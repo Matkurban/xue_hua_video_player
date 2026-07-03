@@ -24,8 +24,10 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // The GStreamer Android SDK is wired up for arm64-v8a only (see the
-        // plugin README). Restrict packaging so other ABIs are not required.
+        // The plugin only ships arm64-v8a native libraries (the bundled
+        // GStreamer runtime + the precompiled Rust binary), so restrict the app
+        // to that ABI. Native-lib extraction (useLegacyPackaging) and the
+        // bundled GStreamer runtime are provided by the plugin itself.
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -36,15 +38,6 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-
-    // GStreamer loads its plugins (libgst*.so) by scanning a filesystem path at
-    // runtime, so the native libs must be extracted from the APK rather than
-    // loaded compressed in place.
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
         }
     }
 }

@@ -163,7 +163,60 @@ class AndroidEnvironment {
       '_CARGOKIT_NDK_LINK_TARGET': targetArg,
       '_CARGOKIT_NDK_LINK_CLANG': ccValue,
       'CARGOKIT_TOOL_TEMP_DIR': toolTempDir,
+      ..._gstreamerSystemDepsEnv(),
     };
+  }
+
+  /// Points the GStreamer/GLib `-sys` crates at the single umbrella
+  /// `libgstreamer_android.so` (built via ndk-build; see
+  /// `android/gstreamer_build`). We bypass pkg-config with
+  /// `system-deps` env overrides because the Android GStreamer SDK ships only
+  /// static libs, and because cargokit runs cargo from a working directory
+  /// where `rust/.cargo/config.toml` is not discovered.
+  ///
+  /// The SDK root defaults to the standard install location and can be
+  /// overridden with GSTREAMER_ROOT_ANDROID. If the umbrella `.so` for this ABI
+  /// is not present, nothing is injected (so non-GStreamer builds are
+  /// unaffected).
+  Map<String, String> _gstreamerSystemDepsEnv() {
+    final abi = const {
+      'aarch64-linux-android': 'arm64',
+      'armv7-linux-androideabi': 'armv7',
+      'i686-linux-android': 'x86',
+      'x86_64-linux-android': 'x86_64',
+    }[target.rust];
+    if (abi == null) {
+      return {};
+    }
+    final sdkRoot = Platform.environment['GSTREAMER_ROOT_ANDROID'] ??
+        path.join(
+          Platform.environment['HOME'] ?? '',
+          'Library',
+          'Developer',
+          'GStreamer',
+          'android',
+          '1.28.4',
+        );
+    final libDir = path.join(sdkRoot, abi, 'lib');
+    if (!File(path.join(libDir, 'libgstreamer_android.so')).existsSync()) {
+      return {};
+    }
+    const pkgs = [
+      'GLIB_2_0',
+      'GOBJECT_2_0',
+      'GIO_2_0',
+      'GSTREAMER_1_0',
+      'GSTREAMER_BASE_1_0',
+      'GSTREAMER_APP_1_0',
+      'GSTREAMER_VIDEO_1_0',
+    ];
+    final env = <String, String>{};
+    for (final p in pkgs) {
+      env['SYSTEM_DEPS_${p}_NO_PKG_CONFIG'] = '1';
+      env['SYSTEM_DEPS_${p}_LIB'] = 'gstreamer_android';
+      env['SYSTEM_DEPS_${p}_SEARCH_NATIVE'] = libDir;
+    }
+    return env;
   }
 
   // Workaround for libgcc missing in NDK23, inspired by cargo-ndk

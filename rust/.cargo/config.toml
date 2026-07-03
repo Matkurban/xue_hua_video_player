@@ -1,20 +1,12 @@
-# Cross-compilation environment for the Rust core.
+# Allow cross-compiled pkg-config probing (used by the GStreamer `-sys` crates)
+# when someone runs `cargo build --target <android>` directly from this
+# directory.
 #
-# The GStreamer `-sys` crates locate GStreamer through pkg-config. When
-# cross-compiling for Android there is no system pkg-config path, so we point
-# pkg-config at the per-ABI pkgconfig dir of the GStreamer Android SDK.
-#
-# The `pkg-config` crate reads the target-suffixed `PKG_CONFIG_PATH_<target>`
-# variable (only the entry matching the current cargo target is used) and
-# requires `PKG_CONFIG_ALLOW_CROSS=1` to allow cross-compiled probing.
-#
-# NOTE: These are absolute paths into the GStreamer Android SDK. Update them if
-# you install the SDK elsewhere (see the plugin README, "Android"). Only the
-# arm64-v8a (aarch64) ABI is wired up by default; uncomment the others if you
-# re-enable those ABIs in cargokit.
+# NOTE: The example app's Android build does NOT rely on this file. cargokit
+# runs cargo from a working directory where this config is not discovered, so
+# the Android GStreamer wiring is injected as environment variables by our
+# patched cargokit (`cargokit/build_tool/lib/src/android_environment.dart`),
+# which points the gstreamer/glib `-sys` crates at the single
+# `libgstreamer_android.so`. See the plugin README ("Android").
 [env]
 PKG_CONFIG_ALLOW_CROSS = "1"
-PKG_CONFIG_PATH_aarch64-linux-android = "/Users/kurban/Library/Developer/GStreamer/android/1.28.4/arm64/lib/pkgconfig"
-# PKG_CONFIG_PATH_armv7-linux-androideabi = "/Users/kurban/Library/Developer/GStreamer/android/1.28.4/armv7/lib/pkgconfig"
-# PKG_CONFIG_PATH_i686-linux-android = "/Users/kurban/Library/Developer/GStreamer/android/1.28.4/x86/lib/pkgconfig"
-# PKG_CONFIG_PATH_x86_64-linux-android = "/Users/kurban/Library/Developer/GStreamer/android/1.28.4/x86_64/lib/pkgconfig"

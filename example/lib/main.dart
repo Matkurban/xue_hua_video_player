@@ -53,7 +53,9 @@ class _PlayerPageState extends State<PlayerPage> {
   void initState() {
     super.initState();
     _controller.initialize().then((_) {
-      if (mounted) setState(() => _ready = true);
+       setState(() => _ready = true);
+    }).catchError((e) {
+      print(e);
     });
   }
 

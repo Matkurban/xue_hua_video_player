@@ -76,6 +76,63 @@ After changing the Rust API:
 flutter_rust_bridge_codegen generate
 ```
 
+## Precompiled binaries
+
+The Rust core is built with [cargokit], which supports **precompiled binaries**
+so that consumers of this plugin do **not** need the Rust toolchain. When a
+consumer builds their app, cargokit computes a `crate-hash` from the Rust
+sources (`rust/src/**`, `Cargo.toml`, `Cargo.lock`, `cargokit.yaml`) and
+downloads a signed, prebuilt library for that hash from this repo's GitHub
+Releases instead of running `cargo`.
+
+> Precompiled binaries only remove the **Rust toolchain** requirement. The
+> precompiled artifact still references GStreamer symbols, so iOS/macOS/Linux/
+> Windows consumers still need the GStreamer SDK at link/runtime (see the
+> per-platform sections below). Android is the exception: the plugin bundles the
+> GStreamer runtime, so it needs neither Rust nor the GStreamer SDK.
+
+Behavior:
+
+- Consumers **without** Rust installed automatically use the precompiled binary.
+- Consumers **with** Rust installed build from source by default. To force the
+  precompiled path (e.g. to reproduce a consumer build), add a
+  `cargokit_options.yaml` next to the app's `pubspec.yaml` with:
+
+  ```yaml
+  use_precompiled_binaries: true
+  ```
+
+Configuration lives in [`rust/cargokit.yaml`](rust/cargokit.yaml) (the download
+URL prefix and the ed25519 **public** key used to verify signatures).
+
+### Publishing (maintainers)
+
+Precompiled binaries are produced by
+[`.github/workflows/precompile_binaries.yml`](.github/workflows/precompile_binaries.yml)
+on every push to `main` (macOS x86_64/arm64, iOS arm64, Linux x86_64, Windows
+x86_64, Android arm64) and uploaded to a release tagged `precompiled_<hash>`.
+
+One-time setup in the GitHub repo (`Matkurban/xue_hua_video_player`):
+
+1. Generate a signing key pair:
+
+   ```bash
+   cd cargokit/build_tool
+   dart run build_tool gen-key
+   ```
+
+2. Put the **public key** in `rust/cargokit.yaml` (`public_key:`) and commit it.
+3. Add the **private key** as the repository secret `PRIVATE_KEY`
+   (Settings → Secrets and variables → Actions). Never commit it.
+4. The workflow uses the built-in `GITHUB_TOKEN` with `contents: write` to
+   create the release and upload assets.
+
+Whenever the Rust sources / `Cargo.lock` change, the crate hash changes and the
+workflow republishes a new release automatically. Keep `rust/Cargo.lock`
+committed so the hash matches between CI and consumers.
+
+[cargokit]: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
+
 ## Native GStreamer setup (per platform)
 
 The Rust core links GStreamer through `pkg-config` at build time, so a GStreamer
@@ -139,33 +196,81 @@ Targets a physical arm64 iPhone. The prebuilt SDK does not ship an arm64
 
 ### Android (arm64)
 
-Targets arm64-v8a devices. Two things must be in place: the Gradle build (see
-"cargokit + Gradle 9" below) and the GStreamer Android SDK.
+Targets arm64-v8a devices. **Consumers need no GStreamer setup**: the plugin
+bundles the entire GStreamer runtime. `android/src/main/jniLibs/arm64-v8a/`
+ships the umbrella `libgstreamer_android.so` (all of GStreamer + its plugins,
+linked statically) and `libc++_shared.so`; these are packaged into the plugin
+AAR and merged into the app. The Rust `libxue_hua_video_player.so` is fetched as
+a precompiled binary (see "Precompiled binaries"). The Rust core registers the
+static plugins itself (`gst_init_static_plugins()` in `rust/src/player.rs`), so
+no `GStreamer.init` Java class is required.
 
-1. Download and extract the **GStreamer Android SDK** (prebuilt universal):
-   ```bash
-   curl -fLO https://gstreamer.freedesktop.org/data/pkg/android/1.28.4/gstreamer-1.0-android-universal-1.28.4.tar.xz
-   mkdir -p ~/Library/Developer/GStreamer/android/1.28.4
-   tar -xf gstreamer-1.0-android-universal-1.28.4.tar.xz \
-     -C ~/Library/Developer/GStreamer/android/1.28.4 --strip-components=1
-   ```
-   Result: per-ABI dirs (`arm64/`, `armv7/`, `x86/`, `x86_64/`), each with
-   `lib/pkgconfig`.
-2. The Rust cross-build finds GStreamer via [`rust/.cargo/config.toml`](rust/.cargo/config.toml),
-   which sets `PKG_CONFIG_ALLOW_CROSS=1` and
-   `PKG_CONFIG_PATH_aarch64-linux-android` to the SDK's `arm64/lib/pkgconfig`.
-   Update those absolute paths if you installed the SDK elsewhere.
-3. The GStreamer shared libraries + the plugins the player needs are bundled in
-   the example under
-   `example/android/app/src/main/jniLibs/arm64-v8a/` and extracted at runtime
-   (`useLegacyPackaging = true`). Rust points GStreamer's plugin/GIO scanner at
-   the app's native library directory before `gst::init()`
-   (`setup_android_gst_env` in `rust/src/player.rs`), so no `GStreamer.init`
-   Java class is required.
-4. Only arm64-v8a is wired up (`abiFilters` in the example app and the ABI trim
-   in `cargokit/gradle/plugin.gradle`). To support the emulator, add the x86/x64
-   `PKG_CONFIG_PATH_*` entries in `rust/.cargo/config.toml`, re-enable those ABIs
-   in cargokit, and bundle the matching `.so`.
+A consuming app only has to build for arm64-v8a (e.g. `ndk { abiFilters +=
+"arm64-v8a" }`, as in the example). Native-lib extraction is requested by the
+plugin's `AndroidManifest.xml` (`android:extractNativeLibs="true"`) and merges
+into the app.
+
+- `https://` sources need the openssl gio module's CA bundle; the
+  `gstreamer_build` recipe includes `G_IO_MODULES := openssl` but does not yet
+  wire the runtime cert path — local files and `http://` work out of the box.
+
+#### Regenerating the bundled `.so` (maintainers)
+
+The GStreamer Android SDK is only needed by maintainers who rebuild the Rust
+library from source (instead of using the precompiled binary) or regenerate the
+umbrella `.so`.
+
+**1. Download + extract the GStreamer Android SDK** (per-ABI top-level dirs):
+
+```bash
+curl -fLO https://gstreamer.freedesktop.org/data/pkg/android/1.28.4/gstreamer-1.0-android-universal-1.28.4.tar.xz
+mkdir -p ~/Library/Developer/GStreamer/android/1.28.4
+# NOTE: no --strip-components; the tarball's top level is arm64/ armv7/ x86/ x86_64/
+tar -xf gstreamer-1.0-android-universal-1.28.4.tar.xz \
+  -C ~/Library/Developer/GStreamer/android/1.28.4
+```
+
+Result: `~/Library/Developer/GStreamer/android/1.28.4/arm64/...` (override the
+root with `GSTREAMER_ROOT_ANDROID`).
+
+**2. Build `libgstreamer_android.so`** from the recipe in
+[`android/gstreamer_build`](android/gstreamer_build) (edit the
+`GSTREAMER_PLUGINS` list there to add codecs):
+
+```bash
+cd android/gstreamer_build
+export GSTREAMER_ROOT_ANDROID="$HOME/Library/Developer/GStreamer/android/1.28.4"
+~/Library/Android/sdk/ndk/<ndk-version>/ndk-build \
+  NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk
+# → libs/arm64-v8a/libgstreamer_android.so (+ libc++_shared.so)
+```
+
+**3. Install the umbrella `.so`** in two places:
+
+```bash
+ABI_LIB=~/Library/Developer/GStreamer/android/1.28.4/arm64/lib
+JNI=android/src/main/jniLibs/arm64-v8a
+cp libs/arm64-v8a/libgstreamer_android.so "$ABI_LIB"/     # for the Rust link step
+cp libs/arm64-v8a/libgstreamer_android.so libs/arm64-v8a/libc++_shared.so "$JNI"/  # committed, bundled at runtime
+```
+
+- When building the Rust library from source, the `-sys` crates are pointed at
+  `libgstreamer_android.so` by our patched cargokit
+  (`cargokit/build_tool/lib/src/android_environment.dart`), which sets
+  `system-deps` `NO_PKG_CONFIG` overrides for `glib`/`gobject`/`gio`/`gstreamer*`
+  (`LIB=gstreamer_android`, `SEARCH_NATIVE=<sdk>/arm64/lib`). This is why the
+  `.so` must be copied into the SDK's `arm64/lib` before building. The CI
+  precompile workflow does the equivalent by copying the committed
+  `jniLibs/arm64-v8a/libgstreamer_android.so` into the SDK lib dir.
+- Only arm64-v8a is wired up (`abiFilters` in the plugin/example and the ABI
+  trim in `cargokit/gradle/plugin.gradle`). For other ABIs, build the umbrella
+  `.so` for that ABI, commit it into the matching `jniLibs` dir, and re-enable
+  the ABI in cargokit.
+
+**compileSdk** — some plugins (e.g. `irondash_engine_context` 0.5.5) compile
+against an older `compileSdk` than their AndroidX deps require. The example's
+[`android/build.gradle.kts`](example/android/build.gradle.kts) forces
+`compileSdkVersion 36` on all subprojects to satisfy AAR metadata checks.
 
 #### cargokit + Gradle 9
 

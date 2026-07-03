@@ -1,3 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
         package="com.flutter_rust_bridge.xue_hua_video_player">
+    <!-- GStreamer loads native code (the umbrella libgstreamer_android.so) that
+         must be present on the filesystem for the dynamic loader / GStreamer's
+         runtime. Request uncompressed, extracted native libs so this propagates
+         to any consuming app via manifest merging. -->
+    <application android:extractNativeLibs="true" />
 </manifest>

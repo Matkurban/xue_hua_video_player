@@ -1,0 +1,5 @@
+# ndk-build outputs; regenerate with the ndk-build command in the plugin README.
+/obj/
+/libs/
+/gst-android-build/
+/src/

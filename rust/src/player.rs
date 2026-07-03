@@ -111,47 +111,14 @@ impl PlayerEvent {
 
 type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
-/// On Android the GStreamer shared libraries and plugins are bundled in the
-/// app's native library directory (extracted from the APK). GStreamer cannot
-/// scan the APK, so point its plugin/GIO scanners at that directory and keep the
-/// plugin registry in a writable location before `gst::init()`.
+// On Android, GStreamer and all of its plugins are compiled statically into a
+// single `libgstreamer_android.so` (built via ndk-build; see
+// `android/gstreamer_build`). Static plugins are not auto-discovered by
+// scanning the filesystem, so they must be registered explicitly. This symbol
+// is generated into that library and registers every bundled plugin.
 #[cfg(target_os = "android")]
-fn setup_android_gst_env() {
-    let Some(lib_dir) = android_native_lib_dir() else {
-        return;
-    };
-    let set_if_absent = |key: &str, val: &str| {
-        if std::env::var_os(key).is_none() {
-            std::env::set_var(key, val);
-        }
-    };
-    set_if_absent("GST_PLUGIN_SYSTEM_PATH_1_0", &lib_dir);
-    set_if_absent("GST_PLUGIN_PATH_1_0", &lib_dir);
-    // glib-networking / gio modules (TLS, etc.) ship as libgio*.so here too.
-    set_if_absent("GIO_EXTRA_MODULES", &lib_dir);
-    // The default registry path (~/.cache) is not writable on Android.
-    if std::env::var_os("GST_REGISTRY_1_0").is_none() {
-        let cache = std::env::var("TMPDIR").unwrap_or_else(|_| "/data/local/tmp".to_string());
-        std::env::set_var("GST_REGISTRY_1_0", format!("{cache}/xhvp_gst_registry.bin"));
-    }
-}
-
-/// Best-effort discovery of the app's native library directory by locating this
-/// crate's own mapped `.so` in `/proc/self/maps`.
-#[cfg(target_os = "android")]
-fn android_native_lib_dir() -> Option<String> {
-    let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
-    for line in maps.lines() {
-        if let Some(idx) = line.find('/') {
-            let path = &line[idx..];
-            if path.ends_with("libxue_hua_video_player.so") {
-                return std::path::Path::new(path)
-                    .parent()
-                    .map(|p| p.to_string_lossy().into_owned());
-            }
-        }
-    }
-    None
+extern "C" {
+    fn gst_init_static_plugins();
 }
 
 /// Ensures `gst::init()` runs exactly once for the process.
@@ -162,9 +129,13 @@ pub fn ensure_gst_init() -> Result<()> {
     // SAFETY: guarded by Once, only written inside call_once.
     unsafe {
         INIT.call_once(|| {
-            #[cfg(target_os = "android")]
-            setup_android_gst_env();
-            RESULT = Some(gst::init().map_err(|e| anyhow!("gst::init failed: {e}")));
+            RESULT = Some((|| {
+                gst::init().map_err(|e| anyhow!("gst::init failed: {e}"))?;
+                // Register the statically-linked plugins on Android.
+                #[cfg(target_os = "android")]
+                gst_init_static_plugins();
+                Ok(())
+            })());
         });
         match &*std::ptr::addr_of!(RESULT) {
             Some(Ok(())) => Ok(()),
