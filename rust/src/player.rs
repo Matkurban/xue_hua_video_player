@@ -746,8 +746,9 @@ fn build_pipeline(
         // (audio/init succeed) instead of hard-failing, and only hardware video
         // decode remains unavailable until the .so is rebuilt.
         use std::str::FromStr;
-        let gl_2d_caps = gst::Caps::from_str("video/x-raw(memory:GLMemory), texture-target=(string)2D")
-            .expect("static GL caps string is valid");
+        let gl_2d_caps =
+            gst::Caps::from_str("video/x-raw(memory:GLMemory), texture-target=(string)2D")
+                .expect("static GL caps string is valid");
         match (
             gst::ElementFactory::make("glcolorconvert").build(),
             gst::ElementFactory::make("capsfilter")
