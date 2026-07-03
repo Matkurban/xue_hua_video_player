@@ -40,24 +40,23 @@ class XueHuaVideoView extends StatelessWidget {
       color: backgroundColor,
       child: Stack(
         fit: StackFit.expand,
+        alignment: .center,
         children: [
           SignalBuilder(
             builder: (context) {
               final textureId = controller.textureId.value;
               if (textureId == null) return const SizedBox.expand();
               final size = controller.videoSize.value;
-              return Center(
-                child: AspectRatio(
-                  aspectRatio: controller.aspectRatio.value,
-                  child: FittedBox(
-                    fit: fit,
-                    clipBehavior: Clip.hardEdge,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: size.width > 0 ? size.width : 16,
-                      height: size.height > 0 ? size.height : 9,
-                      child: Texture(textureId: textureId),
-                    ),
+              return AspectRatio(
+                aspectRatio: controller.aspectRatio.value,
+                child: FittedBox(
+                  fit: fit,
+                  clipBehavior: Clip.hardEdge,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: size.width > 0 ? size.width : 16,
+                    height: size.height > 0 ? size.height : 9,
+                    child: Texture(textureId: textureId),
                   ),
                 ),
               );

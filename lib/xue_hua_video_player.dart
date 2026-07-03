@@ -1,6 +1,7 @@
 library;
 
-export 'src/controls/video_controls.dart' show VideoControls, VideoControlsStyle;
+export 'src/controls/video_controls.dart'
+    show VideoControls, VideoControlsStyle;
 export 'src/player_controller.dart';
 export 'src/theme/video_controls_theme.dart';
 export 'src/video_source.dart';

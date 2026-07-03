@@ -2,7 +2,7 @@ PODS:
   - FlutterMacOS (1.0.0)
   - irondash_engine_context (0.0.1):
     - FlutterMacOS
-  - xue_hua_video_player (0.0.1):
+  - xue_hua_video_player (1.0.0):
     - FlutterMacOS
 
 DEPENDENCIES:
@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   irondash_engine_context: 893c7d96d20ce361d7e996f39d360c4c2f9869ba
-  xue_hua_video_player: d068af212b551f343ab2f36f360da7306caa157c
+  xue_hua_video_player: f804cf05fc40d491952985474f323c0608d7f7b1
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
 

@@ -39,7 +39,10 @@ pub fn create_player(engine_handle: i64) -> Result<PlayerHandle> {
     let texture_id = player.texture_id();
     let player_id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     PLAYERS.lock().insert(player_id, Arc::new(player));
-    Ok(PlayerHandle { player_id, texture_id })
+    Ok(PlayerHandle {
+        player_id,
+        texture_id,
+    })
 }
 
 /// Subscribes to the player's event stream (state, position, duration, size,

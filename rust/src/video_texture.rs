@@ -22,12 +22,18 @@ pub struct FrameBuffer {
 
 impl FrameBuffer {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { inner: Mutex::new(None) })
+        Arc::new(Self {
+            inner: Mutex::new(None),
+        })
     }
 
     /// Stores `data` (expected to be tightly packed RGBA8888) as the latest frame.
     pub fn set(&self, width: i32, height: i32, data: Vec<u8>) {
-        *self.inner.lock() = Some(Frame { width, height, data });
+        *self.inner.lock() = Some(Frame {
+            width,
+            height,
+            data,
+        });
     }
 
     /// Drops the current frame so the texture renders transparent again.

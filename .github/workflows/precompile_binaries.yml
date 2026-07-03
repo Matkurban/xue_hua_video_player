@@ -33,8 +33,8 @@ jobs:
   macos-arm:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1.7.2
       - name: Install GStreamer (Homebrew, arm64) for macOS target
         run: brew install pkg-config gstreamer
       - name: Install GStreamer iOS devel SDK
@@ -79,11 +79,13 @@ jobs:
             --target aarch64-apple-ios
 
   # macOS (Intel): x86_64-apple-darwin.
+  # macos-13 was retired Dec 2025; macos-15-intel is the last GitHub-hosted
+  # x86_64 macOS runner (scheduled retirement Aug 2027).
   macos-intel:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1.7.2
       - name: Install GStreamer (Homebrew, x86_64)
         run: brew install pkg-config gstreamer
       - name: build_tool deps
@@ -105,8 +107,8 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1.7.2
       - name: Install GStreamer dev packages
         run: |
           sudo apt-get update
@@ -129,15 +131,32 @@ jobs:
             --repository="$REPO_SLUG" \
             --target x86_64-unknown-linux-gnu
 
-  # Android: aarch64-linux-android. The Rust cdylib links against the umbrella
-  # libgstreamer_android.so that the plugin already ships in jniLibs; we copy it
-  # into the SDK's arm64/lib so the -sys crates can resolve `-lgstreamer_android`
-  # (see cargokit/build_tool/lib/src/android_environment.dart).
+  # Android: all four ABIs. The Rust cdylib links against the umbrella
+  # libgstreamer_android.so that the plugin already ships in jniLibs; we copy the
+  # per-ABI umbrella .so into the matching SDK lib dir so the -sys crates can
+  # resolve `-lgstreamer_android` (see
+  # cargokit/build_tool/lib/src/android_environment.dart).
   android:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: aarch64-linux-android
+            abi: arm64-v8a
+            sdk_arch: arm64
+          - rust_target: armv7-linux-androideabi
+            abi: armeabi-v7a
+            sdk_arch: armv7
+          - rust_target: i686-linux-android
+            abi: x86
+            sdk_arch: x86
+          - rust_target: x86_64-linux-android
+            abi: x86_64
+            sdk_arch: x86_64
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1.7.2
       - name: Install Android NDK ${{ env.ANDROID_NDK_VERSION }}
         run: |
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
@@ -149,12 +168,14 @@ jobs:
           mkdir -p "$GST_ROOT"
           tar -xf "gstreamer-1.0-android-universal-${GST_VERSION}.tar.xz" -C "$GST_ROOT"
           # The Rust link step resolves `-lgstreamer_android` from the SDK's
-          # arm64/lib; supply it from the umbrella .so shipped with the plugin.
-          cp android/src/main/jniLibs/arm64-v8a/libgstreamer_android.so "$GST_ROOT/arm64/lib/"
+          # <arch>/lib; supply it from the umbrella .so shipped with the plugin
+          # for this ABI.
+          cp "android/src/main/jniLibs/${{ matrix.abi }}/libgstreamer_android.so" \
+            "$GST_ROOT/${{ matrix.sdk_arch }}/lib/"
       - name: build_tool deps
         working-directory: cargokit/build_tool
         run: dart pub get
-      - name: Precompile aarch64-linux-android
+      - name: Precompile ${{ matrix.rust_target }}
         working-directory: cargokit/build_tool
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -164,7 +185,7 @@ jobs:
           dart run build_tool precompile-binaries -v \
             --manifest-dir=../../rust \
             --repository="$REPO_SLUG" \
-            --target aarch64-linux-android \
+            --target ${{ matrix.rust_target }} \
             --android-sdk-location="$ANDROID_SDK_ROOT" \
             --android-ndk-version="$ANDROID_NDK_VERSION" \
             --android-min-sdk-version="$ANDROID_MIN_SDK"
@@ -173,8 +194,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1.7.2
       - name: Install pkg-config
         run: choco install -y pkgconfiglite
       - name: Install GStreamer MSVC (Inno .exe)

@@ -11,8 +11,8 @@ use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
 use gstreamer_video as gst_video;
 use gstreamer_video::prelude::VideoFrameExt;
-use irondash_texture::{BoxedPixelData, SendableTexture, Texture};
 use irondash_run_loop::RunLoop;
+use irondash_texture::{BoxedPixelData, SendableTexture, Texture};
 use parking_lot::Mutex;
 
 use crate::video_texture::{FrameBuffer, FrameProvider};
@@ -81,23 +81,39 @@ impl PlayerEvent {
     }
 
     fn duration(duration_ms: i64) -> Self {
-        Self { duration_ms, ..Self::base(PlayerEventKind::DurationChanged) }
+        Self {
+            duration_ms,
+            ..Self::base(PlayerEventKind::DurationChanged)
+        }
     }
 
     fn position(position_ms: i64) -> Self {
-        Self { position_ms, ..Self::base(PlayerEventKind::PositionChanged) }
+        Self {
+            position_ms,
+            ..Self::base(PlayerEventKind::PositionChanged)
+        }
     }
 
     fn video_size(width: i32, height: i32) -> Self {
-        Self { width, height, ..Self::base(PlayerEventKind::VideoSize) }
+        Self {
+            width,
+            height,
+            ..Self::base(PlayerEventKind::VideoSize)
+        }
     }
 
     fn state(state: PlayerState) -> Self {
-        Self { state, ..Self::base(PlayerEventKind::StateChanged) }
+        Self {
+            state,
+            ..Self::base(PlayerEventKind::StateChanged)
+        }
     }
 
     fn buffering(buffering_percent: i32) -> Self {
-        Self { buffering_percent, ..Self::base(PlayerEventKind::Buffering) }
+        Self {
+            buffering_percent,
+            ..Self::base(PlayerEventKind::Buffering)
+        }
     }
 
     fn eos() -> Self {
@@ -105,7 +121,10 @@ impl PlayerEvent {
     }
 
     fn error(message: String) -> Self {
-        Self { message, ..Self::base(PlayerEventKind::Error) }
+        Self {
+            message,
+            ..Self::base(PlayerEventKind::Error)
+        }
     }
 }
 
@@ -228,7 +247,10 @@ fn setup_ios_env() {
     let tmp_str = tmp.to_string_lossy().to_string();
     // The container root is the parent of `tmp`; use it as HOME so caches land
     // under a writable location.
-    let home: PathBuf = tmp.parent().map(PathBuf::from).unwrap_or_else(|| tmp.clone());
+    let home: PathBuf = tmp
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| tmp.clone());
     let home_str = home.to_string_lossy().to_string();
     let registry = tmp.join("gstreamer-registry.bin");
     let registry_str = registry.to_string_lossy().to_string();
@@ -382,13 +404,15 @@ impl GstPlayer {
             let frame_buffer = frame_buffer.clone();
             let sender = RunLoop::sender_for_main_thread()
                 .map_err(|e| anyhow!("cannot reach main thread run loop: {e:?}"))?;
-            sender.send_and_wait(move || -> Result<(i64, Arc<SendableTexture<BoxedPixelData>>)> {
-                let provider = Arc::new(FrameProvider::new(frame_buffer));
-                let texture = Texture::new_with_provider(engine_handle, provider)
-                    .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
-                let id = texture.id();
-                Ok((id, texture.into_sendable_texture()))
-            })?
+            sender.send_and_wait(
+                move || -> Result<(i64, Arc<SendableTexture<BoxedPixelData>>)> {
+                    let provider = Arc::new(FrameProvider::new(frame_buffer));
+                    let texture = Texture::new_with_provider(engine_handle, provider)
+                        .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
+                    let id = texture.id();
+                    Ok((id, texture.into_sendable_texture()))
+                },
+            )?
         };
 
         // If building the pipeline fails, the last strong reference to the
@@ -577,25 +601,17 @@ impl GstPlayer {
                             }
                         }
                         MessageView::DurationChanged(..) => {
-                            if let Some(d) =
-                                pipeline.query_duration::<gst::ClockTime>()
-                            {
+                            if let Some(d) = pipeline.query_duration::<gst::ClockTime>() {
                                 emit(PlayerEvent::duration(d.mseconds() as i64));
                             }
                         }
                         MessageView::StateChanged(sc) => {
-                            if sc
-                                .src()
-                                .map(|s| s == &pipeline)
-                                .unwrap_or(false)
-                            {
+                            if sc.src().map(|s| s == &pipeline).unwrap_or(false) {
                                 emit(PlayerEvent::state(map_state(sc.current())));
                                 if sc.current() == gst::State::Paused
                                     || sc.current() == gst::State::Playing
                                 {
-                                    if let Some(d) =
-                                        pipeline.query_duration::<gst::ClockTime>()
-                                    {
+                                    if let Some(d) = pipeline.query_duration::<gst::ClockTime>() {
                                         emit(PlayerEvent::duration(d.mseconds() as i64));
                                     }
                                 }
@@ -656,7 +672,9 @@ fn build_pipeline(
         .build()
         .map_err(|_| anyhow!("failed to create playbin3 (is gst-plugins-base installed?)"))?;
 
-    let caps = gst::Caps::builder("video/x-raw").field("format", "RGBA").build();
+    let caps = gst::Caps::builder("video/x-raw")
+        .field("format", "RGBA")
+        .build();
     let appsink = gst_app::AppSink::builder()
         .caps(&caps)
         .max_buffers(1)
@@ -722,8 +740,8 @@ fn build_pipeline(
                 let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
                 let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
                 let caps = sample.caps().ok_or(gst::FlowError::Error)?;
-                let info = gst_video::VideoInfo::from_caps(caps)
-                    .map_err(|_| gst::FlowError::Error)?;
+                let info =
+                    gst_video::VideoInfo::from_caps(caps).map_err(|_| gst::FlowError::Error)?;
                 let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, &info)
                     .map_err(|_| gst::FlowError::Error)?;
 

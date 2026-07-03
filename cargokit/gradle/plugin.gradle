@@ -145,12 +145,12 @@ class CargoKitPlugin implements Plugin<Project> {
                 platforms = plugin.getTargetPlatforms().collect()
             }
 
-            // NOTE: Upstream cargokit adds android-x86/android-x64 for debug so
-            // the emulator works. This plugin links the GStreamer Android SDK,
-            // which we only wire up for arm64-v8a, so building those ABIs would
-            // fail at link time. Restrict to the device ABI(s) Flutter requests.
-            // (If you need emulator support, add the x86/x86_64 GStreamer
-            // pkg-config paths in rust/.cargo/config.toml and re-enable these.)
+            // Build the Rust cdylib for exactly the ABI(s) Flutter requests for
+            // this build. All four Android ABIs are wired up (the umbrella
+            // GStreamer .so is shipped per-ABI in jniLibs and the GStreamer
+            // Android SDK provides a per-ABI lib dir; see
+            // cargokit/build_tool/lib/src/android_environment.dart). Consumers
+            // without the Rust toolchain download precompiled binaries instead.
 
             // The task name depends on plugin properties, which are not available
             // at this point

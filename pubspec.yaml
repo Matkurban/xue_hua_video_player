@@ -1,7 +1,9 @@
 name: xue_hua_video_player
-description: "A new Flutter FFI plugin project."
-version: 0.0.1
-homepage:
+description: "Cross-platform Flutter video player plugin decoding local/network video with GStreamer (via a Rust flutter_rust_bridge core) and rendering into a Flutter texture."
+version: 1.0.0
+homepage: https://github.com/Matkurban/xue_hua_video_player
+repository: https://github.com/Matkurban/xue_hua_video_player
+issue_tracker: https://github.com/Matkurban/xue_hua_video_player/issues
 
 environment:
   sdk: ^3.12.2
@@ -12,6 +14,7 @@ dependencies:
     sdk: flutter
   flutter_rust_bridge: 2.12.0
   irondash_engine_context: ^0.5.5
+  liquid_glass_easy: ^3.2.2
   plugin_platform_interface: ^2.0.2
   signals: ^7.1.0
   theme_extensions_builder_annotation: ^7.4.0

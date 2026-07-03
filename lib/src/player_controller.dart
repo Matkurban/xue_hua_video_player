@@ -85,7 +85,9 @@ class XueHuaPlayerController {
   ReadonlySignal<String?> get error => _error;
 
   /// Whether the pipeline is currently playing.
-  late final ReadonlySignal<bool> isPlaying = computed(() => _state.value == PlayerState.playing);
+  late final ReadonlySignal<bool> isPlaying = computed(
+    () => _state.value == PlayerState.playing,
+  );
 
   /// Whether playback reached the end of the media.
   late final ReadonlySignal<bool> isCompleted = computed(
@@ -121,7 +123,10 @@ class XueHuaPlayerController {
         _position.value = Duration(milliseconds: event.positionMs);
         break;
       case PlayerEventKind.videoSize:
-        _videoSize.value = Size(event.width.toDouble(), event.height.toDouble());
+        _videoSize.value = Size(
+          event.width.toDouble(),
+          event.height.toDouble(),
+        );
         break;
       case PlayerEventKind.stateChanged:
         _state.value = event.state;
@@ -184,8 +189,9 @@ class XueHuaPlayerController {
   /// Toggles between play and pause based on the current [state].
   Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
 
-  Future<void> seek(Duration position) =>
-      _guard(() => rust.playerSeek(playerId: _id, positionMs: position.inMilliseconds));
+  Future<void> seek(Duration position) => _guard(
+    () => rust.playerSeek(playerId: _id, positionMs: position.inMilliseconds),
+  );
 
   Future<void> setVolume(double volume) async {
     final v = volume.clamp(0.0, 1.0);

@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../player_controller.dart';
@@ -206,7 +205,7 @@ class _MaterialVideoControls extends StatefulWidget {
 }
 
 class _MaterialVideoControlsState extends State<_MaterialVideoControls> {
-  double? _dragValue;
+  final FlutterSignal<double?> _dragValue = signal(null);
 
   @override
   Widget build(BuildContext context) {
@@ -236,38 +235,47 @@ class _MaterialVideoControlsState extends State<_MaterialVideoControls> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SignalBuilder(
-                  builder: (context) {
-                    final dur = controller.duration.value.inMilliseconds.toDouble();
-                    final pos = controller.position.value.inMilliseconds.toDouble();
-                    final value = _dragValue ?? (dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0);
-                    return SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: theme.activeTrackColor,
-                        inactiveTrackColor: theme.inactiveTrackColor,
-                        thumbColor: theme.thumbColor,
-                        secondaryActiveTrackColor: theme.bufferedTrackColor,
-                        trackHeight: 3,
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      ),
-                      child: Slider(
-                        value: value,
-                        onChanged: dur > 0
-                            ? (v) {
-                                widget.onInteract();
-                                setState(() => _dragValue = v);
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: theme.activeTrackColor,
+                    inactiveTrackColor: theme.inactiveTrackColor,
+                    thumbColor: theme.thumbColor,
+                    secondaryActiveTrackColor: theme.bufferedTrackColor,
+                    trackHeight: 3,
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  ),
+                  child: SignalBuilder(
+                    builder: (context) {
+                      final dur = controller.duration.value.inMilliseconds.toDouble();
+                      final pos = controller.position.value.inMilliseconds.toDouble();
+                      final value =
+                          _dragValue.value ?? (dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0);
+                      return TweenAnimationBuilder(
+                        tween: Tween<double>(end: value),
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.linear,
+                        builder: (BuildContext context, double value, Widget? child) {
+                          return Slider(
+                            value: value,
+                            onChanged: (v) {
+                              if (dur <= 0) {
+                                return;
                               }
-                            : null,
-                        onChangeEnd: dur > 0
-                            ? (v) {
-                                controller.seek(Duration(milliseconds: (v * dur).round()));
-                                setState(() => _dragValue = null);
-                              }
-                            : null,
-                      ),
-                    );
-                  },
+                              widget.onInteract();
+                              _dragValue.value = v;
+                            },
+                            onChangeEnd: dur > 0
+                                ? (v) {
+                                    controller.seek(Duration(milliseconds: (v * dur).round()));
+                                    _dragValue.value = null;
+                                  }
+                                : null,
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
                 Row(
                   children: [
@@ -358,7 +366,7 @@ class _CupertinoVideoControls extends StatefulWidget {
 }
 
 class _CupertinoVideoControlsState extends State<_CupertinoVideoControls> {
-  double? _dragValue;
+  final FlutterSignal<double?> _dragValue = signal(null);
 
   Future<void> _showSpeedSheet() async {
     widget.onInteract();
@@ -388,112 +396,127 @@ class _CupertinoVideoControlsState extends State<_CupertinoVideoControls> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.controller;
-    final theme = widget.theme;
+    final XueHuaPlayerController controller = widget.controller;
+    final VideoControlsTheme theme = widget.theme;
     return Stack(
       children: [
-        _CenterButton(controller: c, theme: theme, onInteract: widget.onInteract, cupertino: true),
+        _CenterButton(
+          controller: controller,
+          theme: theme,
+          onInteract: widget.onInteract,
+          cupertino: true,
+        ),
         Positioned(
           left: 8,
           right: 8,
           bottom: 8,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(theme.borderRadius),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                color: theme.backgroundColor,
-                padding: theme.barPadding,
-                child: Row(
-                  children: [
-                    SignalBuilder(
-                      builder: (context) => GestureDetector(
-                        onTap: () {
-                          widget.onInteract();
-                          c.toggleMuted();
-                        },
-                        child: Icon(
-                          c.muted.value || c.volume.value == 0
-                              ? CupertinoIcons.volume_off
-                              : CupertinoIcons.volume_up,
-                          size: theme.secondaryIconSize,
-                          color: theme.iconColor,
-                        ),
+          child: LiquidGlassLens(
+            style: LiquidGlassStyle(
+              shape: LiquidGlassShape(
+                cornerRadius: theme.borderRadius,
+                lightColor: theme.backgroundColor,
+              ),
+            ),
+            child: Container(
+              // color: theme.backgroundColor,
+              padding: theme.barPadding,
+              child: Row(
+                children: [
+                  SignalBuilder(
+                    builder: (context) => GestureDetector(
+                      onTap: () {
+                        widget.onInteract();
+                        controller.toggleMuted();
+                      },
+                      child: Icon(
+                        controller.muted.value || controller.volume.value == 0
+                            ? CupertinoIcons.volume_off
+                            : CupertinoIcons.volume_up,
+                        size: theme.secondaryIconSize,
+                        color: theme.iconColor,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    SignalBuilder(
-                      builder: (context) => Text(
-                        _formatDuration(c.position.value),
-                        style: TextStyle(color: theme.textColor, fontSize: 12),
-                      ),
+                  ),
+                  const SizedBox(width: 10),
+                  SignalBuilder(
+                    builder: (context) => Text(
+                      _formatDuration(controller.position.value),
+                      style: TextStyle(color: theme.textColor, fontSize: 12),
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: SignalBuilder(
-                          builder: (context) {
-                            final dur = c.duration.value.inMilliseconds.toDouble();
-                            final pos = c.position.value.inMilliseconds.toDouble();
-                            final value =
-                                _dragValue ?? (dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0);
-                            return CupertinoSlider(
-                              value: value,
-                              activeColor: theme.activeTrackColor,
-                              thumbColor: theme.thumbColor,
-                              onChanged: dur > 0
-                                  ? (v) {
-                                      widget.onInteract();
-                                      setState(() => _dragValue = v);
-                                    }
-                                  : null,
-                              onChangeEnd: dur > 0
-                                  ? (v) {
-                                      c.seek(Duration(milliseconds: (v * dur).round()));
-                                      setState(() => _dragValue = null);
-                                    }
-                                  : null,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    SignalBuilder(
-                      builder: (context) => Text(
-                        _formatDuration(c.duration.value),
-                        style: TextStyle(color: theme.textColor, fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SignalBuilder(
-                      builder: (context) => GestureDetector(
-                        onTap: () {
-                          widget.onInteract();
-                          c.setLooping(!c.looping.value);
-                        },
-                        child: Icon(
-                          CupertinoIcons.repeat,
-                          size: theme.secondaryIconSize,
-                          color: c.looping.value ? theme.activeIconColor : theme.iconColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: _showSpeedSheet,
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: SignalBuilder(
-                        builder: (context) => Text(
-                          '${c.speed.value}x',
-                          style: TextStyle(
-                            color: theme.iconColor,
-                            fontSize: theme.secondaryIconSize * 0.7,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        builder: (context) {
+                          final dur = controller.duration.value.inMilliseconds.toDouble();
+                          final pos = controller.position.value.inMilliseconds.toDouble();
+                          final value =
+                              _dragValue.value ?? (dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0);
+                          return TweenAnimationBuilder(
+                            tween: Tween<double>(end: value),
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.linear,
+                            builder: (context, animatedValue, child) {
+                              return CupertinoSlider(
+                                value: animatedValue,
+                                activeColor: theme.activeTrackColor,
+                                thumbColor: theme.thumbColor,
+                                onChanged: (value) {
+                                  if (dur <= 0) {
+                                    return;
+                                  }
+                                  widget.onInteract();
+                                  _dragValue.value = value;
+                                },
+                                onChangeEnd: dur > 0
+                                    ? (v) {
+                                        controller.seek(Duration(milliseconds: (v * dur).round()));
+                                        _dragValue.value = null;
+                                      }
+                                    : null,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  SignalBuilder(
+                    builder: (context) => Text(
+                      _formatDuration(controller.duration.value),
+                      style: TextStyle(color: theme.textColor, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SignalBuilder(
+                    builder: (context) => GestureDetector(
+                      onTap: () {
+                        widget.onInteract();
+                        controller.setLooping(!controller.looping.value);
+                      },
+                      child: Icon(
+                        CupertinoIcons.repeat,
+                        size: theme.secondaryIconSize,
+                        color: controller.looping.value ? theme.activeIconColor : theme.iconColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: _showSpeedSheet,
+                    child: SignalBuilder(
+                      builder: (context) => Text(
+                        '${controller.speed.value}x',
+                        style: TextStyle(
+                          color: theme.iconColor,
+                          fontSize: theme.secondaryIconSize * 0.7,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

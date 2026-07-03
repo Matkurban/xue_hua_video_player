@@ -18,13 +18,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         useMaterial3: true,
-        extensions: [VideoControlsTheme.material()],
+        extensions: [VideoControlsTheme.cupertino()],
       ),
       darkTheme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         brightness: Brightness.dark,
         useMaterial3: true,
-        extensions: [VideoControlsTheme.material()],
+        extensions: [VideoControlsTheme.cupertino()],
       ),
       home: const PlayerPage(),
     );
@@ -52,11 +52,14 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller.initialize().then((_) {
-       setState(() => _ready = true);
-    }).catchError((e) {
-      debugPrint(e.toString());
-    });
+    _controller
+        .initialize()
+        .then((_) {
+          setState(() => _ready = true);
+        })
+        .catchError((e) {
+          debugPrint(e.toString());
+        });
   }
 
   @override
