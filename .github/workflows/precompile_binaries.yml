@@ -36,7 +36,12 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dart-lang/setup-dart@v1.7.2
       - name: Install GStreamer (Homebrew, arm64) for macOS target
-        run: brew install pkg-config gstreamer
+        run: |
+          # GitHub-hosted runners pre-tap aws/tap (AWS CLI). Newer Homebrew
+          # flags it as an untrusted tap and prints a warning on every brew
+          # command. We don't use it, so untap it (ignore if already gone).
+          brew untap aws/tap || true
+          brew install pkg-config gstreamer
       - name: Install GStreamer iOS devel SDK
         run: |
           curl -fLO "https://gstreamer.freedesktop.org/data/pkg/ios/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-ios-universal.pkg"
@@ -87,7 +92,12 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dart-lang/setup-dart@v1.7.2
       - name: Install GStreamer (Homebrew, x86_64)
-        run: brew install pkg-config gstreamer
+        run: |
+          # GitHub-hosted runners pre-tap aws/tap (AWS CLI). Newer Homebrew
+          # flags it as an untrusted tap and prints a warning on every brew
+          # command. We don't use it, so untap it (ignore if already gone).
+          brew untap aws/tap || true
+          brew install pkg-config gstreamer
       - name: build_tool deps
         working-directory: cargokit/build_tool
         run: dart pub get

@@ -31,17 +31,27 @@ GSTREAMER_NDK_BUILD_PATH := $(GSTREAMER_ROOT)/share/gst-android/ndk-build/
 # broad CODECS/EFFECTS groups because some of their (Rust-based) plugins pull in
 # static deps the ndk-build whole-archive step can't resolve (lcevc_*, bare
 # c++/m). androidmedia provides HW H.264/H.265 decode; soup provides http(s).
+#
+# `opengl` is REQUIRED for hardware decode: Qualcomm/Android MediaCodec decoders
+# (amcvideodec) only emit GL textures (memory:GLMemory, texture-target=
+# external-oes) and refuse to negotiate with a plain system-memory videoconvert
+# ("Codec only supports GL output but downstream does not" -> not-negotiated).
+# It provides glcolorconvert/gldownload so the video sink can accept the GL
+# texture, convert it to RGBA and download it to system memory for the appsink.
 GSTREAMER_PLUGINS := \
     coreelements app typefindfunctions playback \
     audioconvert audioresample videoconvertscale volume autodetect \
     isomp4 matroska audioparsers videoparsersbad id3demux \
-    androidmedia videofilter \
+    androidmedia videofilter opengl \
     soup tcp udp opensles
 
 GSTREAMER_EXTRA_DEPS := gstreamer-video-1.0 gstreamer-app-1.0
 # TLS for https:// sources. The openssl gio module needs libssl/libcrypto,
 # which the ndk-build integration does not pull in automatically.
 G_IO_MODULES := openssl
-GSTREAMER_EXTRA_LIBS := -lssl -lcrypto
+# -lssl/-lcrypto for the openssl TLS backend; -lEGL/-lGLESv2 for the opengl
+# plugin (glcolorconvert/gldownload create an EGL context to receive the
+# amcvideodec GL textures).
+GSTREAMER_EXTRA_LIBS := -lssl -lcrypto -lEGL -lGLESv2
 
 include $(GSTREAMER_NDK_BUILD_PATH)/gstreamer-1.0.mk

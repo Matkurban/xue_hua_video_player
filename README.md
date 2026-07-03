@@ -424,9 +424,20 @@ GStreamer setup**: the plugin bundles the entire GStreamer runtime.
 `android/src/main/jniLibs/<abi>/` ships the umbrella `libgstreamer_android.so`
 (all of GStreamer + its plugins, linked statically) and `libc++_shared.so` for
 each ABI; these are packaged into the plugin AAR and merged into the app. The
-Rust `libxue_hua_video_player.so` is fetched as a precompiled binary per ABI. The
-Rust core registers the static plugins itself (`gst_init_static_plugins()`), so
-no `GStreamer.init` Java class is required.
+Rust `libxue_hua_video_player.so` is fetched as a precompiled binary per ABI.
+
+The GStreamer Android runtime is initialized automatically at process startup by
+`GStreamerInitProvider` (a `ContentProvider` in the plugin's
+`android/src/main/java/`), which runs `System.loadLibrary("gstreamer_android")`
+(so the library's `JNI_OnLoad` captures the JavaVM) and `GStreamer.init(context)`
+(so the app `Context`/`ClassLoader` are set). This is required so the
+`androidmedia` MediaCodec decoders can enumerate/register - without it the only
+bundled decoders never register and playback fails with `not-linked` /
+`No streams to output`. The bundled `GStreamer.java` and the `androidmedia`
+helper classes (under `org/freedesktop/gstreamer/`) are what `JNI_OnLoad`/
+`GStreamer.init` look up by name; **consumers still need no setup** - it all
+happens inside the plugin. The Rust core therefore does NOT register plugins on
+Android (it would run before the Java init and without the JavaVM).
 
 A consuming app builds for all four ABIs by default. To reduce APK size, narrow
 `abiFilters` (see [Permissions & platform configuration](#android)) or ship an

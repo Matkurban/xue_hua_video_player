@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
+// import 'package:xue_hua_video_player_example/video_url.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,9 +42,8 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   final XueHuaPlayerController _controller = XueHuaPlayerController();
   final TextEditingController _urlController = TextEditingController(
-    text:
-        // 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        'https://jsontodart.cn/api/object/7976982000/msg_video_7976982000_1782918277290246.mp4',
+    text: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+    // videoUrl,
   );
   bool _ready = false;
   bool _showControls = true;
@@ -71,18 +71,12 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> _open() async {
     FocusScope.of(context).unfocus();
-    await _controller.open(
-      VideoSource.network(_urlController.text),
-      autoPlay: true,
-    );
+    await _controller.open(VideoSource.network(_urlController.text), autoPlay: true);
   }
 
   Future<void> _openAsset() async {
     FocusScope.of(context).unfocus();
-    await _controller.open(
-      const VideoSource.asset('assets/sample.mp4'),
-      autoPlay: true,
-    );
+    await _controller.open(const VideoSource.asset('assets/sample.mp4'), autoPlay: true);
   }
 
   @override
@@ -151,32 +145,18 @@ class _PlayerPageState extends State<PlayerPage> {
             children: [
               const Text('内置控制器'),
               const Spacer(),
-              Switch(
-                value: _showControls,
-                onChanged: (v) => setState(() => _showControls = v),
-              ),
+              Switch(value: _showControls, onChanged: (v) => setState(() => _showControls = v)),
             ],
           ),
           const SizedBox(height: 8),
           SegmentedButton<VideoControlsStyle>(
             segments: const [
-              ButtonSegment(
-                value: VideoControlsStyle.adaptive,
-                label: Text('自适应'),
-              ),
-              ButtonSegment(
-                value: VideoControlsStyle.material,
-                label: Text('Material'),
-              ),
-              ButtonSegment(
-                value: VideoControlsStyle.cupertino,
-                label: Text('Cupertino'),
-              ),
+              ButtonSegment(value: VideoControlsStyle.adaptive, label: Text('自适应')),
+              ButtonSegment(value: VideoControlsStyle.material, label: Text('Material')),
+              ButtonSegment(value: VideoControlsStyle.cupertino, label: Text('Cupertino')),
             ],
             selected: {_style},
-            onSelectionChanged: _showControls
-                ? (s) => setState(() => _style = s.first)
-                : null,
+            onSelectionChanged: _showControls ? (s) => setState(() => _style = s.first) : null,
           ),
           const SizedBox(height: 8),
           SignalBuilder(
@@ -191,15 +171,10 @@ class _PlayerPageState extends State<PlayerPage> {
                   // not reflow the layout (and resize the video) while seeking.
                   SizedBox(
                     height: 20,
-                    child: buffering < 100
-                        ? Center(child: Text('缓冲 $buffering%'))
-                        : null,
+                    child: buffering < 100 ? Center(child: Text('缓冲 $buffering%')) : null,
                   ),
                   if (error != null)
-                    SelectableText(
-                      '错误: $error',
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                    SelectableText('错误: $error', style: const TextStyle(color: Colors.red)),
                 ],
               );
             },

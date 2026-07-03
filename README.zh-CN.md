@@ -388,8 +388,17 @@ iOS 模拟器。
 支持 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`。**使用方无需任何 GStreamer 配置**：插件已
 内置完整 GStreamer 运行时。`android/src/main/jniLibs/<abi>/` 为每个 ABI 提供伞形
 `libgstreamer_android.so`（静态链接的全部 GStreamer + 插件）与 `libc++_shared.so`；它们被打
-进插件 AAR 并合并到应用。Rust 的 `libxue_hua_video_player.so` 按 ABI 以预编译二进制获取。Rust
-核心自行注册静态插件（`gst_init_static_plugins()`），因此无需 `GStreamer.init` 之类的 Java 类。
+进插件 AAR 并合并到应用。Rust 的 `libxue_hua_video_player.so` 按 ABI 以预编译二进制获取。
+
+GStreamer 的 Android 运行时会在进程启动时由 `GStreamerInitProvider`（插件
+`android/src/main/java/` 下的一个 `ContentProvider`）自动初始化：它执行
+`System.loadLibrary("gstreamer_android")`（使该库的 `JNI_OnLoad` 捕获 JavaVM）并调用
+`GStreamer.init(context)`（设置应用的 `Context`/`ClassLoader`）。这一步是必需的，`androidmedia`
+的 MediaCodec 解码器只有在此之后才能扫描/注册；否则唯一内置的解码器不会注册，播放会报
+`not-linked` / `No streams to output`。内置的 `GStreamer.java` 及 `androidmedia` 辅助类
+（位于 `org/freedesktop/gstreamer/` 下）正是 `JNI_OnLoad`/`GStreamer.init` 按类名查找的对象；
+**使用方仍无需任何配置**——全部在插件内部完成。因此 Rust 核心在 Android 上不再自行注册插件
+（那会在 Java 初始化之前、且没有 JavaVM 的情况下运行）。
 
 使用方默认会构建全部四种 ABI。若要减小 APK 体积，可收窄 `abiFilters`（见
 [权限与各平台配置](#android)）或发布 App Bundle。若你是需要重建伞形库的维护者，见下文

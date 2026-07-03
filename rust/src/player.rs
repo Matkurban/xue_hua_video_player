@@ -131,14 +131,17 @@ impl PlayerEvent {
 type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
 // On Android, GStreamer and all of its plugins are compiled statically into a
-// single `libgstreamer_android.so` (built via ndk-build; see
-// `android/gstreamer_build`). Static plugins are not auto-discovered by
-// scanning the filesystem, so they must be registered explicitly. This symbol
-// is generated into that library and registers every bundled plugin.
-#[cfg(target_os = "android")]
-extern "C" {
-    fn gst_init_static_plugins();
-}
+// single `libgstreamer_android.so`. That library's `JNI_OnLoad` +
+// `GStreamer.init(context)` path (registered via `RegisterNatives`) is what
+// captures the JavaVM, sets the app `Context`/`ClassLoader`, runs `gst_init`,
+// and registers every static plugin - crucially including the `androidmedia`
+// (MediaCodec) decoders, which need the JavaVM/ClassLoader to enumerate codecs.
+// This is driven from Java at process startup by `GStreamerInitProvider`
+// (see `android/src/main/java/.../GStreamerInitProvider.java`), so the Rust
+// side must NOT register plugins itself (doing so runs before the Java init and
+// without the JavaVM, leaving androidmedia with zero decoders). `gst::init()`
+// below is a no-op by the time the Rust core loads, and just satisfies the
+// gstreamer-rs bindings.
 
 // On iOS, GStreamer ships as a single *static* `GStreamer.framework`. As on
 // Android, statically-linked plugins are not discovered by scanning the
@@ -335,9 +338,11 @@ pub fn ensure_gst_init() -> Result<()> {
                 #[cfg(target_os = "ios")]
                 setup_ios_env();
                 gst::init().map_err(|e| anyhow!("gst::init failed: {e}"))?;
-                // Register the statically-linked plugins on Android / iOS.
-                #[cfg(target_os = "android")]
-                gst_init_static_plugins();
+                // Android plugin registration + JavaVM/Context/ClassLoader setup
+                // is performed by the Java-side `GStreamer.init(context)` (see
+                // `GStreamerInitProvider`) before this runs; re-registering here
+                // would run without the JavaVM and break androidmedia decoding.
+                // Register the statically-linked plugins on iOS.
                 #[cfg(target_os = "ios")]
                 {
                     register_ios_static_plugins();
@@ -660,9 +665,27 @@ fn map_state(state: gst::State) -> PlayerState {
     }
 }
 
+/// Configures an HTTP(S) source element: disables TLS certificate verification
+/// (`ssl-strict = false`) so `https://` streams with self-signed / invalid
+/// certificates play, and sets a conventional `user-agent`. Safe to call on any
+/// element; the properties are only touched when present (e.g. `souphttpsrc`).
+fn configure_http_source(element: &gst::Element) {
+    if element.find_property("ssl-strict").is_some() {
+        element.set_property("ssl-strict", false);
+    }
+    if element.find_property("user-agent").is_some() {
+        element.set_property(
+            "user-agent",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
+             AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+        );
+    }
+}
+
 /// Builds a `playbin3` pipeline whose video output is an RGBA `appsink` wrapped
-/// in a `videoconvert` bin. Each decoded frame is copied into `frame_buffer` and
-/// the texture is marked dirty.
+/// in a conversion bin (`videoconvert`, plus a `glcolorconvert ! gldownload` GL
+/// front-end on Android so MediaCodec's GL-texture output can be consumed). Each
+/// decoded frame is copied into `frame_buffer` and the texture is marked dirty.
 fn build_pipeline(
     frame_buffer: &Arc<FrameBuffer>,
     sendable: &Arc<SendableTexture<BoxedPixelData>>,
@@ -682,46 +705,128 @@ fn build_pipeline(
         .enable_last_sample(false)
         .build();
 
-    let convert = gst::ElementFactory::make("videoconvert")
-        .build()
-        .map_err(|_| anyhow!("failed to create videoconvert"))?;
-
     let sink_bin = gst::Bin::new();
-    sink_bin.add_many([&convert, appsink.upcast_ref::<gst::Element>()])?;
-    gst::Element::link_many([&convert, appsink.upcast_ref::<gst::Element>()])?;
 
-    let sink_pad = convert
+    // Conversion elements between the bin's sink (ghosted) and the appsink.
+    //
+    // On Android the video comes from `amcvideodec` (MediaCodec HW decode), which
+    // for most Qualcomm/vendor decoders only emits GL textures
+    // (`video/x-raw(memory:GLMemory), texture-target=external-oes`) and refuses
+    // to negotiate with a plain system-memory `videoconvert`
+    // ("Codec only supports GL output but downstream does not" -> not-negotiated,
+    // with no software fallback bundled). So the chain must first advertise a
+    // GL-capable sink: `glcolorconvert` converts the external-OES texture to RGBA
+    // in GL, `gldownload` transfers it to system memory, then `videoconvert`
+    // normalizes to the RGBA the appsink requests. glcolorconvert/gldownload pick
+    // up the decoder's `GstGLContext` automatically via in-pipeline GstContext
+    // propagation. Other platforms (iOS/desktop) decode to system memory, so only
+    // `videoconvert` is needed there.
+    let mut chain: Vec<gst::Element> = Vec::new();
+
+    #[cfg(target_os = "android")]
+    {
+        // The GL front-end requires the `opengl` plugin in the bundled
+        // libgstreamer_android.so. If it is present, insert
+        // `glcolorconvert ! capsfilter(texture-target=2D) ! gldownload` so
+        // MediaCodec's GL-texture output can be consumed.
+        //
+        // The capsfilter is essential: MediaCodec decodes into an
+        // `external-oes` GL texture (a SurfaceTexture). Such textures can only
+        // be sampled in a shader - they cannot be CPU-mapped or copied
+        // (`gstglmemory`: "Cannot map/copy External OES textures"). Without the
+        // filter, `glcolorconvert` sees that `gldownload` also advertises
+        // GLMemory and simply passes the external-oes texture through unchanged,
+        // so `gldownload` then chokes trying to read it. Forcing
+        // `texture-target=2D` makes `glcolorconvert` actually sample the
+        // external-oes texture into a normal 2D RGBA texture that `gldownload`
+        // can transfer to system memory.
+        //
+        // If the plugin is missing (an older .so not rebuilt with `opengl`),
+        // fall back to a plain videoconvert chain: the pipeline still builds
+        // (audio/init succeed) instead of hard-failing, and only hardware video
+        // decode remains unavailable until the .so is rebuilt.
+        use std::str::FromStr;
+        let gl_2d_caps = gst::Caps::from_str("video/x-raw(memory:GLMemory), texture-target=(string)2D")
+            .expect("static GL caps string is valid");
+        match (
+            gst::ElementFactory::make("glcolorconvert").build(),
+            gst::ElementFactory::make("capsfilter")
+                .property("caps", &gl_2d_caps)
+                .build(),
+            gst::ElementFactory::make("gldownload").build(),
+        ) {
+            (Ok(glcolorconvert), Ok(gl_2d_filter), Ok(gldownload)) => {
+                chain.push(glcolorconvert);
+                chain.push(gl_2d_filter);
+                chain.push(gldownload);
+            }
+            _ => {
+                gst::warning!(
+                    gst::CAT_DEFAULT,
+                    "opengl plugin missing from libgstreamer_android.so: \
+                     MediaCodec GL output cannot be consumed, hardware video \
+                     decode will fail to negotiate. Rebuild the .so with the \
+                     `opengl` plugin (see android/gstreamer_build/jni/Android.mk)."
+                );
+            }
+        }
+    }
+
+    chain.push(
+        gst::ElementFactory::make("videoconvert")
+            .build()
+            .map_err(|_| anyhow!("failed to create videoconvert"))?,
+    );
+
+    for element in &chain {
+        sink_bin.add(element)?;
+    }
+    sink_bin.add(appsink.upcast_ref::<gst::Element>())?;
+
+    let mut prev: Option<&gst::Element> = None;
+    for element in &chain {
+        if let Some(p) = prev {
+            p.link(element)?;
+        }
+        prev = Some(element);
+    }
+    prev.expect("sink chain is never empty (videoconvert is always present)")
+        .link(appsink.upcast_ref::<gst::Element>())?;
+
+    let head = chain
+        .first()
+        .expect("sink chain is never empty (videoconvert is always present)");
+    let sink_pad = head
         .static_pad("sink")
-        .ok_or_else(|| anyhow!("videoconvert has no sink pad"))?;
+        .ok_or_else(|| anyhow!("sink chain head has no sink pad"))?;
     let ghost = gst::GhostPad::with_target(&sink_pad)?;
     ghost.set_active(true)?;
     sink_bin.add_pad(&ghost)?;
 
     playbin.set_property("video-sink", &sink_bin);
 
-    // Configure every internal element playbin3 creates. `element-setup` fires
-    // for each element (including sources nested inside `hlsdemux`/adaptivedemux
-    // for segment fetches), which is more thorough than `source-setup`.
+    // Disable TLS certificate verification for HTTP(S) sources on every
+    // platform. The bundled GStreamer runtimes ship no CA certificate database
+    // (the Android umbrella `.so` and the iOS `GStreamer.framework`), so the
+    // TLS backend cannot verify any server certificate and `souphttpsrc` aborts
+    // the handshake, delivering zero bytes ("Can't typefind stream"). Setting
+    // `ssl-strict = false` makes `souphttpsrc` accept the connection regardless
+    // of certificate validity so `https://` streams (incl. self-signed / expired
+    // certs) play. Trade-off: no MITM protection.
     //
-    // The iOS `GStreamer.framework` ships no CA certificate bundle, so the
-    // OpenSSL TLS backend cannot verify server certificates and `souphttpsrc`
-    // aborts the TLS handshake, delivering zero bytes ("Can't typefind stream").
-    // Disabling `ssl-strict` skips certificate verification so `https://`
-    // streams play. (Trade-off: no MITM protection; revisit with a bundled CA
-    // database if verification is required.) We also set a conventional
+    // We hook BOTH signals: `source-setup` reliably fires for the primary source
+    // element, while `element-setup` also catches sources nested inside
+    // `hlsdemux`/adaptivedemux (segment fetches). We also set a conventional
     // `user-agent` because some servers return an empty body for blank UAs.
+    playbin.connect("source-setup", false, |values| {
+        if let Ok(element) = values[1].get::<gst::Element>() {
+            configure_http_source(&element);
+        }
+        None
+    });
     playbin.connect("element-setup", false, |values| {
         if let Ok(element) = values[1].get::<gst::Element>() {
-            if element.find_property("ssl-strict").is_some() {
-                element.set_property("ssl-strict", false);
-            }
-            if element.find_property("user-agent").is_some() {
-                element.set_property(
-                    "user-agent",
-                    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
-                     AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
-                );
-            }
+            configure_http_source(&element);
         }
         None
     });
