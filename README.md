@@ -194,6 +194,13 @@ Targets a physical arm64 iPhone. The prebuilt SDK does not ship an arm64
 3. Build/run on a connected device: `flutter run -d <device>` (or
    `flutter build ios` / `--no-codesign` to verify the build).
 
+Because the iOS `GStreamer.framework` is static, its plugins are not
+auto-discovered. The Rust core registers the ones needed for playback
+(`register_ios_static_plugins()` in `rust/src/player.rs`, guarded by
+`#[cfg(target_os = "ios")]`), which is what makes the linker pull the
+corresponding `gst_plugin_*_register` objects out of the framework archive. Add
+to that list if you need an element from a plugin that isn't registered yet.
+
 ### Android (arm64)
 
 Targets arm64-v8a devices. **Consumers need no GStreamer setup**: the plugin

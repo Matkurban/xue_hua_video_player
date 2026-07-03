@@ -64,10 +64,12 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     'ENABLE_BITCODE' => 'NO',
     'FRAMEWORK_SEARCH_PATHS' => '"' + gst_framework_parent + '"',
     # Force-load the Rust static library and link the umbrella GStreamer
-    # framework (provides core + statically-registered plugins). The static
-    # GStreamer archive references a few OS libraries/frameworks (iconv, resolv,
-    # compression, media) that must be linked explicitly.
-    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework AVFoundation -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
+    # framework. iOS plugins are static and are registered explicitly by the
+    # Rust core (`register_ios_static_plugins()` in `rust/src/player.rs`); the
+    # linker pulls the referenced `gst_plugin_*_register` objects from the
+    # framework archive. The static GStreamer archive also references a few OS
+    # libraries/frameworks (iconv, resolv, compression, media) linked here.
+    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
   }
   s.vendored_frameworks = []
 end

@@ -55,7 +55,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _controller.initialize().then((_) {
        setState(() => _ready = true);
     }).catchError((e) {
-      print(e);
+      debugPrint(e.toString());
     });
   }
 
@@ -179,13 +179,14 @@ class _PlayerPageState extends State<PlayerPage> {
           SignalBuilder(
             builder: (context) {
               final error = _controller.error.value;
+              debugPrint(error.toString());
               final buffering = _controller.bufferingPercent.value;
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (buffering < 100) Text('缓冲 $buffering%'),
                   if (error != null)
-                    Text(
+                    SelectableText(
                       '错误: $error',
                       style: const TextStyle(color: Colors.red),
                     ),

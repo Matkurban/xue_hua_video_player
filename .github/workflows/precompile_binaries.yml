@@ -113,6 +113,7 @@ jobs:
           sudo apt-get install -y \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav \
+            libgtk-3-dev \
             pkg-config
       - name: build_tool deps
         working-directory: cargokit/build_tool
@@ -176,14 +177,23 @@ jobs:
       - uses: dart-lang/setup-dart@v1
       - name: Install pkg-config
         run: choco install -y pkgconfiglite
-      - name: Install GStreamer MSVC (runtime + devel)
+      - name: Install GStreamer MSVC (Inno .exe)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $ver = "${env:GST_VERSION}"
-          foreach ($kind in @("", "-devel")) {
-            $msi = "gstreamer-1.0$kind-msvc-x86_64-$ver.msi"
-            curl.exe -fLO "https://gstreamer.freedesktop.org/data/pkg/windows/$ver/msvc/$msi"
-            Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn ADDLOCAL=ALL" -Wait
+          # GStreamer 1.28+ dropped the .msi packages: Windows now ships a single
+          # Inno Setup .exe per arch that bundles both the runtime and the
+          # development files. Install it silently; the default (Complete) setup
+          # type includes the dev headers/libs/pkgconfig. It installs to the
+          # standard root C:\gstreamer\1.0\msvc_x86_64 used by the step below.
+          $exe = "gstreamer-1.0-msvc-x86_64-$ver.exe"
+          curl.exe -fLO "https://gstreamer.freedesktop.org/data/pkg/windows/$ver/msvc/$exe"
+          $p = Start-Process -FilePath ".\$exe" `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-","/NOICONS" `
+            -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            throw "GStreamer installer failed with exit code $($p.ExitCode)"
           }
       - name: build_tool deps
         working-directory: cargokit/build_tool

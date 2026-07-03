@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Weak,
 };
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -121,6 +121,184 @@ extern "C" {
     fn gst_init_static_plugins();
 }
 
+// On iOS, GStreamer ships as a single *static* `GStreamer.framework`. As on
+// Android, statically-linked plugins are not discovered by scanning the
+// filesystem, so each plugin must be registered explicitly. Every bundled
+// plugin exposes a `gst_plugin_<name>_register` symbol; we register the set
+// needed for local + network video playback (playbin3, appsink, common
+// containers/parsers, `libav` software decoders, and the HTTP/HLS/RTSP source
+// stack). All of these symbols are present in the official GStreamer iOS SDK
+// framework.
+//
+// NOTE: `applemedia` (VideoToolbox hardware decode) is intentionally NOT
+// registered: it drags in MoltenVK/Vulkan objects that require a full C++/Metal
+// link surface the Rust `cdylib` link (`-nodefaultlibs`) does not provide.
+// Software decode via `libav` is used instead; revisit if hardware decode is
+// needed (would require linking libc++ and the Vulkan/Metal stack).
+#[cfg(target_os = "ios")]
+extern "C" {
+    fn gst_plugin_coreelements_register();
+    fn gst_plugin_app_register();
+    fn gst_plugin_typefindfunctions_register();
+    fn gst_plugin_playback_register();
+    fn gst_plugin_autodetect_register();
+    fn gst_plugin_pbtypes_register();
+    fn gst_plugin_gio_register();
+    fn gst_plugin_videoconvertscale_register();
+    fn gst_plugin_videofilter_register();
+    fn gst_plugin_videorate_register();
+    fn gst_plugin_deinterlace_register();
+    fn gst_plugin_videocrop_register();
+    fn gst_plugin_audioconvert_register();
+    fn gst_plugin_audioresample_register();
+    fn gst_plugin_audiorate_register();
+    fn gst_plugin_volume_register();
+    fn gst_plugin_audiofx_register();
+    fn gst_plugin_audioparsers_register();
+    fn gst_plugin_videoparsersbad_register();
+    fn gst_plugin_isomp4_register();
+    fn gst_plugin_matroska_register();
+    fn gst_plugin_id3demux_register();
+    fn gst_plugin_subparse_register();
+    fn gst_plugin_libav_register();
+    fn gst_plugin_jpeg_register();
+    fn gst_plugin_png_register();
+    fn gst_plugin_osxaudio_register();
+    fn gst_plugin_soup_register();
+    fn gst_plugin_hls_register();
+    fn gst_plugin_rtp_register();
+    fn gst_plugin_rtpmanager_register();
+    fn gst_plugin_rtsp_register();
+    fn gst_plugin_udp_register();
+    fn gst_plugin_tcp_register();
+    fn gst_plugin_srtp_register();
+    fn gst_plugin_dtls_register();
+}
+
+// GIO TLS backend (glib-networking, OpenSSL) bundled in the iOS framework.
+// Without a registered `gio-tls-backend`, `souphttpsrc` cannot complete a TLS
+// handshake, so `https://` streams deliver zero bytes and playbin3 fails with
+// "Can't typefind stream". This mirrors the Android recipe's
+// `G_IO_MODULES := openssl`.
+#[cfg(target_os = "ios")]
+extern "C" {
+    // Registers the standard GIO extension points (incl. `gio-tls-backend`) so
+    // the OpenSSL module's `g_io_extension_point_implement` call below succeeds
+    // under static linking. GLib-internal but exported by the framework.
+    fn _g_io_modules_ensure_extension_points_registered();
+    // glib-networking OpenSSL module entry point; registers the TLS/DTLS backend
+    // implementations. Takes an (optional) `GIOModule*`; NULL is fine here.
+    fn g_io_openssl_load(module: *mut std::ffi::c_void);
+}
+
+/// Registers the OpenSSL-based GIO TLS backend so `https://` sources work.
+#[cfg(target_os = "ios")]
+fn register_ios_tls_backend() {
+    // SAFETY: both symbols are statically linked from the GStreamer iOS SDK
+    // framework. The extension points are registered first so the OpenSSL
+    // module can implement `gio-tls-backend`; both calls are idempotent.
+    unsafe {
+        _g_io_modules_ensure_extension_points_registered();
+        g_io_openssl_load(std::ptr::null_mut());
+    }
+}
+
+/// Prepares the process environment GStreamer/GLib expect, before `gst::init()`.
+///
+/// iOS apps launch without the POSIX/XDG environment variables GLib assumes
+/// exist. Two concrete failures result:
+///
+/// * ORC (the SIMD JIT behind `videoconvert`/`audioconvert`/`audioresample`)
+///   tries to allocate writable+executable memory, which the iOS Hardened
+///   Runtime forbids without the `com.apple.security.cs.allow-jit` entitlement,
+///   logging "Failed to create write and exec mmap regions". Setting
+///   `ORC_CODE=backup` forces the plain C fallbacks and avoids the JIT path.
+/// * With `HOME`/`TMPDIR`/`XDG_*` unset, GLib helpers receive NULL paths and log
+///   `g_dir_open ... path != NULL` / `g_filename_to_utf8 ... opsysstring != NULL`
+///   CRITICALs. Pointing them all at the app's writable temp sandbox silences
+///   these and gives the plugin registry a writable location.
+///
+/// Must run before `gst::init()` so the values are read during initialization.
+#[cfg(target_os = "ios")]
+fn setup_ios_env() {
+    use std::path::PathBuf;
+
+    // Writable per-app temp sandbox (e.g. .../Application/<UUID>/tmp).
+    let tmp = std::env::temp_dir();
+    let tmp_str = tmp.to_string_lossy().to_string();
+    // The container root is the parent of `tmp`; use it as HOME so caches land
+    // under a writable location.
+    let home: PathBuf = tmp.parent().map(PathBuf::from).unwrap_or_else(|| tmp.clone());
+    let home_str = home.to_string_lossy().to_string();
+    let registry = tmp.join("gstreamer-registry.bin");
+    let registry_str = registry.to_string_lossy().to_string();
+
+    // Called inside `ensure_gst_init`'s `Once` before any GStreamer worker
+    // threads are spawned, so there is no concurrent environment access.
+    std::env::set_var("ORC_CODE", "backup");
+
+    std::env::set_var("HOME", &home_str);
+    std::env::set_var("TMPDIR", &tmp_str);
+    std::env::set_var("TMP", &tmp_str);
+    std::env::set_var("TEMP", &tmp_str);
+
+    std::env::set_var("XDG_CACHE_HOME", &tmp_str);
+    std::env::set_var("XDG_DATA_HOME", &tmp_str);
+    std::env::set_var("XDG_CONFIG_HOME", &tmp_str);
+    std::env::set_var("XDG_RUNTIME_DIR", &tmp_str);
+    std::env::set_var("XDG_DATA_DIRS", &tmp_str);
+    std::env::set_var("XDG_CONFIG_DIRS", &tmp_str);
+
+    std::env::set_var("GST_REGISTRY", &registry_str);
+}
+
+/// Registers the statically-linked GStreamer plugins bundled in the iOS
+/// `GStreamer.framework`.
+#[cfg(target_os = "ios")]
+fn register_ios_static_plugins() {
+    // SAFETY: each symbol is a C plugin registration function statically linked
+    // from the GStreamer iOS SDK framework; calling it after `gst::init()` only
+    // registers element factories and is idempotent.
+    unsafe {
+        gst_plugin_coreelements_register();
+        gst_plugin_app_register();
+        gst_plugin_typefindfunctions_register();
+        gst_plugin_playback_register();
+        gst_plugin_autodetect_register();
+        gst_plugin_pbtypes_register();
+        gst_plugin_gio_register();
+        gst_plugin_videoconvertscale_register();
+        gst_plugin_videofilter_register();
+        gst_plugin_videorate_register();
+        gst_plugin_deinterlace_register();
+        gst_plugin_videocrop_register();
+        gst_plugin_audioconvert_register();
+        gst_plugin_audioresample_register();
+        gst_plugin_audiorate_register();
+        gst_plugin_volume_register();
+        gst_plugin_audiofx_register();
+        gst_plugin_audioparsers_register();
+        gst_plugin_videoparsersbad_register();
+        gst_plugin_isomp4_register();
+        gst_plugin_matroska_register();
+        gst_plugin_id3demux_register();
+        gst_plugin_subparse_register();
+        gst_plugin_libav_register();
+        gst_plugin_jpeg_register();
+        gst_plugin_png_register();
+        gst_plugin_osxaudio_register();
+        gst_plugin_soup_register();
+        gst_plugin_hls_register();
+        gst_plugin_rtp_register();
+        gst_plugin_rtpmanager_register();
+        gst_plugin_rtsp_register();
+        gst_plugin_udp_register();
+        gst_plugin_tcp_register();
+        gst_plugin_srtp_register();
+        gst_plugin_dtls_register();
+    }
+}
+
 /// Ensures `gst::init()` runs exactly once for the process.
 pub fn ensure_gst_init() -> Result<()> {
     use std::sync::Once;
@@ -130,10 +308,19 @@ pub fn ensure_gst_init() -> Result<()> {
     unsafe {
         INIT.call_once(|| {
             RESULT = Some((|| {
+                // On iOS the environment (ORC_CODE, HOME, TMPDIR, XDG_*) must be
+                // prepared before `gst::init()` reads it.
+                #[cfg(target_os = "ios")]
+                setup_ios_env();
                 gst::init().map_err(|e| anyhow!("gst::init failed: {e}"))?;
-                // Register the statically-linked plugins on Android.
+                // Register the statically-linked plugins on Android / iOS.
                 #[cfg(target_os = "android")]
                 gst_init_static_plugins();
+                #[cfg(target_os = "ios")]
+                {
+                    register_ios_static_plugins();
+                    register_ios_tls_backend();
+                }
                 Ok(())
             })());
         });
@@ -157,8 +344,28 @@ pub struct GstPlayer {
     desired_playing: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     bus_thread: Mutex<Option<JoinHandle<()>>>,
-    // Kept alive for the lifetime of the player; frames are pushed through it.
-    _sendable: Arc<SendableTexture<BoxedPixelData>>,
+    // The sole strong reference to the texture; frames are pushed through it.
+    // The appsink callback holds only a `Weak`, so this is guaranteed to be the
+    // last owner and can be released on the main thread in `Drop` (see
+    // `drop_sendable_on_main`). Wrapped in `Option` so `Drop` can take it.
+    sendable: Option<Arc<SendableTexture<BoxedPixelData>>>,
+}
+
+/// Releases a `SendableTexture` on the platform (main) thread.
+///
+/// The texture is wrapped in an irondash `Capsule` that remembers the thread it
+/// was created on (the main thread, inside `send_and_wait` in `GstPlayer::new`).
+/// Dropping it on any other thread panics with "Capsule was dropped on wrong
+/// thread". Since `GstPlayer` is created and dropped on flutter_rust_bridge
+/// worker threads, hand the final `Arc` to the main-thread run loop so its
+/// `Texture` is destroyed there.
+fn drop_sendable_on_main(sendable: Arc<SendableTexture<BoxedPixelData>>) {
+    match RunLoop::sender_for_main_thread() {
+        Ok(sender) => sender.send(move || drop(sendable)),
+        // If the main-thread run loop is unreachable there is no safe thread to
+        // drop on; leak rather than panic (this should not happen in practice).
+        Err(_) => std::mem::forget(sendable),
+    }
 }
 
 impl GstPlayer {
@@ -184,7 +391,17 @@ impl GstPlayer {
             })?
         };
 
-        let pipeline = build_pipeline(&frame_buffer, &sendable, &emitter)?;
+        // If building the pipeline fails, the last strong reference to the
+        // texture would otherwise be dropped here on this worker thread and
+        // panic in `Capsule::drop`, masking the real error. Release it on the
+        // main thread and propagate the original error instead.
+        let pipeline = match build_pipeline(&frame_buffer, &sendable, &emitter) {
+            Ok(pipeline) => pipeline,
+            Err(e) => {
+                drop_sendable_on_main(sendable);
+                return Err(e);
+            }
+        };
 
         let player = Self {
             pipeline,
@@ -196,7 +413,7 @@ impl GstPlayer {
             desired_playing: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(true)),
             bus_thread: Mutex::new(None),
-            _sendable: sendable,
+            sendable: Some(sendable),
         };
 
         player.spawn_bus_thread();
@@ -404,9 +621,15 @@ impl GstPlayer {
 impl Drop for GstPlayer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
+        // Stop dataflow first so the appsink callback (which holds only a `Weak`
+        // to the texture) can no longer run, then join the bus thread.
         let _ = self.pipeline.set_state(gst::State::Null);
         if let Some(handle) = self.bus_thread.lock().take() {
             let _ = handle.join();
+        }
+        // Release the sole strong reference to the texture on the main thread.
+        if let Some(sendable) = self.sendable.take() {
+            drop_sendable_on_main(sendable);
         }
     }
 }
@@ -458,9 +681,38 @@ fn build_pipeline(
 
     playbin.set_property("video-sink", &sink_bin);
 
-    // Wire the frame callback.
+    // Configure every internal element playbin3 creates. `element-setup` fires
+    // for each element (including sources nested inside `hlsdemux`/adaptivedemux
+    // for segment fetches), which is more thorough than `source-setup`.
+    //
+    // The iOS `GStreamer.framework` ships no CA certificate bundle, so the
+    // OpenSSL TLS backend cannot verify server certificates and `souphttpsrc`
+    // aborts the TLS handshake, delivering zero bytes ("Can't typefind stream").
+    // Disabling `ssl-strict` skips certificate verification so `https://`
+    // streams play. (Trade-off: no MITM protection; revisit with a bundled CA
+    // database if verification is required.) We also set a conventional
+    // `user-agent` because some servers return an empty body for blank UAs.
+    playbin.connect("element-setup", false, |values| {
+        if let Ok(element) = values[1].get::<gst::Element>() {
+            if element.find_property("ssl-strict").is_some() {
+                element.set_property("ssl-strict", false);
+            }
+            if element.find_property("user-agent").is_some() {
+                element.set_property(
+                    "user-agent",
+                    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
+                     AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+                );
+            }
+        }
+        None
+    });
+
+    // Wire the frame callback. The callback holds only a `Weak` reference to the
+    // texture so the player's `sendable` field remains the sole strong owner and
+    // can be dropped on the main thread (see `drop_sendable_on_main`).
     let fb = frame_buffer.clone();
-    let tex = sendable.clone();
+    let tex: Weak<SendableTexture<BoxedPixelData>> = Arc::downgrade(sendable);
     let emitter = emitter.clone();
     let last_size: Arc<Mutex<(i32, i32)>> = Arc::new(Mutex::new((0, 0)));
 
@@ -493,7 +745,9 @@ fn build_pipeline(
                 }
 
                 fb.set(width, height, data);
-                tex.mark_frame_available();
+                if let Some(tex) = tex.upgrade() {
+                    tex.mark_frame_available();
+                }
 
                 {
                     let mut ls = last_size.lock();
