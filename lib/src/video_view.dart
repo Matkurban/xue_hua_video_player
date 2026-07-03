@@ -2,9 +2,10 @@ import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
 import 'controls/video_controls.dart';
+import 'enum/video_controls_style.dart';
 import 'player_controller.dart';
 
-export 'controls/video_controls.dart' show VideoControlsStyle;
+export 'controls/video_controls.dart';
 
 /// Renders the video frames produced by a [XueHuaPlayerController] into a
 /// Flutter [Texture], preserving the decoded aspect ratio and optionally
@@ -62,7 +63,8 @@ class XueHuaVideoView extends StatelessWidget {
               );
             },
           ),
-          if (showControls) VideoControls(controller: controller, style: controlsStyle),
+          if (showControls)
+            VideoControls(controller: controller, style: controlsStyle),
         ],
       ),
     );

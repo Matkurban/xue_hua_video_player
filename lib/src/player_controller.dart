@@ -6,12 +6,13 @@ import 'package:flutter/widgets.dart';
 import 'package:irondash_engine_context/irondash_engine_context.dart';
 import 'package:signals/signals_flutter.dart';
 
+import 'enum/video_source_type.dart';
 import 'rust/api/player.dart' as rust;
 import 'rust/player.dart';
-import 'video_source.dart';
+import 'model/video_source.dart';
 
 export 'rust/player.dart' show PlayerState, PlayerEvent, PlayerEventKind;
-export 'video_source.dart';
+export 'model/video_source.dart';
 
 /// Drives a single GStreamer-backed video player living in Rust and exposes its
 /// state to Flutter widgets through fine-grained [signals].

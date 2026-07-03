@@ -187,7 +187,14 @@ class _PlayerPageState extends State<PlayerPage> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (buffering < 100) Text('缓冲 $buffering%'),
+                  // Reserve a fixed height so the transient buffering line does
+                  // not reflow the layout (and resize the video) while seeking.
+                  SizedBox(
+                    height: 20,
+                    child: buffering < 100
+                        ? Center(child: Text('缓冲 $buffering%'))
+                        : null,
+                  ),
                   if (error != null)
                     SelectableText(
                       '错误: $error',

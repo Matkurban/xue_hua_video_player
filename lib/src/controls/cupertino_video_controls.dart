@@ -1,0 +1,193 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
+import 'package:signals/signals_flutter.dart';
+
+import '../constant/constant.dart';
+import '../mixin/seek_mixin.dart';
+import '../player_controller.dart';
+import '../theme/video_controls_theme.dart';
+import '../utils/time_util.dart';
+import 'center_button.dart';
+
+class CupertinoVideoControls extends StatefulWidget {
+  const CupertinoVideoControls({
+    super.key,
+    required this.controller,
+    required this.theme,
+    required this.onInteract,
+  });
+
+  final XueHuaPlayerController controller;
+  final VideoControlsTheme theme;
+  final VoidCallback onInteract;
+
+  @override
+  State<CupertinoVideoControls> createState() => _CupertinoVideoControlsState();
+}
+
+class _CupertinoVideoControlsState extends State<CupertinoVideoControls>
+    with SeekMixin {
+  @override
+  XueHuaPlayerController get seekController => widget.controller;
+
+  @override
+  VoidCallback get onSeekInteract => widget.onInteract;
+
+  Future<void> _showSpeedSheet() async {
+    widget.onInteract();
+    final c = widget.controller;
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Playback speed'),
+        actions: [
+          for (final s in speeds)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                c.setSpeed(s);
+                Navigator.of(context).pop();
+              },
+              child: Text('${s}x'),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final XueHuaPlayerController controller = widget.controller;
+    final VideoControlsTheme theme = widget.theme;
+    return Stack(
+      children: [
+        CenterButton(
+          controller: controller,
+          theme: theme,
+          onInteract: widget.onInteract,
+          cupertino: true,
+        ),
+        Positioned(
+          left: 8,
+          right: 8,
+          bottom: 8,
+          child: LiquidGlassLens(
+            style: LiquidGlassStyle(
+              shape: LiquidGlassShape(
+                cornerRadius: theme.borderRadius,
+                lightColor: theme.backgroundColor,
+              ),
+            ),
+            child: Container(
+              // color: theme.backgroundColor,
+              padding: theme.barPadding,
+              child: Row(
+                children: [
+                  SignalBuilder(
+                    builder: (context) => GestureDetector(
+                      onTap: () {
+                        widget.onInteract();
+                        controller.toggleMuted();
+                      },
+                      child: Icon(
+                        controller.muted.value || controller.volume.value == 0
+                            ? CupertinoIcons.volume_off
+                            : CupertinoIcons.volume_up,
+                        size: theme.secondaryIconSize,
+                        color: theme.iconColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SignalBuilder(
+                    builder: (context) => Text(
+                      formatDuration(controller.position.value),
+                      style: TextStyle(color: theme.textColor, fontSize: 12),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: SignalBuilder(
+                        builder: (context) {
+                          final dur = controller.duration.value.inMilliseconds
+                              .toDouble();
+                          final pos = controller.position.value.inMilliseconds
+                              .toDouble();
+                          final value = sliderValue(dur, pos);
+                          Widget buildSlider(double v) {
+                            return CupertinoSlider(
+                              value: v,
+                              activeColor: theme.activeTrackColor,
+                              thumbColor: theme.thumbColor,
+                              onChanged: (v) => onSeekChanged(v, dur),
+                              onChangeEnd: dur > 0
+                                  ? (v) => onSeekEnd(v, dur)
+                                  : null,
+                            );
+                          }
+
+                          if (isScrubbing) {
+                            return buildSlider(value);
+                          }
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween<double>(end: value),
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.linear,
+                            builder: (context, animatedValue, child) =>
+                                buildSlider(animatedValue),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  SignalBuilder(
+                    builder: (context) => Text(
+                      formatDuration(controller.duration.value),
+                      style: TextStyle(color: theme.textColor, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SignalBuilder(
+                    builder: (context) => GestureDetector(
+                      onTap: () {
+                        widget.onInteract();
+                        controller.setLooping(!controller.looping.value);
+                      },
+                      child: Icon(
+                        CupertinoIcons.repeat,
+                        size: theme.secondaryIconSize,
+                        color: controller.looping.value
+                            ? theme.activeIconColor
+                            : theme.iconColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: _showSpeedSheet,
+                    child: SignalBuilder(
+                      builder: (context) => Text(
+                        '${controller.speed.value}x',
+                        style: TextStyle(
+                          color: theme.iconColor,
+                          fontSize: theme.secondaryIconSize * 0.7,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
