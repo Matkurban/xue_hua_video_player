@@ -1,0 +1,71 @@
+// The Android Gradle Plugin builds the native code with the Android NDK.
+
+group 'com.flutter_rust_bridge.xue_hua_video_player'
+version '1.0.0'
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        // The Android Gradle Plugin knows how to build native code with the NDK.
+        classpath 'com.android.tools.build:gradle:7.3.0'
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    if (project.android.hasProperty("namespace")) {
+        namespace 'com.flutter_rust_bridge.xue_hua_video_player'
+    }
+
+    // Bumping the plugin compileSdkVersion requires all clients of this plugin
+    // to bump the version in their app.
+    compileSdkVersion 33
+
+    // Use the NDK version
+    // declared in /android/app/build.gradle file of the Flutter project.
+    // Replace it with a version number if this plugin requires a specfic NDK version.
+    // (e.g. ndkVersion "23.1.7779620")
+    ndkVersion android.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        minSdkVersion 19
+    }
+}
+
+apply from: "../cargokit/gradle/plugin.gradle"
+cargokit {
+    manifestDir = "../rust"
+    libname = "xue_hua_video_player"
+}
+
+// --- GStreamer (Android) integration notes ----------------------------------
+// Android decoding requires the GStreamer Android SDK (prebuilt). The Rust core
+// links GStreamer via pkg-config while cross-compiling for each ABI, so the
+// build needs, per target ABI, environment such as:
+//
+//   export GSTREAMER_ROOT_ANDROID=/path/to/gstreamer-1.0-android-universal-1.x
+//   export PKG_CONFIG_PATH="$GSTREAMER_ROOT_ANDROID/arm64/lib/pkgconfig"
+//   export PKG_CONFIG_ALLOW_CROSS=1
+//
+// You must also build the `gstreamer_android` shared library (via ndk-build with
+// the SDK's `gstreamer_android-1.0.mk`) which bundles the core + plugins and
+// generates the `org.freedesktop.gstreamer.GStreamer` Java class used by the
+// example's MainActivity. See the plugin README ("Android") for the full steps.
+
