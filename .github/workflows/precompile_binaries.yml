@@ -183,14 +183,19 @@ jobs:
           $ErrorActionPreference = "Stop"
           $ver = "${env:GST_VERSION}"
           # GStreamer 1.28+ dropped the .msi packages: Windows now ships a single
-          # Inno Setup .exe per arch that bundles both the runtime and the
-          # development files. Install it silently; the default (Complete) setup
-          # type includes the dev headers/libs/pkgconfig. It installs to the
-          # standard root C:\gstreamer\1.0\msvc_x86_64 used by the step below.
+          # Inno Setup .exe per arch bundling runtime + development files.
+          # Two flags are essential for CI (see cerbero's inno_setup.py):
+          #   /TYPE=devel  - the installer's DefaultDirName is {autopf}\... and
+          #                  its silent default may omit headers; "devel" pulls in
+          #                  the development headers/.lib/.pc that pkg-config needs.
+          #   /DIR=...      - override DefaultDirName ({autopf}\gstreamer\...,
+          #                  i.e. C:\Program Files\...) so the tree lands at the
+          #                  canonical C:\gstreamer\1.0\msvc_x86_64 the precompile
+          #                  step (PKG_CONFIG_PATH) expects.
           $exe = "gstreamer-1.0-msvc-x86_64-$ver.exe"
           curl.exe -fLO "https://gstreamer.freedesktop.org/data/pkg/windows/$ver/msvc/$exe"
           $p = Start-Process -FilePath ".\$exe" `
-            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-","/NOICONS" `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-","/NOICONS","/TYPE=devel","/DIR=C:\gstreamer\1.0\msvc_x86_64" `
             -Wait -PassThru
           if ($p.ExitCode -ne 0) {
             throw "GStreamer installer failed with exit code $($p.ExitCode)"
