@@ -369,6 +369,8 @@ pub struct GstPlayer {
     rate: Arc<Mutex<f64>>,
     looping: Arc<AtomicBool>,
     desired_playing: Arc<AtomicBool>,
+    /// Set when playback reaches EOS; cleared on seek or replay.
+    at_eos: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     bus_thread: Mutex<Option<JoinHandle<()>>>,
     // The sole strong reference to the texture; frames are pushed through it.
@@ -440,6 +442,7 @@ impl GstPlayer {
             rate: Arc::new(Mutex::new(1.0)),
             looping: Arc::new(AtomicBool::new(false)),
             desired_playing: Arc::new(AtomicBool::new(false)),
+            at_eos: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(true)),
             bus_thread: Mutex::new(None),
             sendable: Some(sendable),
@@ -465,6 +468,7 @@ impl GstPlayer {
 
     /// Loads a media URI. Accepts `file://`, `http(s)://`, `rtsp://`, etc.
     pub fn set_uri(&self, uri: &str) -> Result<()> {
+        self.at_eos.store(false, Ordering::SeqCst);
         self.pipeline.set_state(gst::State::Ready)?;
         self.pipeline.set_property("uri", uri);
         // Preroll so duration/size become available and the first frame renders.
@@ -474,6 +478,9 @@ impl GstPlayer {
 
     pub fn play(&self) -> Result<()> {
         self.desired_playing.store(true, Ordering::SeqCst);
+        if self.at_eos.swap(false, Ordering::SeqCst) {
+            self.seek(0)?;
+        }
         self.pipeline.set_state(gst::State::Playing)?;
         Ok(())
     }
@@ -486,6 +493,7 @@ impl GstPlayer {
 
     pub fn stop(&self) -> Result<()> {
         self.desired_playing.store(false, Ordering::SeqCst);
+        self.at_eos.store(false, Ordering::SeqCst);
         self.pipeline.set_state(gst::State::Ready)?;
         self.frame_buffer.clear();
         self.emit(PlayerEvent::state(PlayerState::Stopped));
@@ -493,6 +501,7 @@ impl GstPlayer {
     }
 
     pub fn seek(&self, position_ms: i64) -> Result<()> {
+        self.at_eos.store(false, Ordering::SeqCst);
         let rate = *self.rate.lock();
         let pos = gst::ClockTime::from_mseconds(position_ms.max(0) as u64);
         self.pipeline.seek(
@@ -560,6 +569,7 @@ impl GstPlayer {
         let emitter = self.emitter.clone();
         let looping = self.looping.clone();
         let desired_playing = self.desired_playing.clone();
+        let at_eos = self.at_eos.clone();
         let running = self.running.clone();
 
         let handle = std::thread::spawn(move || {
@@ -576,11 +586,13 @@ impl GstPlayer {
                     match msg.view() {
                         MessageView::Eos(..) => {
                             if looping.load(Ordering::SeqCst) {
+                                at_eos.store(false, Ordering::SeqCst);
                                 let _ = pipeline.seek_simple(
                                     gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
                                     gst::ClockTime::ZERO,
                                 );
                             } else {
+                                at_eos.store(true, Ordering::SeqCst);
                                 emit(PlayerEvent::eos());
                                 emit(PlayerEvent::state(PlayerState::Completed));
                             }
@@ -680,6 +692,51 @@ fn configure_http_source(element: &gst::Element) {
              AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
         );
     }
+}
+
+/// Builds an audio sink bin with `scaletempo` for pitch-preserving rate changes.
+/// Falls back to plain `autoaudiosink` when scaletempo is unavailable (e.g.
+/// plugins-good / audiofx not installed or not bundled on Android).
+fn build_audio_sink_bin() -> Result<gst::Bin> {
+    let audio_bin = gst::Bin::new();
+    let audiosink = gst::ElementFactory::make("autoaudiosink")
+        .build()
+        .map_err(|_| anyhow!("failed to create autoaudiosink"))?;
+
+    let head = match (
+        gst::ElementFactory::make("scaletempo").build(),
+        gst::ElementFactory::make("audioconvert").build(),
+        gst::ElementFactory::make("audioresample").build(),
+    ) {
+        (Ok(scaletempo), Ok(audioconvert), Ok(audioresample)) => {
+            audio_bin.add(&scaletempo)?;
+            audio_bin.add(&audioconvert)?;
+            audio_bin.add(&audioresample)?;
+            audio_bin.add(&audiosink)?;
+            scaletempo.link(&audioconvert)?;
+            audioconvert.link(&audioresample)?;
+            audioresample.link(&audiosink)?;
+            scaletempo
+        }
+        _ => {
+            gst::warning!(
+                gst::CAT_DEFAULT,
+                "scaletempo unavailable (install/bundle the audiofx plugin from \
+                 gst-plugins-good): playback speed will change pitch."
+            );
+            audio_bin.add(&audiosink)?;
+            audiosink
+        }
+    };
+
+    let sink_pad = head
+        .static_pad("sink")
+        .ok_or_else(|| anyhow!("audio sink head has no sink pad"))?;
+    let ghost = gst::GhostPad::with_target(&sink_pad)?;
+    ghost.set_active(true)?;
+    audio_bin.add_pad(&ghost)?;
+
+    Ok(audio_bin)
 }
 
 /// Builds a `playbin3` pipeline whose video output is an RGBA `appsink` wrapped
@@ -805,6 +862,9 @@ fn build_pipeline(
     sink_bin.add_pad(&ghost)?;
 
     playbin.set_property("video-sink", &sink_bin);
+
+    let audio_bin = build_audio_sink_bin()?;
+    playbin.set_property("audio-sink", &audio_bin);
 
     // Disable TLS certificate verification for HTTP(S) sources on every
     // platform. The bundled GStreamer runtimes ship no CA certificate database

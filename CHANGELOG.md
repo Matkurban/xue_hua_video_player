@@ -1,6 +1,26 @@
-# Changelog
+## 1.0.1
 
-All notable changes to this project are documented in this file.
+### Bug fixes
+
+- Fixed replay after playback reaches the end of the media: pressing play again
+  now seeks back to the start instead of staying stuck at the end.
+- Buffering events now set `PlayerState.buffering` so the control bar shows the
+  loading indicator during network buffering.
+
+### Improvements
+
+- Playback speed changes now preserve the original pitch (via GStreamer's
+  `scaletempo` audio filter) instead of shifting tone at non-1x rates.
+- Optimized control bar UI.
+
+### Platform notes
+
+- Android: bundled `audiofx` plugin (includes `scaletempo`) in
+  `libgstreamer_android.so` so pitch-preserving speed works out of the box.
+- Other platforms: pitch-preserving speed uses the system `audiofx` / `plugins-good`
+  package (`gstreamer1.0-plugins-good` on Linux, GStreamer MSVC good plugins on
+  Windows, Homebrew `gst-plugins-good` on macOS). If `scaletempo` is unavailable,
+  playback speed falls back to the previous pitch-shifting behaviour.
 
 ## 1.0.0
 

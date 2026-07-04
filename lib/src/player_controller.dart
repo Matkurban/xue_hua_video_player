@@ -133,7 +133,10 @@ class XueHuaPlayerController {
         _state.value = event.state;
         break;
       case PlayerEventKind.buffering:
-        _bufferingPercent.value = event.bufferingPercent;
+        batch(() {
+          _state.value = PlayerState.buffering;
+          _bufferingPercent.value = event.bufferingPercent;
+        });
         break;
       case PlayerEventKind.eos:
         batch(() {

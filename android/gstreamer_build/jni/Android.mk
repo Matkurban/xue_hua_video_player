@@ -40,7 +40,7 @@ GSTREAMER_NDK_BUILD_PATH := $(GSTREAMER_ROOT)/share/gst-android/ndk-build/
 # texture, convert it to RGBA and download it to system memory for the appsink.
 GSTREAMER_PLUGINS := \
     coreelements app typefindfunctions playback \
-    audioconvert audioresample videoconvertscale volume autodetect \
+    audioconvert audioresample audiofx videoconvertscale volume autodetect \
     isomp4 matroska audioparsers videoparsersbad id3demux \
     androidmedia videofilter opengl \
     soup tcp udp opensles

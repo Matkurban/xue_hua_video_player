@@ -437,18 +437,23 @@ tar -xf gstreamer-1.0-android-universal-1.28.4.tar.xz \
 cd android/gstreamer_build
 export GSTREAMER_ROOT_ANDROID="$HOME/Library/Developer/GStreamer/android/1.28.4"
 ~/Library/Android/sdk/ndk/<ndk-version>/ndk-build \
+  NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk clean
+~/Library/Android/sdk/ndk/<ndk-version>/ndk-build \
   NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk -j4
 # -> 每个 ABI 的 libs/<abi>/libgstreamer_android.so (+ libc++_shared.so)
+#    注意：请从 libs/ 复制（已 strip）；gst-android-build/ 下是未 strip 的链接中间产物。
 ```
 
 **3. 把伞形 `.so` 安装到 `jniLibs`（提交入库、运行时打包）与 SDK 的各 ABI `lib` 目录（供 Rust
 链接步骤使用）。** 注意 GStreamer SDK 用 `armv7`/`arm64` 目录名，而 jniLibs 用
-`armeabi-v7a`/`arm64-v8a`：
+`armeabi-v7a`/`arm64-v8a`。复制前确认 `libs/<abi>/libgstreamer_android.so` 已包含
+`audiofx`（例如 `strings ... | rg gst_plugin_audiofx_register`）：
 
 ```bash
 GST=~/Library/Developer/GStreamer/android/1.28.4
 declare -A SDK=( [arm64-v8a]=arm64 [armeabi-v7a]=armv7 [x86]=x86 [x86_64]=x86_64 )
 for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+  strings "libs/$abi/libgstreamer_android.so" | rg -q gst_plugin_audiofx_register
   cp libs/$abi/libgstreamer_android.so "$GST/${SDK[$abi]}/lib/"          # 供 Rust 链接
   mkdir -p ../src/main/jniLibs/$abi
   cp libs/$abi/libgstreamer_android.so libs/$abi/libc++_shared.so \
