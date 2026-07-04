@@ -8,6 +8,8 @@ import 'package:path/path.dart' as path;
 
 import 'util.dart';
 
+String? Function()? rustupExecutablePathOverride;
+
 class _Toolchain {
   _Toolchain(
     this.name,
@@ -128,6 +130,11 @@ class Rustup {
   }
 
   static String? executablePath() {
+    final override = rustupExecutablePathOverride;
+    if (override != null) {
+      return override();
+    }
+
     final envPath = Platform.environment['PATH'];
     final envPathSeparator = Platform.isWindows ? ';' : ':';
     final home = Platform.isWindows

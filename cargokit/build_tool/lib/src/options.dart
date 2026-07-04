@@ -13,7 +13,6 @@ import 'package:yaml/yaml.dart';
 
 import 'builder.dart';
 import 'environment.dart';
-import 'rustup.dart';
 
 final _log = Logger('options');
 
@@ -231,10 +230,11 @@ class CargokitCrateOptions {
 }
 
 class CargokitUserOptions {
-  // When Rustup is installed always build locally unless user opts into
-  // using precompiled binaries.
+  // Published plugin consumers should prefer signed precompiled binaries by
+  // default. Maintainers can still opt into local source builds explicitly via
+  // cargokit_options.yaml when they are iterating on Rust code.
   static bool defaultUsePrecompiledBinaries() {
-    return Rustup.executablePath() == null;
+    return true;
   }
 
   CargokitUserOptions({

@@ -56,6 +56,11 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 > The Apple-Silicon iOS **Simulator** is not supported because the prebuilt iOS
 > SDK does not ship an arm64 simulator slice.
+>
+> On Apple-Silicon macOS, the default Homebrew install is arm64-only. The plugin
+> therefore builds arm64-only by default in that setup; install the official
+> `GStreamer.framework` (or point `GSTREAMER_PKG_CONFIG_PATH` at a universal /
+> x86_64-capable SDK) when you need a universal macOS app.
 
 ## Installation
 
@@ -75,8 +80,9 @@ Then:
 flutter pub get
 ```
 
-The Rust core is fetched as a **precompiled binary** by default, so your machine
-does **not** need the Rust toolchain (see [Precompiled binaries](#precompiled-binaries)).
+The Rust core is fetched as a **precompiled binary** by default, so consumers do
+**not** normally need the Rust toolchain even on machines that already have Rust
+installed (see [Precompiled binaries](#precompiled-binaries)).
 Each desktop/iOS platform still needs the GStreamer SDK available at build/run
 time; Android bundles everything (see the sections below).
 
@@ -345,15 +351,21 @@ available (bundled or system-installed) when running.
 
 ### macOS
 
-Install via Homebrew (used by `macos/xue_hua_video_player.podspec` by default):
+Install via Homebrew for local Apple-Silicon development:
 
 ```bash
 brew install pkg-config gstreamer gst-plugins-base gst-plugins-good \
   gst-plugins-bad gst-libav
 ```
 
-To use the official `GStreamer.framework` instead, set
-`GSTREAMER_PKG_CONFIG_PATH` to its `.../Versions/1.0/lib/pkgconfig`.
+`macos/xue_hua_video_player.podspec` prefers the official
+`GStreamer.framework` automatically when it is installed at the standard
+location. Otherwise it falls back to Homebrew.
+
+On Apple-Silicon machines, that Homebrew fallback is typically arm64-only, so
+the plugin excludes `x86_64` by default to avoid a broken universal link step.
+To build a universal macOS app, install the official `GStreamer.framework` or
+set `GSTREAMER_PKG_CONFIG_PATH` to a universal / x86_64-capable SDK.
 
 For distribution you must bundle the GStreamer dylibs into the `.app` and fix
 their load paths; the Homebrew setup above is intended for local development.
@@ -505,9 +517,19 @@ of running `cargo`.
 
 Behavior:
 
-- Consumers **without** Rust installed automatically use the precompiled binary.
-- Consumers **with** Rust installed build from source by default. To force the
-  precompiled path, add a `cargokit_options.yaml` next to the app's
+- Consumers use the precompiled binary by default, including on machines where
+  Rust / `rustup` is already installed.
+- Maintainers who intentionally want a local source build can add a
+  `cargokit_options.yaml` next to the app's `pubspec.yaml` with:
+
+  ```yaml
+  use_precompiled_binaries: false
+  ```
+
+- If no matching signed artifact exists for the current `crate-hash`, cargokit
+  falls back to building from source.
+- To force the precompiled path explicitly, add a `cargokit_options.yaml` next
+  to the app's
   `pubspec.yaml` with:
 
   ```yaml
