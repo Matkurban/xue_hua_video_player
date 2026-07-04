@@ -34,15 +34,14 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
 
   @override
   Widget build(BuildContext context) {
-    final controller = widget.controller;
-    final theme = widget.theme;
+    final XueHuaPlayerController controller = widget.controller;
+    final VideoControlsTheme theme = widget.theme;
     return Stack(
       children: [
         CenterButton(
           controller: controller,
           theme: theme,
           onInteract: widget.onInteract,
-          cupertino: false,
         ),
         Positioned(
           left: 0,
@@ -118,13 +117,16 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
                     const Spacer(),
                     SignalBuilder(
                       builder: (context) => IconButton(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: theme.secondaryIconSize,
+                        style: IconButton.styleFrom(
+                          tapTargetSize: .shrinkWrap,
+                          visualDensity: .compact,
+                        ),
                         color: theme.iconColor,
                         icon: Icon(
                           controller.muted.value || controller.volume.value == 0
                               ? Icons.volume_off
                               : Icons.volume_up,
+                          size: theme.secondaryIconSize,
                         ),
                         onPressed: () {
                           widget.onInteract();
@@ -134,15 +136,19 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
                     ),
                     SignalBuilder(
                       builder: (context) => IconButton(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: theme.secondaryIconSize,
+                        style: IconButton.styleFrom(
+                          tapTargetSize: .shrinkWrap,
+                          visualDensity: .compact,
+                        ),
                         color: controller.looping.value
-                            ? theme.activeIconColor
-                            : theme.iconColor,
-                        icon: const Icon(Icons.loop),
-                        onPressed: () {
+                            ? theme.iconColor
+                            : theme.iconColor.withValues(alpha: 0.5),
+                        icon: Icon(Icons.loop, size: theme.secondaryIconSize),
+                        onPressed: () async {
                           widget.onInteract();
-                          controller.setLooping(!controller.looping.value);
+                          await controller.setLooping(
+                            !controller.looping.value,
+                          );
                         },
                       ),
                     ),

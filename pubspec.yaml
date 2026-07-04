@@ -14,9 +14,9 @@ dependencies:
     sdk: flutter
   flutter_rust_bridge: 2.12.0
   irondash_engine_context: ^0.5.5
-  liquid_glass_easy: ^3.2.2
   plugin_platform_interface: ^2.0.2
   signals: ^7.1.0
+  liquid_glass_widgets: ^0.21.0
   theme_extensions_builder_annotation: ^7.4.0
 
 dev_dependencies:
@@ -28,7 +28,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   build_runner: ^2.15.0
-  theme_extensions_builder: ^7.4.0 
+  theme_extensions_builder: ^7.4.0
 
 flutter:
   plugin:

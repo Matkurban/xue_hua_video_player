@@ -40,8 +40,8 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     textColor: Color(0xFFFFFFFF),
     backgroundColor: Color(0x99000000),
     primaryIconSize: 24,
-    secondaryIconSize: 24,
-    barPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    secondaryIconSize: 20,
+    barPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     borderRadius: 0,
   );
 
@@ -56,8 +56,8 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     textColor: Color(0xFFEBEBF5),
     backgroundColor: Color(0x66000000),
     primaryIconSize: 24,
-    secondaryIconSize: 22,
-    barPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    secondaryIconSize: 20,
+    barPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
     borderRadius: 14,
   );
 
