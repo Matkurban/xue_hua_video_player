@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../enum/video_controls_style.dart';
-import '../player_controller.dart';
+import '../xue_hua_player_controller.dart';
 import '../theme/video_controls_theme.dart';
 import 'cupertino_video_controls.dart';
 import 'material_video_controls.dart';

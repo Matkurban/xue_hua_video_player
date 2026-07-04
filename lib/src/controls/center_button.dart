@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../player_controller.dart';
+import '../xue_hua_player_controller.dart';
 import '../theme/video_controls_theme.dart';
 
 /// Central play/pause/buffering affordance shared by both styles.

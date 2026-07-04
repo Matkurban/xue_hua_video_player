@@ -3,7 +3,7 @@ import 'package:signals/signals_flutter.dart';
 
 import 'controls/video_controls.dart';
 import 'enum/video_controls_style.dart';
-import 'player_controller.dart';
+import 'xue_hua_player_controller.dart';
 
 export 'controls/video_controls.dart';
 

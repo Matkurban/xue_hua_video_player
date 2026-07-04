@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../player_controller.dart';
+import '../xue_hua_player_controller.dart';
 
 /// Shared drag/seek handling for the built-in sliders.
 ///

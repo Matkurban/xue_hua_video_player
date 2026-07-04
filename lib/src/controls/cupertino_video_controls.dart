@@ -5,7 +5,7 @@ import 'package:signals/signals_flutter.dart';
 
 import '../constant/constant.dart';
 import '../mixin/seek_mixin.dart';
-import '../player_controller.dart';
+import '../xue_hua_player_controller.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/time_util.dart';
 import 'center_button.dart';
