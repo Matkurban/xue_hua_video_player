@@ -331,7 +331,11 @@ Rust 核心在构建时链接 GStreamer，所以构建时必须能找到 GStream
   - `GStreamer.framework` — 完整 SDK（构建链接用）
   - `GStreamerRuntime.framework` — runtime 快照（嵌入 `.app` 用，消费方无需关心）
 
-最终 `.app` 仅嵌入 runtime 部分（约 **150–600MB**）。多项目共享同一份缓存。
+最终 `.app` 嵌入经裁剪的 **Slim Runtime**（v1.0.5+，约 **350–450MB** universal，或 **175–280MB** 单架构），
+仅保留 playbin3 + HTTPS/HLS/RTSP + applemedia 硬解所需插件。多项目共享同一份下载缓存。
+
+按架构分包（可选）：构建前设置 `XUE_HUA_GSTREAMER_ARCH=arm64` 或 `x86_64`（默认 `universal`），
+可分别产出 Apple Silicon / Intel 安装包以减小体积。
 
 可选环境变量：`XUE_HUA_GSTREAMER_ROOT`、`GSTREAMER_FRAMEWORK_SRC`（离线/自定义路径）；
 维护者仍可用 `sh tool/setup_gstreamer_macos.sh --system` 安装到 `/Library/Frameworks`。

@@ -319,6 +319,13 @@ fn setup_macos_env() {
             std::env::set_var("GIO_MODULE_DIR", gio_modules.to_string_lossy().as_ref());
         }
     }
+
+    // Prefer VideoToolbox hardware decoders from the bundled applemedia plugin;
+    // libav remains as fallback when vtdec is unavailable.
+    std::env::set_var(
+        "GST_PLUGIN_FEATURE_RANK",
+        "vtdec:PRIMARY,vtdemux:PRIMARY,avdec_h264:SECONDARY,avdec_h265:SECONDARY",
+    );
 }
 
 /// Registers the statically-linked GStreamer plugins bundled in the iOS

@@ -364,8 +364,14 @@ user cache (~**800MB–1GB** download, no sudo):
   - `GStreamerRuntime.framework` — runtime snapshot (embedded into `.app`; consumers
     do not need to configure this)
 
-The final `.app` embeds **runtime only** (~**150–600MB**). Multiple Flutter
-projects share the same cache.
+The final `.app` embeds a trimmed **Slim Runtime** (v1.0.5+, ~**350–450MB**
+universal, or ~**175–280MB** per-arch) with only the plugins needed for playbin3,
+HTTPS/HLS/RTSP, and applemedia hardware decode. Multiple Flutter projects share
+the same download cache.
+
+Optional per-arch builds: set `XUE_HUA_GSTREAMER_ARCH=arm64` or `x86_64` before
+`pod install` / `flutter build macos` (default `universal`) to ship separate Apple
+Silicon and Intel packages.
 
 Optional env vars: `XUE_HUA_GSTREAMER_ROOT`, `GSTREAMER_FRAMEWORK_SRC` (offline /
 custom paths). Maintainers may still run `sh tool/setup_gstreamer_macos.sh

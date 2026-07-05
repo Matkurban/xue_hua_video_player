@@ -36,19 +36,10 @@ echo "Embedding GStreamer.framework (runtime) from ${SRC} into ${DEST}"
 mkdir -p "${DEST_DIR}"
 rm -rf "${DEST}"
 ditto "${SRC}" "${DEST}"
-clean_framework_root() {
-  find "${1}" -maxdepth 1 -name '.*' -type f -delete 2>/dev/null || true
-}
-clean_framework_root "${DEST}"
-
-# Strip build-only artifacts if present (e.g. from older caches).
-find "${DEST}" -name '*.a' -delete 2>/dev/null || true
-rm -rf \
-  "${DEST}/Versions/1.0/include" \
-  "${DEST}/Versions/1.0/share" \
-  "${DEST}/Versions/1.0/bin" \
-  "${DEST}/Versions/1.0/lib/pkgconfig" \
-  2>/dev/null || true
+bash "${SCRIPT_DIR}/strip_gstreamer_runtime.sh" "${DEST}"
+bash "${SCRIPT_DIR}/prune_gstreamer_plugins.sh" "${DEST}"
+bash "${SCRIPT_DIR}/prune_gstreamer_orphan_dylibs.sh" "${DEST}"
+bash "${SCRIPT_DIR}/thin_gstreamer_framework.sh" "${DEST}"
 
 sign_if_needed() {
   local file="$1"

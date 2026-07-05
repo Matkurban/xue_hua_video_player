@@ -1,0 +1,95 @@
+# GStreamer plugins kept for macOS video playback (playbin3 + network + applemedia).
+# One plugin basename per line (without libgst prefix / .dylib suffix).
+# Lines starting with # are ignored.
+
+# Core / playback
+coreelements
+playback
+typefindfunctions
+app
+pbtypes
+gio
+
+# Audio / video processing
+videoconvertscale
+videofilter
+videorate
+deinterlace
+videocrop
+audioconvert
+audioresample
+audiorate
+volume
+audiofx
+audioparsers
+videoparsersbad
+
+# Containers / demuxers
+isomp4
+matroska
+id3demux
+subparse
+ogg
+avi
+flv
+asf
+mpegtsdemux
+mpegpsdemux
+wavparse
+aiff
+multipart
+icydemux
+apetag
+
+# Decoders
+libav
+applemedia
+jpeg
+png
+vpx
+dav1d
+flac
+vorbis
+opus
+opusparse
+theora
+speex
+wavpack
+mulaw
+alaw
+adpcmdec
+dvdlpcmdec
+dvdsub
+dvbsuboverlay
+closedcaption
+
+# macOS audio / autodetect
+osxaudio
+autodetect
+
+# Network sources (HTTPS / HLS / RTSP / RTP)
+soup
+hls
+adaptivedemux2
+rtsp
+rtp
+rtpmanager
+udp
+tcp
+srtp
+dtls
+nice
+sctp
+sdpelem
+
+# TLS / crypto helpers used by network stack
+aes
+bz2
+
+# playbin autoplug helpers
+autoconvert
+encoding
+multifile
+rawparse
+videotestsrc
+audiovisualizers

@@ -1,3 +1,18 @@
+## 1.0.5
+
+### Improvements
+
+- **Smaller macOS app bundles (Slim Runtime)**: vendored `GStreamer.framework` is
+  now stripped (no `bin/` / devel dirs), pruned to a playback plugin whitelist
+  (~80 plugins vs 257), and orphan dylibs removed. Typical universal apps drop
+  from ~680MB to ~350–450MB GStreamer footprint.
+- **applemedia hardware decode on macOS**: bundled `applemedia` plugin is kept in
+  the whitelist; `GST_PLUGIN_FEATURE_RANK` prefers VideoToolbox (`vtdec`) with
+  `libav` as fallback.
+- **Per-architecture macOS builds**: set `XUE_HUA_GSTREAMER_ARCH=arm64` or
+  `x86_64` (default `universal`) before `pod install` to thin the embedded
+  framework for single-arch distribution.
+
 ## 1.0.4
 
 ### Bug fixes

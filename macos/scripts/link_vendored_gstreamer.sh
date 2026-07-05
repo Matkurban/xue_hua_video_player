@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Copies the runtime GStreamer.framework snapshot into macos/Vendored/ so
-# CocoaPods vendored_frameworks + [CP] Embed Pods Frameworks copies it into .app
-# as GStreamer.framework (symlinks would embed as GStreamerRuntime.framework).
+# Copies and slim-down the runtime GStreamer.framework into macos/Vendored/ so
+# CocoaPods vendored_frameworks + [CP] Embed Pods Frameworks copies it into .app.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,8 +25,12 @@ fi
 
 mkdir -p "${VENDORED_DIR}"
 rm -rf "${VENDORED_FW}"
-# Copy (APFS clone when possible) so CocoaPods embeds as GStreamer.framework, not the
-# runtime snapshot name GStreamerRuntime.framework.
 cp -Rc "${RUNTIME_SRC}" "${VENDORED_FW}"
 
-echo "[xue_hua_video_player] Vendored GStreamer.framework from ${RUNTIME_SRC}"
+bash "${SCRIPT_DIR}/strip_gstreamer_runtime.sh" "${VENDORED_FW}"
+bash "${SCRIPT_DIR}/prune_gstreamer_plugins.sh" "${VENDORED_FW}"
+bash "${SCRIPT_DIR}/prune_gstreamer_orphan_dylibs.sh" "${VENDORED_FW}"
+bash "${SCRIPT_DIR}/thin_gstreamer_framework.sh" "${VENDORED_FW}"
+
+size="$(du -sh "${VENDORED_FW}" | awk '{print $1}')"
+echo "[xue_hua_video_player] Vendored slim GStreamer.framework (${size}) from ${RUNTIME_SRC}"
