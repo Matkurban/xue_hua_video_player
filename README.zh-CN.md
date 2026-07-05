@@ -223,7 +223,12 @@ java.lang.NoSuchMethodError: IrondashEngineContextPlugin.getTextureRegistry(J)
 -keep class dev.irondash.engine_context.** { *; }
 -keep interface io.flutter.view.TextureRegistry { *; }
 -keep class io.flutter.view.TextureRegistry$* { *; }
+-keep class org.freedesktop.gstreamer.** { *; }
 ```
+
+**v1.0.8+** 还会保留 GStreamer `androidmedia` 的 JNI 辅助类（如
+`GstAmcOnFrameAvailableListener`）。若被 R8 移除，release 播放会失败并出现
+`ClassNotFoundException` 与 GStreamer MediaCodec 错误，而不一定有 Java 堆栈。
 
 并确保 `release` 构建类型引用了该文件：
 

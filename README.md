@@ -235,14 +235,20 @@ java.lang.NoSuchMethodError: IrondashEngineContextPlugin.getTextureRegistry(J)
 so minified release builds should work without extra configuration once you depend
 on a version that includes them.
 
-If you still see the crash (or you are on an older plugin version), add this to
+If you still see crashes (or you are on an older plugin version), add this to
 your app's `android/app/proguard-rules.pro`:
 
 ```proguard
 -keep class dev.irondash.engine_context.** { *; }
 -keep interface io.flutter.view.TextureRegistry { *; }
 -keep class io.flutter.view.TextureRegistry$* { *; }
+-keep class org.freedesktop.gstreamer.** { *; }
 ```
+
+**v1.0.8+** also keeps GStreamer `androidmedia` JNI helpers (e.g.
+`GstAmcOnFrameAvailableListener`). Without them, release playback fails with
+`ClassNotFoundException` and GStreamer MediaCodec errors instead of a Java
+stack trace.
 
 Ensure your `release` build type references that file:
 

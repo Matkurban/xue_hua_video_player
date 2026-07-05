@@ -1,3 +1,12 @@
+## 1.0.8
+
+### Bug fixes
+
+- **Android release playback / crash**: extend consumer ProGuard rules to keep
+  `org.freedesktop.gstreamer.**` JNI helper classes (e.g.
+  `GstAmcOnFrameAvailableListener`). R8 was removing them in minified release
+  builds, causing `ClassNotFoundException` and GStreamer MediaCodec failures.
+
 ## 1.0.7
 
 ### Bug fixes

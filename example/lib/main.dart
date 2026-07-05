@@ -53,14 +53,9 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller
-        .initialize()
-        .then((_) {
-          setState(() => _ready = true);
-        })
-        .catchError((e) {
-          debugPrint(e.toString());
-        });
+    _controller.initialize().then((_) {
+      setState(() => _ready = true);
+    });
   }
 
   @override
