@@ -39,13 +39,4 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end
-
-  gstreamer_helper = File.expand_path(
-    'Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos/gstreamer_podfile_helper.rb',
-    __dir__,
-  )
-  if File.exist?(gstreamer_helper)
-    load gstreamer_helper
-    install_gstreamer_embed_script!(installer)
-  end
 end

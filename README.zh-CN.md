@@ -338,23 +338,12 @@ Rust 核心在构建时链接 GStreamer，所以构建时必须能找到 GStream
 
 #### 消费方：构建配置
 
-1. 在 `macos/Podfile` 的 `post_install` 中加载嵌入脚本（example 已包含）：
-
-   ```ruby
-   gstreamer_helper = File.expand_path(
-     'Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos/gstreamer_podfile_helper.rb',
-     __dir__,
-   )
-   if File.exist?(gstreamer_helper)
-     load gstreamer_helper
-     install_gstreamer_embed_script!(installer)
-   end
-   ```
-
-2. 开启 App Sandbox + `com.apple.security.network.client`（见 [权限](#权限与各平台配置)）。
-
+1. 开启 App Sandbox + `com.apple.security.network.client`（见 [权限](#权限与各平台配置)）。
+2. `flutter pub get` → `cd macos && pod install`（首次会自动下载 GStreamer 缓存）。
 3. `flutter build macos --release`，确认产物中存在
    `YourApp.app/Contents/Frameworks/GStreamer.framework`。
+
+插件通过 CocoaPods `vendored_frameworks` 自动嵌入 GStreamer，**无需**修改 `Podfile`。
 
 Rust 核心会在 `gst::init()` 前设置 `GST_PLUGIN_SYSTEM_PATH`、`GIO_MODULE_DIR` 以及沙盒可写的
 `GST_REGISTRY` 路径（见 `rust/src/player.rs` 中的 `setup_macos_env()`）。
@@ -368,14 +357,13 @@ brew install pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-
 
 ### Mac App Store 发布（macOS）
 
-1. 确认 `macos/Podfile` 已集成 `gstreamer_podfile_helper.rb`（见上）。
-2. `macos/Runner/*entitlements` 开启沙盒与 `network.client`。
-3. `flutter build macos --release` 或 Xcode Archive（首次构建会自动下载 GStreamer 缓存）。
-4. 验证：
+1. `macos/Runner/*entitlements` 开启沙盒与 `network.client`。
+2. `flutter build macos --release` 或 Xcode Archive（首次构建会自动下载 GStreamer 缓存）。
+3. 验证：
    - `YourApp.app/Contents/Frameworks/GStreamer.framework` 存在
    - `codesign -vvv --deep --strict YourApp.app` 通过
    - 沙盒下可播放 http/https 视频
-5. Validate App → Upload to App Store Connect。
+4. Validate App → Upload to App Store Connect。
 
 ### Linux
 
@@ -627,8 +615,10 @@ Metal 的行对齐要求（`Could not create Metal texture from pixel buffer: CV
   或发布按 ABI 拆分的 APK / App Bundle。
 - **Windows `pkg-config` 找不到 `glib-2.0`**：确认已安装**开发**文件，且 `PKG_CONFIG_PATH`
   指向 `...\1.0\msvc_x86_64\lib\pkgconfig`。
-- **macOS 黑屏 / 插件加载失败**：确认 `.app/Contents/Frameworks/GStreamer.framework` 已嵌入；
-  沙盒需开启 `network.client`；若使用 Homebrew 调试请设置
+- **macOS 黑屏 / dyld 找不到 GStreamer**：确认
+  `.app/Contents/Frameworks/GStreamer.framework` 已存在；若缺失，重新
+  `cd macos && pod install`（需 **v1.0.4+**，通过 `vendored_frameworks` 自动嵌入）。
+  沙盒需开启 `network.client`；Homebrew 调试请设置
   `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1`（上架必须用官方 Framework）。
 
 ## 维护者

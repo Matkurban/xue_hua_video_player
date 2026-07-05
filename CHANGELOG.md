@@ -1,3 +1,13 @@
+## 1.0.4
+
+### Bug fixes
+
+- Fixed macOS apps crashing at launch with
+  `dyld: Library not loaded: @rpath/GStreamer.framework/...` when consumers did
+  not manually add the Podfile embed helper. GStreamer is now embedded
+  automatically via CocoaPods `vendored_frameworks` and `[CP] Embed Pods
+  Frameworks` — **no Podfile changes required** (requires **v1.0.4+**).
+
 ## 1.0.3
 
 ### Features
@@ -25,8 +35,6 @@
 
 ### Platform notes (macOS)
 
-- Add the `gstreamer_podfile_helper.rb` snippet to your `macos/Podfile`
-  `post_install` (see README) so the embed Run Script is registered on Runner.
 - Enable App Sandbox and `com.apple.security.network.client` in
   `macos/Runner/*entitlements` for network playback.
 - Local Homebrew-only debugging remains available via

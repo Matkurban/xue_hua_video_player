@@ -24,8 +24,8 @@ A Flutter video player plugin that decodes local/network video with GStreamer
 
   # --- GStreamer (macOS) -----------------------------------------------------
   # Official universal GStreamer.framework is auto-downloaded to the user cache
-  # during pod install (macos/scripts/ensure_gstreamer_macos.sh) and embedded
-  # into the .app by gstreamer_podfile_helper.rb + embed_gstreamer_framework.sh .
+  # during pod install (ensure_gstreamer_macos.sh) and embedded into the .app
+  # via vendored_frameworks + CocoaPods [CP] Embed Pods Frameworks.
   #
   # Set XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1 for local Homebrew-only dev (not MAS).
   gst_ver = ENV.fetch('GST_VER', '1.28.4')
@@ -78,6 +78,12 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     gst_headers = "#{framework_path}/Headers"
 
     Pod::UI.puts "[xue_hua_video_player] Using GStreamer.framework at #{framework_path}"
+
+    link_script = File.join(__dir__, 'scripts', 'link_vendored_gstreamer.sh')
+    unless system({ 'GST_VER' => gst_ver }, 'sh', link_script)
+      raise 'GStreamer vendored link failed; see log above'
+    end
+    s.vendored_frameworks = 'Vendored/GStreamer.framework'
 
     gst_env = gst_sys_pkgs.map { |p|
       "export SYSTEM_DEPS_#{p}_NO_PKG_CONFIG=1; " \

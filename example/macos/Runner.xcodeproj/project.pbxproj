@@ -249,7 +249,6 @@
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
 				E020C3AE7A23959CA81F2816 /* [CP] Embed Pods Frameworks */,
-				B7F3A57ADD4FD2062EEF7904 /* [xue_hua_video_player] Embed GStreamer Framework */,
 			);
 			buildRules = (
 			);
@@ -419,29 +418,6 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
-		};
-		B7F3A57ADD4FD2062EEF7904 /* [xue_hua_video_player] Embed GStreamer Framework */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				/Users/kurban/Library/Caches/xue_hua_video_player/gstreamer/1.28.4/GStreamerRuntime.framework/Versions/Current,
-				/Users/kurban/Library/Caches/xue_hua_video_player/gstreamer/1.28.4/GStreamer.framework/Versions/Current,
-				/Library/Frameworks/GStreamer.framework/Versions/Current,
-			);
-			name = "[xue_hua_video_player] Embed GStreamer Framework";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GStreamer.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -e\nexport XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=\"${XUE_HUA_ALLOW_HOMEBREW_GSTREAMER:-}\"\n# shellcheck source=gstreamer_paths.sh\nsource \"/Users/kurban/VideoPlayer/xue_hua_video_player/macos/scripts/gstreamer_paths.sh\"\nbash \"/Users/kurban/VideoPlayer/xue_hua_video_player/macos/scripts/embed_gstreamer_framework.sh\"\n";
 		};
 		E020C3AE7A23959CA81F2816 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;

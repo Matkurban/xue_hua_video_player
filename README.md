@@ -373,25 +373,15 @@ custom paths). Maintainers may still run `sh tool/setup_gstreamer_macos.sh
 
 #### Consumers: build setup
 
-1. Load the embed helper in `macos/Podfile` `post_install` (the example already
-   does this):
-
-   ```ruby
-   gstreamer_helper = File.expand_path(
-     'Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos/gstreamer_podfile_helper.rb',
-     __dir__,
-   )
-   if File.exist?(gstreamer_helper)
-     load gstreamer_helper
-     install_gstreamer_embed_script!(installer)
-   end
-   ```
-
-2. Enable App Sandbox + `com.apple.security.network.client` (see
+1. Enable App Sandbox + `com.apple.security.network.client` (see
    [Permissions](#permissions-per-platform)).
-
+2. Run `flutter pub get`, then `cd macos && pod install` (first run downloads
+   the GStreamer cache automatically).
 3. Run `flutter build macos --release` and verify
    `YourApp.app/Contents/Frameworks/GStreamer.framework` exists.
+
+The plugin embeds GStreamer via CocoaPods `vendored_frameworks` — **no Podfile
+changes required**.
 
 The Rust core sets `GST_PLUGIN_SYSTEM_PATH`, `GIO_MODULE_DIR`, and a writable
 `GST_REGISTRY` before `gst::init()` (`setup_macos_env()` in
@@ -406,15 +396,14 @@ brew install pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-
 
 ### Mac App Store release (macOS)
 
-1. Ensure `macos/Podfile` integrates `gstreamer_podfile_helper.rb` (see above).
-2. Enable sandbox + `network.client` in `macos/Runner/*entitlements`.
-3. `flutter build macos --release` or Archive in Xcode (first build downloads
+1. Enable sandbox + `network.client` in `macos/Runner/*entitlements`.
+2. `flutter build macos --release` or Archive in Xcode (first build downloads
    the GStreamer cache automatically).
-4. Verify:
+3. Verify:
    - `YourApp.app/Contents/Frameworks/GStreamer.framework` is present
    - `codesign -vvv --deep --strict YourApp.app` passes
    - Network playback works with sandbox enabled
-5. Validate App → Upload to App Store Connect.
+4. Validate App → Upload to App Store Connect.
 
 ### Linux
 
@@ -699,9 +688,10 @@ in through `[patch.crates-io]` in `rust/Cargo.toml`.
 - **Windows `pkg-config` cannot find `glib-2.0`:** confirm the **development**
   files were installed and `PKG_CONFIG_PATH` points at
   `...\1.0\msvc_x86_64\lib\pkgconfig`.
-- **macOS black screen / plugin load failure:** confirm
-  `.app/Contents/Frameworks/GStreamer.framework` is embedded; enable sandbox
-  `network.client`; for Homebrew-only dev set
+- **macOS black screen / dyld cannot load GStreamer:** confirm
+  `.app/Contents/Frameworks/GStreamer.framework` exists; if missing, re-run
+  `cd macos && pod install` (**v1.0.4+** embeds via `vendored_frameworks`
+  automatically). Enable sandbox `network.client`; for Homebrew-only dev set
   `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` (store builds require the official
   framework).
 

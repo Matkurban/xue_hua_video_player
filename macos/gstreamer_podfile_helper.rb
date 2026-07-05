@@ -1,4 +1,27 @@
-# Adds a Run Script phase to the Flutter Runner target that embeds GStreamer.framework
+# DEPRECATED: use vendored_frameworks (podspec) since v1.0.4. Kept for migration cleanup.
+# Removes the legacy Run Script phase from Runner (safe to call once after upgrading).
+def remove_gstreamer_embed_script!(installer)
+  podfile_dir = Pod::Config.instance.installation_root.to_s
+  runner_project_path = File.join(podfile_dir, 'Runner.xcodeproj')
+  return unless File.directory?(runner_project_path)
+
+  require 'xcodeproj'
+  project = Xcodeproj::Project.open(runner_project_path)
+  target = project.targets.find { |t| t.name == 'Runner' }
+  return unless target
+
+  phase_name = '[xue_hua_video_player] Embed GStreamer Framework'
+  removed = target.build_phases
+    .grep(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+    .select { |p| p.name == phase_name }
+  return if removed.empty?
+
+  removed.each(&:remove_from_project)
+  project.save
+  Pod::UI.puts '[xue_hua_video_player] Removed deprecated GStreamer embed Run Script from Runner'
+end
+
+# DEPRECATED: Adds a Run Script phase to the Flutter Runner target that embeds GStreamer.framework
 # into the .app bundle (required for App Sandbox / Mac App Store).
 def install_gstreamer_embed_script!(installer)
   podfile_dir = Pod::Config.instance.installation_root.to_s
