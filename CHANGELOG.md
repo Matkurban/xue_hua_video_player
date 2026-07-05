@@ -1,3 +1,13 @@
+## 1.0.2
+
+### Bug fixes
+
+- Fixed Cargokit precompiled binary downloads failing on macOS (and other
+  platforms) with `ClientException: Connection closed while receiving data`.
+  Downloads now retry transient network errors up to 10 times with exponential
+  backoff, stream large artifacts to disk, and gracefully fall back to a local
+  Rust build when the download still fails.
+
 ## 1.0.1
 
 ### Bug fixes

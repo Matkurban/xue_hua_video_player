@@ -526,8 +526,9 @@ Behavior:
   use_precompiled_binaries: false
   ```
 
-- If no matching signed artifact exists for the current `crate-hash`, cargokit
-  falls back to building from source.
+- If no matching signed artifact exists for the current `crate-hash`, or the
+  download fails due to network issues, cargokit falls back to building from
+  source (v1.0.2+ retries failed downloads up to 10 times automatically).
 - To force the precompiled path explicitly, add a `cargokit_options.yaml` next
   to the app's
   `pubspec.yaml` with:
@@ -538,6 +539,46 @@ Behavior:
 
 Configuration lives in [`rust/cargokit.yaml`](rust/cargokit.yaml) (the download
 URL prefix and the ed25519 **public** key used to verify signatures).
+
+### Troubleshooting
+
+If a macOS / iOS / Linux / Windows build fails with:
+
+```
+ClientException: Connection closed while receiving data
+uri=https://release-assets.githubusercontent.com/.../aarch64-apple-darwin_libxue_hua_video_player.a
+```
+
+Cargokit was interrupted while downloading a precompiled Rust library from GitHub
+Releases (the macOS static library is ~29 MB). **v1.0.2+** adds automatic retries
+and graceful fallback; if it still fails, try in order:
+
+1. **Retry and clear the cache**:
+
+   ```bash
+   flutter clean
+   rm -rf build/macos/Build/Intermediates.noindex/Pods.build/**/precompiled
+   flutter pub get
+   flutter build macos --release
+   ```
+
+2. **Improve GitHub access**: ensure `release-assets.githubusercontent.com` is
+   reachable; use a proxy if needed (common in regions with restricted GitHub
+   CDN access).
+
+3. **Disable precompiled binaries and build locally** (requires Rust +
+   GStreamer; for maintainers):
+
+   Create `cargokit_options.yaml` next to the app's `pubspec.yaml`:
+
+   ```yaml
+   use_precompiled_binaries: false
+   ```
+
+   On macOS also install: `brew install gstreamer pkg-config`, plus the
+   `rustup` toolchain.
+
+4. **Upgrade the plugin** to `xue_hua_video_player` **v1.0.2** or newer.
 
 ### Publishing (maintainers)
 

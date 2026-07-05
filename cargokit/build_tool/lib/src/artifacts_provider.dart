@@ -1,6 +1,7 @@
 /// This is copied from Cargokit (which is the official way to use it currently)
 /// Details: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ed25519_edwards/ed25519_edwards.dart';
@@ -44,6 +45,89 @@ class Artifact {
 
 final _log = Logger('artifacts_provider');
 
+const maxDownloadAttempts = 10;
+
+/// Whether a download error should be retried. Exposed for unit tests.
+bool isRetriableDownloadError(Object error) {
+  return error is SocketException ||
+      error is ClientException ||
+      error is HttpException ||
+      error is TimeoutException ||
+      error is HandshakeException;
+}
+
+/// Exponential backoff delay for download retries. Exposed for unit tests.
+Duration downloadRetryDelay(int attempt) {
+  final seconds = 1 << attempt;
+  return Duration(seconds: seconds > 30 ? 30 : seconds);
+}
+
+Future<T> retryDownloadRequest<T>(
+  Uri url,
+  Future<T> Function() action, {
+  int maxAttempts = maxDownloadAttempts,
+  Duration Function(int attempt)? delayForAttempt,
+}) async {
+  var attempt = 0;
+  while (true) {
+    try {
+      return await action();
+    } catch (e) {
+      if (!isRetriableDownloadError(e) || attempt >= maxAttempts - 1) {
+        rethrow;
+      }
+      attempt++;
+      _log.warning(
+        'Failed to download $url: $e, attempt $attempt of $maxAttempts, will retry...',
+      );
+      await Future.delayed(
+        delayForAttempt?.call(attempt - 1) ?? downloadRetryDelay(attempt - 1),
+      );
+    }
+  }
+}
+
+Future<void> downloadArtifactToFile(
+  Uri url,
+  String destination, {
+  Map<String, String>? headers,
+}) async {
+  await retryDownloadRequest(url, () async {
+    final client = Client();
+    try {
+      final request = Request('GET', url);
+      if (headers != null) {
+        request.headers.addAll(headers);
+      }
+      final response = await client.send(request);
+      if (response.statusCode != 200) {
+        throw ClientException(
+          'HTTP ${response.statusCode}',
+          url,
+        );
+      }
+
+      final file = File(destination);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+
+      final sink = file.openWrite();
+      try {
+        await response.stream.pipe(sink);
+      } catch (e) {
+        await sink.close();
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+        rethrow;
+      }
+    } finally {
+      client.close();
+    }
+  });
+}
+
 class ArtifactProvider {
   ArtifactProvider({
     required this.environment,
@@ -64,7 +148,7 @@ class ArtifactProvider {
     }
 
     final rustup = Rustup();
-    for (final target in targets) {
+    for (final target in pendingTargets) {
       final builder = RustBuilder(target: target, environment: environment);
       builder.prepare(rustup);
       _log.info('Building ${environment.crateInfo.packageName} for $target');
@@ -160,25 +244,11 @@ class ArtifactProvider {
     return res;
   }
 
-  static Future<Response> _get(Uri url, {Map<String, String>? headers}) async {
-    int attempt = 0;
-    const maxAttempts = 10;
-    while (true) {
-      try {
-        return await get(url, headers: headers);
-      } on SocketException catch (e) {
-        // Try to detect reset by peer error and retry.
-        if (attempt++ < maxAttempts &&
-            (e.osError?.errorCode == 54 || e.osError?.errorCode == 10054)) {
-          _log.severe(
-              'Failed to download $url: $e, attempt $attempt of $maxAttempts, will retry...');
-          await Future.delayed(Duration(seconds: 1));
-          continue;
-        } else {
-          rethrow;
-        }
-      }
-    }
+  static Future<Response> _get(Uri url, {Map<String, String>? headers}) {
+    return retryDownloadRequest(
+      url,
+      () => get(url, headers: headers),
+    );
   }
 
   Future<void> _tryDownloadArtifacts({
@@ -187,33 +257,50 @@ class ArtifactProvider {
     required String signatureFileName,
     required String finalPath,
   }) async {
-    final precompiledBinaries = environment.crateOptions.precompiledBinaries!;
-    final prefix = precompiledBinaries.uriPrefix;
-    final url = Uri.parse('$prefix$crateHash/$fileName');
-    final signatureUrl = Uri.parse('$prefix$crateHash/$signatureFileName');
-    _log.fine('Downloading signature from $signatureUrl');
-    final signature = await _get(signatureUrl);
-    if (signature.statusCode == 404) {
+    try {
+      final precompiledBinaries = environment.crateOptions.precompiledBinaries!;
+      final prefix = precompiledBinaries.uriPrefix;
+      final url = Uri.parse('$prefix$crateHash/$fileName');
+      final signatureUrl = Uri.parse('$prefix$crateHash/$signatureFileName');
+      _log.fine('Downloading signature from $signatureUrl');
+      final signature = await _get(signatureUrl);
+      if (signature.statusCode == 404) {
+        _log.warning(
+            'Precompiled binaries not available for crate hash $crateHash ($fileName)');
+        return;
+      }
+      if (signature.statusCode != 200) {
+        _log.severe(
+            'Failed to download signature $signatureUrl: status ${signature.statusCode}');
+        return;
+      }
+
+      _log.fine('Downloading binary from $url');
+      final tempPath = '$finalPath.download';
+      final tempFile = File(tempPath);
+      try {
+        await downloadArtifactToFile(url, tempPath);
+        final bodyBytes = tempFile.readAsBytesSync();
+        if (verify(precompiledBinaries.publicKey, bodyBytes,
+            signature.bodyBytes)) {
+          if (File(finalPath).existsSync()) {
+            File(finalPath).deleteSync();
+          }
+          tempFile.renameSync(finalPath);
+        } else {
+          _log.shout('Signature verification failed! Ignoring binary.');
+          tempFile.deleteSync();
+        }
+      } catch (e) {
+        if (tempFile.existsSync()) {
+          tempFile.deleteSync();
+        }
+        rethrow;
+      }
+    } catch (e, st) {
       _log.warning(
-          'Precompiled binaries not available for crate hash $crateHash ($fileName)');
-      return;
-    }
-    if (signature.statusCode != 200) {
-      _log.severe(
-          'Failed to download signature $signatureUrl: status ${signature.statusCode}');
-      return;
-    }
-    _log.fine('Downloading binary from $url');
-    final res = await _get(url);
-    if (res.statusCode != 200) {
-      _log.severe('Failed to download binary $url: status ${res.statusCode}');
-      return;
-    }
-    if (verify(
-        precompiledBinaries.publicKey, res.bodyBytes, signature.bodyBytes)) {
-      File(finalPath).writeAsBytesSync(res.bodyBytes);
-    } else {
-      _log.shout('Signature verification failed! Ignoring binary.');
+          'Failed to download precompiled artifact $fileName, will fall back to local build: $e');
+      _log.fine(st.toString());
     }
   }
 }
