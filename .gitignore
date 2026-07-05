@@ -36,3 +36,4 @@ devtools_options.yaml
 
 # macOS GStreamer vendored framework symlink (created by link_vendored_gstreamer.sh)
 macos/Vendored/
+.vscode/

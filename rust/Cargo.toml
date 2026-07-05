@@ -17,11 +17,7 @@ gstreamer-video = "0.25.3"
 # Flutter external texture bridge
 irondash_texture = "0.5.0"
 irondash_engine_context = "0.5.0"
-# Must match the version the vendored irondash_texture (0.5.0) depends on.
-# Mixing 0.5.x and 0.6.x links two copies of irondash_run_loop, each with its
-# own "main thread" identity, causing the texture Capsule to panic with
-# "Capsule was dropped on wrong thread" on iOS/macOS.
-irondash_run_loop = "0.5.0"
+irondash_run_loop = "0.6.0"
 
 anyhow = "1.0.103"
 log = "0.4.20"
@@ -38,3 +34,4 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 # vendored copy aligns the stride to 256 bytes and uploads row-by-row.
 [patch.crates-io]
 irondash_texture = { path = "vendor/irondash_texture" }
+irondash_engine_context = { path = "vendor/irondash_engine_context" }

@@ -13,6 +13,9 @@ use core_foundation::{
     mach_port::CFAllocatorRef,
 };
 use irondash_engine_context::EngineContext;
+use objc2::rc::Retained;
+use objc2::runtime::NSObject;
+use objc2::{define_class, extern_class, extern_methods, msg_send, AnyThread, DefinedClass};
 
 use crate::{
     log::OkLog,
@@ -23,10 +26,6 @@ use crate::{
     BoxedIOSurface, BoxedPixelData, IOSurfaceProvider, PayloadProvider, PixelFormat,
     PlatformTextureWithProvider, Result,
 };
-use objc2::{
-    declare_class, extern_class, extern_methods, msg_send_id, mutability, rc::Id,
-    runtime::NSObject, ClassType, DeclaredClass,
-};
 
 use self::io_surface::{IOSurface, IOSurfaceGetHeight, IOSurfaceGetWidth, IOSurfaceRef};
 pub(crate) mod io_surface;
@@ -34,7 +33,7 @@ pub(crate) mod io_surface;
 pub struct PlatformTexture<Type> {
     id: i64,
     engine_handle: i64,
-    _texture_objc: Id<IrondashTexture>,
+    _texture_objc: Retained<IrondashTexture>,
     _phantom: PhantomData<Type>,
     update_requested: Arc<AtomicBool>,
 }
@@ -46,36 +45,34 @@ impl<Type> PlatformTexture<Type> {
 }
 
 extern_class!(
+    #[unsafe(super(NSObject))]
     #[derive(PartialEq, Eq, Hash)]
     pub struct FlutterTextureRegistry;
-
-    unsafe impl ClassType for FlutterTextureRegistry {
-        type Super = NSObject;
-        type Mutability = mutability::Mutable;
-    }
 );
 
-extern_methods!(
-    unsafe impl FlutterTextureRegistry {
+impl FlutterTextureRegistry {
+    extern_methods!(
         #[allow(non_snake_case)]
-        #[method(registerTexture:)]
-        pub unsafe fn registerTexture(&mut self, texture: &NSObject) -> i64;
+        #[unsafe(method(registerTexture:))]
+        pub unsafe fn registerTexture(&self, texture: &NSObject) -> i64;
 
         #[allow(non_snake_case)]
-        #[method(textureFrameAvailable:)]
-        pub unsafe fn textureFrameAvailable(&mut self, textureId: i64);
+        #[unsafe(method(textureFrameAvailable:))]
+        pub unsafe fn textureFrameAvailable(&self, textureId: i64);
 
         #[allow(non_snake_case)]
-        #[method(unregisterTexture:)]
-        pub unsafe fn unregisterTexture(&mut self, textureId: i64);
-    }
-);
+        #[unsafe(method(unregisterTexture:))]
+        pub unsafe fn unregisterTexture(&self, textureId: i64);
+    );
+}
 
 pub(crate) const PIXEL_DATA_FORMAT: PixelFormat = PixelFormat::RGBA;
 
 impl<Type> PlatformTexture<Type> {
-    fn texture_registery(engine_handle: i64) -> Result<Id<FlutterTextureRegistry>> {
-        Ok(unsafe { Id::cast(EngineContext::get()?.get_texture_registry(engine_handle)?) })
+    fn texture_registery(engine_handle: i64) -> Result<Retained<FlutterTextureRegistry>> {
+        Ok(unsafe {
+            Retained::cast_unchecked(EngineContext::get()?.get_texture_registry(engine_handle)?)
+        })
     }
 
     pub fn new(
@@ -85,7 +82,7 @@ impl<Type> PlatformTexture<Type> {
         let update_requested = Arc::new(AtomicBool::new(false));
         let provider = Arc::new(SurfaceCache::new(provider, update_requested.clone()));
         let texture_objc = IrondashTexture::new_with_provider(provider);
-        let mut texture_registry = Self::texture_registery(engine_handle)?;
+        let texture_registry = Self::texture_registery(engine_handle)?;
         let id: i64 = unsafe { texture_registry.registerTexture(&texture_objc) };
         Ok(Self {
             id,
@@ -97,14 +94,14 @@ impl<Type> PlatformTexture<Type> {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        let mut texture_registry = Self::texture_registery(self.engine_handle)?;
+        let texture_registry = Self::texture_registery(self.engine_handle)?;
         unsafe { texture_registry.unregisterTexture(self.id) }
         Ok(())
     }
 
     pub fn mark_frame_available(&self) -> Result<()> {
         self.update_requested.store(true, Ordering::Release);
-        let mut texture_registry = Self::texture_registery(self.engine_handle)?;
+        let texture_registry = Self::texture_registery(self.engine_handle)?;
         unsafe { texture_registry.textureFrameAvailable(self.id) };
         Ok(())
     }
@@ -299,21 +296,14 @@ struct Ivars {
     payload_provider: Arc<dyn PayloadProvider<BoxedIOSurface>>,
 }
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "IrondashTexture"]
+    #[ivars = Ivars]
     struct IrondashTexture;
 
-    unsafe impl ClassType for IrondashTexture {
-        type Super = NSObject;
-        type Mutability = mutability::Mutable;
-        const NAME: &'static str = "IrondashTexture";
-    }
-
-    impl DeclaredClass for IrondashTexture {
-        type Ivars = Ivars;
-    }
-
-    unsafe impl IrondashTexture {
-        #[method(copyPixelBuffer)]
+    impl IrondashTexture {
+        #[unsafe(method(copyPixelBuffer))]
         fn copy_pixel_buffer(&self) -> CVPixelBufferRef {
             do_copy_pixel_buffer(&self.ivars().payload_provider)
         }
@@ -323,10 +313,10 @@ declare_class!(
 impl IrondashTexture {
     pub fn new_with_provider(
         payload_provider: Arc<dyn PayloadProvider<BoxedIOSurface>>,
-    ) -> Id<Self> {
+    ) -> Retained<Self> {
         let this = Self::alloc().set_ivars(Ivars {
             payload_provider: payload_provider.clone(),
         });
-        unsafe { msg_send_id![super(this), init] }
+        unsafe { msg_send![super(this), init] }
     }
 }
