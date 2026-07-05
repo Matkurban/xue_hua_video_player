@@ -1,3 +1,40 @@
+## 1.0.3
+
+### Features
+
+- **macOS App Sandbox / Mac App Store**: the plugin now embeds the official
+  universal `GStreamer.framework` into the `.app` at build time and configures
+  `GST_PLUGIN_SYSTEM_PATH`, `GIO_MODULE_DIR`, and a sandbox-writable
+  `GST_REGISTRY` before `gst::init()` (`setup_macos_env()` in the Rust core).
+  Consumers no longer need manual Xcode Copy Files steps.
+
+### Improvements
+
+- **macOS GStreamer auto-setup**: on first `pod install`, the official runtime +
+  devel SDK is downloaded automatically into the user cache
+  (`~/Library/Caches/xue_hua_video_player/gstreamer/<version>/`) — no `sudo`
+  or manual `setup_gstreamer_macos.sh` required for consumers.
+- **Smaller macOS app bundles**: the build cache keeps the full SDK for linking,
+  but only a **runtime snapshot** (`GStreamerRuntime.framework`) is embedded into
+  the final `.app`, stripping static libraries (`.a`) and devel-only directories.
+  Typical release apps are ~700 MB instead of ~4 GB.
+- macOS podspec links the official framework via `system-deps` + `-framework
+  GStreamer` (aligned with iOS), supporting universal (x86_64 + arm64) builds.
+- CI precompile jobs use the cache-based ensure script instead of a system-wide
+  `sudo installer`.
+
+### Platform notes (macOS)
+
+- Add the `gstreamer_podfile_helper.rb` snippet to your `macos/Podfile`
+  `post_install` (see README) so the embed Run Script is registered on Runner.
+- Enable App Sandbox and `com.apple.security.network.client` in
+  `macos/Runner/*entitlements` for network playback.
+- Local Homebrew-only debugging remains available via
+  `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` (not suitable for App Store submission).
+- Optional overrides: `XUE_HUA_GSTREAMER_ROOT`, `GSTREAMER_FRAMEWORK_SRC`,
+  `GSTREAMER_RUNTIME_FRAMEWORK_SRC`. Maintainers may still run
+  `sh tool/setup_gstreamer_macos.sh --system` for a system-wide install.
+
 ## 1.0.2
 
 ### Bug fixes

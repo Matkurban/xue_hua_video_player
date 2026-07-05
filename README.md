@@ -58,9 +58,9 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 > SDK does not ship an arm64 simulator slice.
 >
 > On Apple-Silicon macOS, the default Homebrew install is arm64-only. The plugin
-> therefore builds arm64-only by default in that setup; install the official
-> `GStreamer.framework` (or point `GSTREAMER_PKG_CONFIG_PATH` at a universal /
-> x86_64-capable SDK) when you need a universal macOS app.
+> builds arm64-only in Homebrew debug mode; **Mac App Store / universal release**
+> auto-downloads the official universal `GStreamer.framework` to the user cache
+> during `pod install`.
 
 ## Installation
 
@@ -236,25 +236,26 @@ Notes:
 
 ### macOS
 
-Network video requires the **outgoing network** entitlement. Add it to both
-`macos/Runner/DebugProfile.entitlements` and `Release.entitlements`:
+The Mac App Store requires **App Sandbox**. This plugin automatically embeds the
+official `GStreamer.framework` into `.app/Contents/Frameworks/` at build time;
+the Rust core configures `GST_PLUGIN_SYSTEM_PATH` and `GIO_MODULE_DIR` at
+startup — no manual Xcode Copy Files phase.
+
+Add at minimum to `macos/Runner/DebugProfile.entitlements` and
+`Release.entitlements`:
 
 ```xml
+<key>com.apple.security.app-sandbox</key>
+<true/>
 <key>com.apple.security.network.client</key>
 <true/>
 ```
 
-If you keep the **App Sandbox enabled**, you must bundle the GStreamer dylibs
-inside the `.app` and add:
+See [Mac App Store release (macOS)](#mac-app-store-release-macos) for the full
+checklist.
 
-```xml
-<key>com.apple.security.cs.disable-library-validation</key>
-<true/>
-```
-
-The bundled example **disables** the App Sandbox so it can load the Homebrew
-dylibs directly during development; production apps should bundle GStreamer and
-keep the sandbox on.
+For local dev without the official framework, set
+`XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` (not suitable for store submission).
 
 ### Windows
 
@@ -351,24 +352,69 @@ available (bundled or system-installed) when running.
 
 ### macOS
 
-Install via Homebrew for local Apple-Silicon development:
+**Mac App Store / sandboxed release** requires the official universal
+`GStreamer.framework` (x86_64 + arm64). Homebrew dylibs cannot be loaded from
+`/opt/homebrew` inside the sandbox.
+
+On first `pod install`, runtime + devel are **downloaded automatically** into the
+user cache (~**800MB–1GB** download, no sudo):
+
+`~/Library/Caches/xue_hua_video_player/gstreamer/1.28.4/`
+  - `GStreamer.framework` — full SDK (for build/link)
+  - `GStreamerRuntime.framework` — runtime snapshot (embedded into `.app`; consumers
+    do not need to configure this)
+
+The final `.app` embeds **runtime only** (~**150–600MB**). Multiple Flutter
+projects share the same cache.
+
+Optional env vars: `XUE_HUA_GSTREAMER_ROOT`, `GSTREAMER_FRAMEWORK_SRC` (offline /
+custom paths). Maintainers may still run `sh tool/setup_gstreamer_macos.sh
+--system` to install under `/Library/Frameworks`.
+
+#### Consumers: build setup
+
+1. Load the embed helper in `macos/Podfile` `post_install` (the example already
+   does this):
+
+   ```ruby
+   gstreamer_helper = File.expand_path(
+     'Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos/gstreamer_podfile_helper.rb',
+     __dir__,
+   )
+   if File.exist?(gstreamer_helper)
+     load gstreamer_helper
+     install_gstreamer_embed_script!(installer)
+   end
+   ```
+
+2. Enable App Sandbox + `com.apple.security.network.client` (see
+   [Permissions](#permissions-per-platform)).
+
+3. Run `flutter build macos --release` and verify
+   `YourApp.app/Contents/Frameworks/GStreamer.framework` exists.
+
+The Rust core sets `GST_PLUGIN_SYSTEM_PATH`, `GIO_MODULE_DIR`, and a writable
+`GST_REGISTRY` before `gst::init()` (`setup_macos_env()` in
+`rust/src/player.rs`).
+
+#### Local Homebrew dev (not for MAS)
 
 ```bash
-brew install pkg-config gstreamer gst-plugins-base gst-plugins-good \
-  gst-plugins-bad gst-libav
+export XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1
+brew install pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav
 ```
 
-`macos/xue_hua_video_player.podspec` prefers the official
-`GStreamer.framework` automatically when it is installed at the standard
-location. Otherwise it falls back to Homebrew.
+### Mac App Store release (macOS)
 
-On Apple-Silicon machines, that Homebrew fallback is typically arm64-only, so
-the plugin excludes `x86_64` by default to avoid a broken universal link step.
-To build a universal macOS app, install the official `GStreamer.framework` or
-set `GSTREAMER_PKG_CONFIG_PATH` to a universal / x86_64-capable SDK.
-
-For distribution you must bundle the GStreamer dylibs into the `.app` and fix
-their load paths; the Homebrew setup above is intended for local development.
+1. Ensure `macos/Podfile` integrates `gstreamer_podfile_helper.rb` (see above).
+2. Enable sandbox + `network.client` in `macos/Runner/*entitlements`.
+3. `flutter build macos --release` or Archive in Xcode (first build downloads
+   the GStreamer cache automatically).
+4. Verify:
+   - `YourApp.app/Contents/Frameworks/GStreamer.framework` is present
+   - `codesign -vvv --deep --strict YourApp.app` passes
+   - Network playback works with sandbox enabled
+5. Validate App → Upload to App Store Connect.
 
 ### Linux
 
@@ -653,9 +699,11 @@ in through `[patch.crates-io]` in `rust/Cargo.toml`.
 - **Windows `pkg-config` cannot find `glib-2.0`:** confirm the **development**
   files were installed and `PKG_CONFIG_PATH` points at
   `...\1.0\msvc_x86_64\lib\pkgconfig`.
-- **macOS black screen / dylib load failure:** enable
-  `com.apple.security.network.client`, and either disable the sandbox (dev) or
-  bundle the dylibs and add `disable-library-validation`.
+- **macOS black screen / plugin load failure:** confirm
+  `.app/Contents/Frameworks/GStreamer.framework` is embedded; enable sandbox
+  `network.client`; for Homebrew-only dev set
+  `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` (store builds require the official
+  framework).
 
 ## Maintainers
 

@@ -35,13 +35,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dart-lang/setup-dart@v1.7.2
-      - name: Install GStreamer (Homebrew, arm64) for macOS target
-        run: |
-          # GitHub-hosted runners pre-tap aws/tap (AWS CLI). Newer Homebrew
-          # flags it as an untrusted tap and prints a warning on every brew
-          # command. We don't use it, so untap it (ignore if already gone).
-          brew untap aws/tap || true
-          brew install pkg-config gstreamer
+      - name: Cache GStreamer macOS SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/xue_hua_video_player/gstreamer
+          key: gstreamer-macos-${{ env.GST_VERSION }}
+      - name: Ensure official GStreamer macOS SDK (universal, user cache)
+        run: sh macos/scripts/ensure_gstreamer_macos.sh
       - name: Install GStreamer iOS devel SDK
         run: |
           curl -fLO "https://gstreamer.freedesktop.org/data/pkg/ios/${GST_VERSION}/gstreamer-1.0-devel-${GST_VERSION}-ios-universal.pkg"
@@ -55,7 +55,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: |
-          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          GST_CACHE="$HOME/Library/Caches/xue_hua_video_player/gstreamer/${GST_VERSION}"
+          for p in GLIB_2_0 GOBJECT_2_0 GIO_2_0 GSTREAMER_1_0 GSTREAMER_BASE_1_0 GSTREAMER_APP_1_0 GSTREAMER_VIDEO_1_0; do
+            export SYSTEM_DEPS_${p}_NO_PKG_CONFIG=1
+            export SYSTEM_DEPS_${p}_SEARCH_FRAMEWORK="$GST_CACHE"
+            export SYSTEM_DEPS_${p}_LIB_FRAMEWORK=GStreamer
+            export SYSTEM_DEPS_${p}_INCLUDE="$GST_CACHE/GStreamer.framework/Headers"
+          done
           dart run build_tool precompile-binaries -v \
             --manifest-dir=../../rust \
             --repository="$REPO_SLUG" \
@@ -91,13 +97,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dart-lang/setup-dart@v1.7.2
-      - name: Install GStreamer (Homebrew, x86_64)
-        run: |
-          # GitHub-hosted runners pre-tap aws/tap (AWS CLI). Newer Homebrew
-          # flags it as an untrusted tap and prints a warning on every brew
-          # command. We don't use it, so untap it (ignore if already gone).
-          brew untap aws/tap || true
-          brew install pkg-config gstreamer
+      - name: Cache GStreamer macOS SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/xue_hua_video_player/gstreamer
+          key: gstreamer-macos-${{ env.GST_VERSION }}
+      - name: Ensure official GStreamer macOS SDK (universal, user cache)
+        run: sh macos/scripts/ensure_gstreamer_macos.sh
       - name: build_tool deps
         working-directory: cargokit/build_tool
         run: dart pub get
@@ -107,7 +113,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: |
-          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          GST_CACHE="$HOME/Library/Caches/xue_hua_video_player/gstreamer/${GST_VERSION}"
+          for p in GLIB_2_0 GOBJECT_2_0 GIO_2_0 GSTREAMER_1_0 GSTREAMER_BASE_1_0 GSTREAMER_APP_1_0 GSTREAMER_VIDEO_1_0; do
+            export SYSTEM_DEPS_${p}_NO_PKG_CONFIG=1
+            export SYSTEM_DEPS_${p}_SEARCH_FRAMEWORK="$GST_CACHE"
+            export SYSTEM_DEPS_${p}_LIB_FRAMEWORK=GStreamer
+            export SYSTEM_DEPS_${p}_INCLUDE="$GST_CACHE/GStreamer.framework/Headers"
+          done
           dart run build_tool precompile-binaries -v \
             --manifest-dir=../../rust \
             --repository="$REPO_SLUG" \

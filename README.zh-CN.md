@@ -55,9 +55,8 @@
 > 不支持 Apple Silicon 的 iOS **模拟器**，因为官方预编译 iOS SDK 不提供 arm64 模拟器切片。
 >
 > 在 Apple Silicon 的 macOS 上，Homebrew 默认安装的 GStreamer 通常只有 `arm64`
-> 切片。因此插件在该环境下默认构建 `arm64` 版本；如果你需要 universal macOS 应用，
-> 请安装官方 `GStreamer.framework`，或把 `GSTREAMER_PKG_CONFIG_PATH` 指向一个
-> 支持 universal / `x86_64` 的 GStreamer SDK。
+> 切片。插件在 Homebrew 调试模式下默认构建 `arm64`；**Mac App Store / universal 发布**
+> 会在 `pod install` 时自动下载官方 universal `GStreamer.framework` 到用户缓存。
 
 ## 安装
 
@@ -216,23 +215,23 @@ GStreamer 运行时较大（每个 ABI 约 13–18 MB）。
 
 ### macOS
 
-播放网络视频需要**对外网络**授权。请在 `macos/Runner/DebugProfile.entitlements` 和
-`Release.entitlements` 中都加入：
+Mac App Store 要求开启 **App Sandbox**。本插件会在构建时自动将官方 `GStreamer.framework`
+嵌入 `.app/Contents/Frameworks/`，Rust 核心在启动时配置 `GST_PLUGIN_SYSTEM_PATH` 与
+`GIO_MODULE_DIR`，无需在 Xcode 里手动 Copy Files。
+
+在 `macos/Runner/DebugProfile.entitlements` 和 `Release.entitlements` 中至少加入：
 
 ```xml
+<key>com.apple.security.app-sandbox</key>
+<true/>
 <key>com.apple.security.network.client</key>
 <true/>
 ```
 
-如果保持 **App Sandbox 开启**，则必须把 GStreamer 的 dylib 打包进 `.app`，并加入：
+完整上架步骤见 [Mac App Store 发布（macOS）](#mac-app-store-发布macos)。
 
-```xml
-<key>com.apple.security.cs.disable-library-validation</key>
-<true/>
-```
-
-示例工程为方便开发**关闭**了 App Sandbox，从而可直接加载 Homebrew 的 dylib；正式发布的
-应用应打包 GStreamer 并保持沙盒开启。
+本地调试若暂未安装官方 Framework，可设置 `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` 使用
+Homebrew GStreamer（**不可用于上架**）。
 
 ### Windows
 
@@ -323,23 +322,60 @@ Rust 核心在构建时链接 GStreamer，所以构建时必须能找到 GStream
 
 ### macOS
 
-在 Apple Silicon 本地开发时，可通过 Homebrew 安装：
+**Mac App Store / 沙盒发布**必须使用官方 universal `GStreamer.framework`（x86_64 + arm64），
+不能用 Homebrew 路径下的 dylib。
+
+首次 `pod install` 时会**自动下载** runtime + devel 到用户缓存（合计约 **800MB–1GB** 下载，无需 sudo）：
+
+`~/Library/Caches/xue_hua_video_player/gstreamer/1.28.4/`
+  - `GStreamer.framework` — 完整 SDK（构建链接用）
+  - `GStreamerRuntime.framework` — runtime 快照（嵌入 `.app` 用，消费方无需关心）
+
+最终 `.app` 仅嵌入 runtime 部分（约 **150–600MB**）。多项目共享同一份缓存。
+
+可选环境变量：`XUE_HUA_GSTREAMER_ROOT`、`GSTREAMER_FRAMEWORK_SRC`（离线/自定义路径）；
+维护者仍可用 `sh tool/setup_gstreamer_macos.sh --system` 安装到 `/Library/Frameworks`。
+
+#### 消费方：构建配置
+
+1. 在 `macos/Podfile` 的 `post_install` 中加载嵌入脚本（example 已包含）：
+
+   ```ruby
+   gstreamer_helper = File.expand_path(
+     'Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos/gstreamer_podfile_helper.rb',
+     __dir__,
+   )
+   if File.exist?(gstreamer_helper)
+     load gstreamer_helper
+     install_gstreamer_embed_script!(installer)
+   end
+   ```
+
+2. 开启 App Sandbox + `com.apple.security.network.client`（见 [权限](#权限与各平台配置)）。
+
+3. `flutter build macos --release`，确认产物中存在
+   `YourApp.app/Contents/Frameworks/GStreamer.framework`。
+
+Rust 核心会在 `gst::init()` 前设置 `GST_PLUGIN_SYSTEM_PATH`、`GIO_MODULE_DIR` 以及沙盒可写的
+`GST_REGISTRY` 路径（见 `rust/src/player.rs` 中的 `setup_macos_env()`）。
+
+#### 本地 Homebrew 调试（非 MAS）
 
 ```bash
-brew install pkg-config gstreamer gst-plugins-base gst-plugins-good \
-  gst-plugins-bad gst-libav
+export XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1
+brew install pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav
 ```
 
-如果标准位置下安装了官方 `GStreamer.framework`，
-`macos/xue_hua_video_player.podspec` 会优先使用它；否则才回退到 Homebrew。
+### Mac App Store 发布（macOS）
 
-在 Apple Silicon 机器上，这个 Homebrew 回退路径通常只有 `arm64` 切片，因此插件会默认排除
-`x86_64`，避免 universal 链接阶段失败。若要构建 universal 的 macOS 应用，请安装官方
-`GStreamer.framework`，或将 `GSTREAMER_PKG_CONFIG_PATH` 指向支持 universal /
-`x86_64` 的 GStreamer SDK。
-
-发布时你必须把 GStreamer 的 dylib 打包进 `.app` 并修正其加载路径；上面的 Homebrew 方式仅
-用于本地开发。
+1. 确认 `macos/Podfile` 已集成 `gstreamer_podfile_helper.rb`（见上）。
+2. `macos/Runner/*entitlements` 开启沙盒与 `network.client`。
+3. `flutter build macos --release` 或 Xcode Archive（首次构建会自动下载 GStreamer 缓存）。
+4. 验证：
+   - `YourApp.app/Contents/Frameworks/GStreamer.framework` 存在
+   - `codesign -vvv --deep --strict YourApp.app` 通过
+   - 沙盒下可播放 http/https 视频
+5. Validate App → Upload to App Store Connect。
 
 ### Linux
 
@@ -591,8 +627,9 @@ Metal 的行对齐要求（`Could not create Metal texture from pixel buffer: CV
   或发布按 ABI 拆分的 APK / App Bundle。
 - **Windows `pkg-config` 找不到 `glib-2.0`**：确认已安装**开发**文件，且 `PKG_CONFIG_PATH`
   指向 `...\1.0\msvc_x86_64\lib\pkgconfig`。
-- **macOS 黑屏 / dylib 加载失败**：开启 `com.apple.security.network.client`，并在开发时关闭
-  沙盒，或打包 dylib 并加入 `disable-library-validation`。
+- **macOS 黑屏 / 插件加载失败**：确认 `.app/Contents/Frameworks/GStreamer.framework` 已嵌入；
+  沙盒需开启 `network.client`；若使用 Homebrew 调试请设置
+  `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1`（上架必须用官方 Framework）。
 
 ## 维护者
 
