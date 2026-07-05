@@ -1,3 +1,11 @@
+## 1.0.6
+
+### Bug fixes
+
+- **Android release crash**: ship consumer ProGuard rules so R8/minify builds no
+  longer strip `IrondashEngineContextPlugin.getTextureRegistry()` (fixes
+  `NoSuchMethodError` when opening a video page in release).
+
 ## 1.0.5
 
 ### Improvements

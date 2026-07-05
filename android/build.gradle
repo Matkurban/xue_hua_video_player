@@ -46,6 +46,7 @@ android {
 
     defaultConfig {
         minSdkVersion 19
+        consumerProguardFiles 'proguard-rules.pro'
 
         // All four Android ABIs are wired up: the bundled umbrella GStreamer
         // library and the precompiled Rust binary are provided for each of them

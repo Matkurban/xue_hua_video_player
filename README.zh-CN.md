@@ -203,6 +203,45 @@ GStreamer 运行时较大（每个 ABI 约 13–18 MB）。
 - 部分传递依赖需要较新的 `compileSdk`。若 AAR 元数据校验失败，可在所有子工程强制
   `compileSdk = 36`（示例工程在其 `android/build.gradle.kts` 中就是这样做的）。
 
+#### Release 构建（R8 / ProGuard）
+
+插件通过 Flutter 外部纹理渲染视频。Rust 核心会在 Android 主线程通过 JNI 调用
+`IrondashEngineContextPlugin.getTextureRegistry()`。若 release 构建开启了代码压缩
+（`isMinifyEnabled = true`），R8 可能移除该静态方法，进入视频页时闪退：
+
+```
+java.lang.NoSuchMethodError: IrondashEngineContextPlugin.getTextureRegistry(J)
+```
+
+**本插件 AAR 已内置 consumer ProGuard 规则**（`android/proguard-rules.pro`），依赖
+包含该修复的版本后，minify 的 release 包一般无需额外配置。
+
+若仍出现崩溃（或你使用的是旧版插件），在应用的 `android/app/proguard-rules.pro`
+中添加：
+
+```proguard
+-keep class dev.irondash.engine_context.** { *; }
+-keep interface io.flutter.view.TextureRegistry { *; }
+-keep class io.flutter.view.TextureRegistry$* { *; }
+```
+
+并确保 `release` 构建类型引用了该文件：
+
+```kotlin
+buildTypes {
+    release {
+        isMinifyEnabled = true
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro",
+        )
+    }
+}
+```
+
+若要确认是否为 R8 导致，可临时设 `isMinifyEnabled = false` 重新打包；若不闪退，
+说明上述 keep 规则即为修复方案。
+
 ### iOS
 
 - **最低部署版本：iOS 13.0。** 仅支持真机 `arm64`（不支持模拟器）。

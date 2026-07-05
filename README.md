@@ -220,6 +220,47 @@ Notes:
   fail, force `compileSdk = 36` across subprojects (the example does this in its
   `android/build.gradle.kts`).
 
+#### Release builds (R8 / ProGuard)
+
+The plugin renders video through an external Flutter texture. The Rust core calls
+`IrondashEngineContextPlugin.getTextureRegistry()` via JNI on the Android main
+thread. If your release build enables code shrinking (`isMinifyEnabled = true`),
+R8 may strip that static method and the app crashes when opening a video page:
+
+```
+java.lang.NoSuchMethodError: IrondashEngineContextPlugin.getTextureRegistry(J)
+```
+
+**This plugin ships consumer ProGuard rules** in its AAR (`android/proguard-rules.pro`),
+so minified release builds should work without extra configuration once you depend
+on a version that includes them.
+
+If you still see the crash (or you are on an older plugin version), add this to
+your app's `android/app/proguard-rules.pro`:
+
+```proguard
+-keep class dev.irondash.engine_context.** { *; }
+-keep interface io.flutter.view.TextureRegistry { *; }
+-keep class io.flutter.view.TextureRegistry$* { *; }
+```
+
+Ensure your `release` build type references that file:
+
+```kotlin
+buildTypes {
+    release {
+        isMinifyEnabled = true
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro",
+        )
+    }
+}
+```
+
+To confirm R8 is the cause, temporarily set `isMinifyEnabled = false` and rebuild;
+if the crash disappears, the keep rules above are the fix.
+
 ### iOS
 
 - **Minimum deployment target: iOS 13.0.** Physical `arm64` device only (no
