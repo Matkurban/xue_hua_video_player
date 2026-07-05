@@ -281,8 +281,8 @@ class ArtifactProvider {
       try {
         await downloadArtifactToFile(url, tempPath);
         final bodyBytes = tempFile.readAsBytesSync();
-        if (verify(precompiledBinaries.publicKey, bodyBytes,
-            signature.bodyBytes)) {
+        if (verify(
+            precompiledBinaries.publicKey, bodyBytes, signature.bodyBytes)) {
           if (File(finalPath).existsSync()) {
             File(finalPath).deleteSync();
           }

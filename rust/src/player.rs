@@ -309,10 +309,7 @@ fn setup_macos_env() {
     if let Some(lib_dir) = bundled_gstreamer_lib_dir() {
         let plugins = lib_dir.join("gstreamer-1.0");
         if plugins.is_dir() {
-            std::env::set_var(
-                "GST_PLUGIN_SYSTEM_PATH",
-                plugins.to_string_lossy().as_ref(),
-            );
+            std::env::set_var("GST_PLUGIN_SYSTEM_PATH", plugins.to_string_lossy().as_ref());
         }
         let gio_modules = lib_dir.join("gio").join("modules");
         if gio_modules.is_dir() {

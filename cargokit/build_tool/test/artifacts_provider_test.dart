@@ -109,7 +109,8 @@ void main() {
           ..close();
       });
 
-      final tempDir = Directory.systemTemp.createTempSync('artifacts_provider_');
+      final tempDir =
+          Directory.systemTemp.createTempSync('artifacts_provider_');
       addTearDown(() {
         if (tempDir.existsSync()) {
           tempDir.deleteSync(recursive: true);
