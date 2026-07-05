@@ -247,11 +247,11 @@ buildTypes {
 若要确认是否为 R8 导致，可临时设 `isMinifyEnabled = false` 重新打包；若不闪退，
 说明上述 keep 规则即为修复方案。
 
-**v1.0.7+** 还修复了另一类 release 闪退（`Fatal signal 6 / SIGABRT`），出现在
-新版 Flutter（Impeller/Vulkan）纹理注册之后。vendored `irondash_texture` 已改用
-`createSurfaceProducer()` 替代废弃的 `createSurfaceTexture()`。请升级到 **1.0.7** 并
-先执行 `flutter clean` 再打包，确保 APK 内含更新后的 `libxue_hua_video_player.so`
-（预编译二进制需匹配新的 `crate-hash`）。
+**v1.0.9+** 进一步强化 SurfaceProducer：当存在 `createSurfaceProducer()` 时不再静默
+回退到废弃的 `createSurfaceTexture()`；延迟到首帧再获取 `ANativeWindow`；并注册
+surface 生命周期回调。请升级到 **1.0.9**、执行 `flutter clean`，并确保 APK 内含新的
+`libxue_hua_video_player.so`（预编译二进制需匹配新的 `crate-hash`）。logcat 应出现
+`irondash_texture: using surface_producer path`。
 
 ### iOS
 

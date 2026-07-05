@@ -7,6 +7,7 @@
 
 # GStreamer startup ContentProvider (runs before Flutter engine)
 -keep class com.flutter_rust_bridge.xue_hua_video_player.GStreamerInitProvider { *; }
+-keep class com.flutter_rust_bridge.xue_hua_video_player.IrondashSurfaceProducerCallback { *; }
 
 # GStreamer Android MediaCodec JNI helpers (referenced only from native code;
 # R8 strips them without these rules, breaking release playback/decoding).

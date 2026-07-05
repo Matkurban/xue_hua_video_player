@@ -267,12 +267,12 @@ buildTypes {
 To confirm R8 is the cause, temporarily set `isMinifyEnabled = false` and rebuild;
 if the crash disappears, the keep rules above are the fix.
 
-**v1.0.7+** also fixes a separate release crash (`Fatal signal 6 / SIGABRT`) that
-occurs after texture registration on modern Flutter (Impeller/Vulkan). The vendored
-`irondash_texture` uses `createSurfaceProducer()` instead of the deprecated
-`createSurfaceTexture()` path. Upgrade to **1.0.7** and run `flutter clean` before
-rebuilding so the updated `libxue_hua_video_player.so` is packaged (precompiled
-binaries must match the new `crate-hash`).
+**v1.0.9+** hardens the SurfaceProducer path: no silent fallback to legacy
+`createSurfaceTexture()` when `createSurfaceProducer()` is available, deferred
+`ANativeWindow` acquisition until the first frame, and a lifecycle callback for
+surface teardown. Upgrade to **1.0.9**, run `flutter clean`, and ensure the APK
+contains a fresh `libxue_hua_video_player.so` (precompiled binaries must match
+the new `crate-hash`). Logcat should show `irondash_texture: using surface_producer path`.
 
 ### iOS
 

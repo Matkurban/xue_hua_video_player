@@ -1,3 +1,15 @@
+## 1.0.9
+
+### Bug fixes
+
+- **Android release SIGABRT (legacy texture path)**: vendored `irondash_texture`
+  no longer silently falls back to `createSurfaceTexture()` when
+  `createSurfaceProducer()` is available but fails. `ANativeWindow` acquisition
+  is deferred until the first frame on the SurfaceProducer path. Adds
+  `IrondashSurfaceProducerCallback` for surface lifecycle and calls
+  `scheduleFrame()` after posting pixels. **Requires fresh precompiled
+  `libxue_hua_video_player.so`** for the new `crate-hash`.
+
 ## 1.0.8
 
 ### Bug fixes
