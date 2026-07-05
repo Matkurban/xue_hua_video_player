@@ -1,3 +1,14 @@
+## 1.0.7
+
+### Bug fixes
+
+- **Android release SIGABRT on video page**: vendored `irondash_texture` now uses
+  Flutter's `createSurfaceProducer()` API instead of legacy `createSurfaceTexture()`,
+  fixing `Fatal signal 6 (SIGABRT)` on modern Flutter engines (Impeller/Vulkan).
+  Falls back to `createSurfaceTexture` on older Flutter versions. **Requires a
+  fresh native build** (precompiled `libxue_hua_video_player.so` must be rebuilt
+  for the new `crate-hash`).
+
 ## 1.0.6
 
 ### Bug fixes

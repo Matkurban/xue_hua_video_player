@@ -242,6 +242,12 @@ buildTypes {
 若要确认是否为 R8 导致，可临时设 `isMinifyEnabled = false` 重新打包；若不闪退，
 说明上述 keep 规则即为修复方案。
 
+**v1.0.7+** 还修复了另一类 release 闪退（`Fatal signal 6 / SIGABRT`），出现在
+新版 Flutter（Impeller/Vulkan）纹理注册之后。vendored `irondash_texture` 已改用
+`createSurfaceProducer()` 替代废弃的 `createSurfaceTexture()`。请升级到 **1.0.7** 并
+先执行 `flutter clean` 再打包，确保 APK 内含更新后的 `libxue_hua_video_player.so`
+（预编译二进制需匹配新的 `crate-hash`）。
+
 ### iOS
 
 - **最低部署版本：iOS 13.0。** 仅支持真机 `arm64`（不支持模拟器）。
@@ -645,10 +651,16 @@ flutter_rust_bridge_codegen generate
 
 ### 内置依赖补丁
 
-`rust/vendor/irondash_texture` 是 `irondash_texture` 0.5.0 的本地副本，包含一处 macOS/iOS
-修复：上游底层 `IOSurface` 使用 `bytesPerRow = width * 4`，在当前 Flutter 渲染器上不满足
-Metal 的行对齐要求（`Could not create Metal texture from pixel buffer: CVReturn -6684`）。该
-副本把 stride 对齐到 256 字节并逐行上传，通过 `rust/Cargo.toml` 的 `[patch.crates-io]` 接入。
+`rust/vendor/irondash_texture` 是 `irondash_texture` 0.5.0 的本地副本，包含 macOS/iOS 与
+Android 补丁：
+
+- **macOS/iOS**：上游底层 `IOSurface` 使用 `bytesPerRow = width * 4`，在当前 Flutter 渲染器上
+  不满足 Metal 的行对齐要求（`Could not create Metal texture from pixel buffer: CVReturn -6684`）。
+  该副本把 stride 对齐到 256 字节并逐行上传。
+- **Android**：改用 `createSurfaceProducer()` 替代废弃的 `createSurfaceTexture()`，避免新版
+  Flutter（Impeller/Vulkan）上进入视频页 `SIGABRT`。
+
+通过 `rust/Cargo.toml` 的 `[patch.crates-io]` 接入。
 
 ## 常见问题
 

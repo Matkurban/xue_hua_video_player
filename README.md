@@ -261,6 +261,13 @@ buildTypes {
 To confirm R8 is the cause, temporarily set `isMinifyEnabled = false` and rebuild;
 if the crash disappears, the keep rules above are the fix.
 
+**v1.0.7+** also fixes a separate release crash (`Fatal signal 6 / SIGABRT`) that
+occurs after texture registration on modern Flutter (Impeller/Vulkan). The vendored
+`irondash_texture` uses `createSurfaceProducer()` instead of the deprecated
+`createSurfaceTexture()` path. Upgrade to **1.0.7** and run `flutter clean` before
+rebuilding so the updated `libxue_hua_video_player.so` is packaged (precompiled
+binaries must match the new `crate-hash`).
+
 ### iOS
 
 - **Minimum deployment target: iOS 13.0.** Physical `arm64` device only (no
@@ -718,12 +725,17 @@ flutter_rust_bridge_codegen generate
 
 ### Vendored dependency patch
 
-`rust/vendor/irondash_texture` is a local copy of `irondash_texture` 0.5.0 with a
-macOS/iOS fix: the upstream backing `IOSurface` uses `bytesPerRow = width * 4`,
-which fails Metal's row-alignment requirement on the current Flutter renderer
-(`Could not create Metal texture from pixel buffer: CVReturn -6684`). The
-vendored copy aligns the stride to 256 bytes and uploads row-by-row. It is wired
-in through `[patch.crates-io]` in `rust/Cargo.toml`.
+`rust/vendor/irondash_texture` is a local copy of `irondash_texture` 0.5.0 with
+patches for macOS/iOS and Android:
+
+- **macOS/iOS**: the upstream backing `IOSurface` uses `bytesPerRow = width * 4`,
+  which fails Metal's row-alignment requirement on the current Flutter renderer
+  (`Could not create Metal texture from pixel buffer: CVReturn -6684`). The
+  vendored copy aligns the stride to 256 bytes and uploads row-by-row.
+- **Android**: uses `createSurfaceProducer()` instead of legacy `createSurfaceTexture()`
+  to avoid `SIGABRT` on modern Flutter (Impeller/Vulkan).
+
+It is wired in through `[patch.crates-io]` in `rust/Cargo.toml`.
 
 ## Troubleshooting
 

@@ -1,3 +1,6 @@
+# Vendored copy of irondash_texture 0.5.0 with patches:
+# - macOS/iOS: IOSurface stride aligned to 256 bytes (Metal CVReturn -6684)
+# - Android: createSurfaceProducer() instead of legacy createSurfaceTexture()
 [package]
 name = "irondash_texture"
 version = "0.5.0"
