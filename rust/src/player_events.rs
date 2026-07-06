@@ -170,8 +170,14 @@ pub struct PlayerEvent {
     pub state: PlayerState,
     pub message: String,
     pub fps: f64,
+    pub pixel_aspect_width: i32,
+    pub pixel_aspect_height: i32,
     pub display_aspect_width: i32,
     pub display_aspect_height: i32,
+    pub interlaced: bool,
+    pub color_matrix: String,
+    pub color_range: String,
+    pub hdr_format: String,
     pub is_seekable: bool,
 }
 
@@ -187,8 +193,14 @@ impl PlayerEvent {
             state: PlayerState::Idle,
             message: String::new(),
             fps: 0.0,
+            pixel_aspect_width: 1,
+            pixel_aspect_height: 1,
             display_aspect_width: 16,
             display_aspect_height: 9,
+            interlaced: false,
+            color_matrix: String::new(),
+            color_range: String::new(),
+            hdr_format: String::new(),
             is_seekable: true,
         }
     }
@@ -221,8 +233,14 @@ impl PlayerEvent {
             width: meta.width,
             height: meta.height,
             fps: meta.fps,
+            pixel_aspect_width: meta.pixel_aspect_width,
+            pixel_aspect_height: meta.pixel_aspect_height,
             display_aspect_width: meta.display_aspect_width,
             display_aspect_height: meta.display_aspect_height,
+            interlaced: meta.interlaced,
+            color_matrix: meta.color_matrix,
+            color_range: meta.color_range,
+            hdr_format: meta.hdr_format,
             ..Self::base(PlayerEventKind::MetadataChanged)
         }
     }

@@ -40,4 +40,4 @@ The public Rust seam is **`PlaybackEngine`** (`playback/engine.rs`); FRB/Dart ca
 
 - Bus/overlay logic is written once; platform overlay constraints in `CONTEXT.md` remain centralized.
 - Asset seek is limited for pure AppSrc streams; `is_seekable` is exposed to Dart.
-- Subtitle **track enumeration** uses playbin properties; burned-in rendering is out of scope for v1.
+- Subtitle **track enumeration** on URI/playbin3 pipelines uses `GstStreamCollection` bus messages and `GST_EVENT_SELECT_STREAMS` (not legacy playbin `n-audio` properties). Burned-in rendering is out of scope for v1.

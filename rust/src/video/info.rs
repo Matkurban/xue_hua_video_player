@@ -1,3 +1,4 @@
+use gstreamer as gst;
 use gstreamer_video as gst_video;
 
 /// Internal decoded video metadata (converted to [`crate::player_events::VideoMetadata`] for Dart).
@@ -18,6 +19,13 @@ pub(crate) struct InternalVideoMetadata {
 
 impl InternalVideoMetadata {
     pub fn from_video_info(info: &gst_video::VideoInfo) -> Self {
+        Self::from_video_info_and_caps(info, info.to_caps().ok().as_ref().map(|c| c.as_ref()))
+    }
+
+    pub fn from_video_info_and_caps(
+        info: &gst_video::VideoInfo,
+        caps: Option<&gst::CapsRef>,
+    ) -> Self {
         let fps = if info.fps().numer() > 0 {
             info.fps().numer() as f64 / info.fps().denom().max(1) as f64
         } else {
@@ -35,6 +43,9 @@ impl InternalVideoMetadata {
             (w, h)
         };
         let colorimetry = info.colorimetry();
+        let hdr_format = caps
+            .map(detect_hdr_format)
+            .unwrap_or_else(|| detect_hdr_from_colorimetry(&colorimetry));
         Self {
             width: w,
             height: h,
@@ -46,7 +57,7 @@ impl InternalVideoMetadata {
             interlaced: info.is_interlaced(),
             color_matrix: format!("{:?}", colorimetry.matrix()),
             color_range: format!("{:?}", colorimetry.range()),
-            hdr_format: String::new(),
+            hdr_format,
         }
     }
 
@@ -59,4 +70,27 @@ impl InternalVideoMetadata {
             16.0 / 9.0
         }
     }
+}
+
+fn detect_hdr_from_colorimetry(colorimetry: &gst_video::VideoColorimetry) -> String {
+    match colorimetry.transfer() {
+        gst_video::VideoTransferFunction::Bt202012 => "HDR10".to_string(),
+        other => {
+            let name = format!("{other:?}");
+            if name.contains("Smpte2084") || name.contains("Bt2020") {
+                "HDR10".to_string()
+            } else if name.contains("Arib") || name.contains("B67") {
+                "HLG".to_string()
+            } else {
+                String::new()
+            }
+        }
+    }
+}
+
+fn detect_hdr_format(caps: &gst::CapsRef) -> String {
+    if let Ok(info) = gst_video::VideoInfo::from_caps(caps) {
+        return detect_hdr_from_colorimetry(&info.colorimetry());
+    }
+    String::new()
 }

@@ -1255,8 +1255,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlayerEvent dco_decode_player_event(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return PlayerEvent(
       kind: dco_decode_player_event_kind(arr[0]),
       positionMs: dco_decode_i_64(arr[1]),
@@ -1267,9 +1267,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       state: dco_decode_player_state(arr[6]),
       message: dco_decode_String(arr[7]),
       fps: dco_decode_f_64(arr[8]),
-      displayAspectWidth: dco_decode_i_32(arr[9]),
-      displayAspectHeight: dco_decode_i_32(arr[10]),
-      isSeekable: dco_decode_bool(arr[11]),
+      pixelAspectWidth: dco_decode_i_32(arr[9]),
+      pixelAspectHeight: dco_decode_i_32(arr[10]),
+      displayAspectWidth: dco_decode_i_32(arr[11]),
+      displayAspectHeight: dco_decode_i_32(arr[12]),
+      interlaced: dco_decode_bool(arr[13]),
+      colorMatrix: dco_decode_String(arr[14]),
+      colorRange: dco_decode_String(arr[15]),
+      hdrFormat: dco_decode_String(arr[16]),
+      isSeekable: dco_decode_bool(arr[17]),
     );
   }
 
@@ -1486,8 +1492,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_state = sse_decode_player_state(deserializer);
     var var_message = sse_decode_String(deserializer);
     var var_fps = sse_decode_f_64(deserializer);
+    var var_pixelAspectWidth = sse_decode_i_32(deserializer);
+    var var_pixelAspectHeight = sse_decode_i_32(deserializer);
     var var_displayAspectWidth = sse_decode_i_32(deserializer);
     var var_displayAspectHeight = sse_decode_i_32(deserializer);
+    var var_interlaced = sse_decode_bool(deserializer);
+    var var_colorMatrix = sse_decode_String(deserializer);
+    var var_colorRange = sse_decode_String(deserializer);
+    var var_hdrFormat = sse_decode_String(deserializer);
     var var_isSeekable = sse_decode_bool(deserializer);
     return PlayerEvent(
       kind: var_kind,
@@ -1499,8 +1511,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       state: var_state,
       message: var_message,
       fps: var_fps,
+      pixelAspectWidth: var_pixelAspectWidth,
+      pixelAspectHeight: var_pixelAspectHeight,
       displayAspectWidth: var_displayAspectWidth,
       displayAspectHeight: var_displayAspectHeight,
+      interlaced: var_interlaced,
+      colorMatrix: var_colorMatrix,
+      colorRange: var_colorRange,
+      hdrFormat: var_hdrFormat,
       isSeekable: var_isSeekable,
     );
   }
@@ -1737,8 +1755,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_player_state(self.state, serializer);
     sse_encode_String(self.message, serializer);
     sse_encode_f_64(self.fps, serializer);
+    sse_encode_i_32(self.pixelAspectWidth, serializer);
+    sse_encode_i_32(self.pixelAspectHeight, serializer);
     sse_encode_i_32(self.displayAspectWidth, serializer);
     sse_encode_i_32(self.displayAspectHeight, serializer);
+    sse_encode_bool(self.interlaced, serializer);
+    sse_encode_String(self.colorMatrix, serializer);
+    sse_encode_String(self.colorRange, serializer);
+    sse_encode_String(self.hdrFormat, serializer);
     sse_encode_bool(self.isSeekable, serializer);
   }
 

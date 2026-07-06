@@ -109,14 +109,14 @@ class XueHuaPlayerController {
           width: event.width,
           height: event.height,
           fps: event.fps,
-          pixelAspectWidth: 1,
-          pixelAspectHeight: 1,
+          pixelAspectWidth: event.pixelAspectWidth,
+          pixelAspectHeight: event.pixelAspectHeight,
           displayAspectWidth: event.displayAspectWidth,
           displayAspectHeight: event.displayAspectHeight,
-          interlaced: false,
-          colorMatrix: '',
-          colorRange: '',
-          hdrFormat: '',
+          interlaced: event.interlaced,
+          colorMatrix: event.colorMatrix,
+          colorRange: event.colorRange,
+          hdrFormat: event.hdrFormat,
         );
         _isSeekable.value = event.isSeekable;
         break;
@@ -125,8 +125,10 @@ class XueHuaPlayerController {
         break;
       case PlayerEventKind.buffering:
         batch(() {
-          _state.value = PlayerState.buffering;
           _bufferingPercent.value = event.bufferingPercent;
+          if (event.bufferingPercent < 100) {
+            _state.value = PlayerState.buffering;
+          }
         });
         break;
       case PlayerEventKind.eos:
@@ -181,6 +183,7 @@ class XueHuaPlayerController {
       _videoSize.value = Size.zero;
       _videoMetadata.value = null;
       _tracks.value = const [];
+      _speed.value = 1.0;
       _state.value = PlayerState.buffering;
     });
     await _guard(() async {

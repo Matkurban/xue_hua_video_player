@@ -10,7 +10,7 @@ crate-type = ["cdylib", "staticlib"]
 flutter_rust_bridge = "=2.12.0"
 
 # Media pipeline
-gstreamer = "0.25.3"
+gstreamer = { version = "0.25.3", features = ["v1_18"] }
 gstreamer-app = "0.25.2"
 gstreamer-video = "0.25.3"
 

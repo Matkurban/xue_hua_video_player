@@ -66,8 +66,14 @@ class PlayerEvent {
   final PlayerState state;
   final String message;
   final double fps;
+  final int pixelAspectWidth;
+  final int pixelAspectHeight;
   final int displayAspectWidth;
   final int displayAspectHeight;
+  final bool interlaced;
+  final String colorMatrix;
+  final String colorRange;
+  final String hdrFormat;
   final bool isSeekable;
 
   const PlayerEvent({
@@ -80,8 +86,14 @@ class PlayerEvent {
     required this.state,
     required this.message,
     required this.fps,
+    required this.pixelAspectWidth,
+    required this.pixelAspectHeight,
     required this.displayAspectWidth,
     required this.displayAspectHeight,
+    required this.interlaced,
+    required this.colorMatrix,
+    required this.colorRange,
+    required this.hdrFormat,
     required this.isSeekable,
   });
 
@@ -96,8 +108,14 @@ class PlayerEvent {
       state.hashCode ^
       message.hashCode ^
       fps.hashCode ^
+      pixelAspectWidth.hashCode ^
+      pixelAspectHeight.hashCode ^
       displayAspectWidth.hashCode ^
       displayAspectHeight.hashCode ^
+      interlaced.hashCode ^
+      colorMatrix.hashCode ^
+      colorRange.hashCode ^
+      hdrFormat.hashCode ^
       isSeekable.hashCode;
 
   @override
@@ -114,8 +132,14 @@ class PlayerEvent {
           state == other.state &&
           message == other.message &&
           fps == other.fps &&
+          pixelAspectWidth == other.pixelAspectWidth &&
+          pixelAspectHeight == other.pixelAspectHeight &&
           displayAspectWidth == other.displayAspectWidth &&
           displayAspectHeight == other.displayAspectHeight &&
+          interlaced == other.interlaced &&
+          colorMatrix == other.colorMatrix &&
+          colorRange == other.colorRange &&
+          hdrFormat == other.hdrFormat &&
           isSeekable == other.isSeekable;
 }
 

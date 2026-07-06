@@ -1239,8 +1239,14 @@ impl SseDecode for crate::player_events::PlayerEvent {
         let mut var_state = <crate::player_events::PlayerState>::sse_decode(deserializer);
         let mut var_message = <String>::sse_decode(deserializer);
         let mut var_fps = <f64>::sse_decode(deserializer);
+        let mut var_pixelAspectWidth = <i32>::sse_decode(deserializer);
+        let mut var_pixelAspectHeight = <i32>::sse_decode(deserializer);
         let mut var_displayAspectWidth = <i32>::sse_decode(deserializer);
         let mut var_displayAspectHeight = <i32>::sse_decode(deserializer);
+        let mut var_interlaced = <bool>::sse_decode(deserializer);
+        let mut var_colorMatrix = <String>::sse_decode(deserializer);
+        let mut var_colorRange = <String>::sse_decode(deserializer);
+        let mut var_hdrFormat = <String>::sse_decode(deserializer);
         let mut var_isSeekable = <bool>::sse_decode(deserializer);
         return crate::player_events::PlayerEvent {
             kind: var_kind,
@@ -1252,8 +1258,14 @@ impl SseDecode for crate::player_events::PlayerEvent {
             state: var_state,
             message: var_message,
             fps: var_fps,
+            pixel_aspect_width: var_pixelAspectWidth,
+            pixel_aspect_height: var_pixelAspectHeight,
             display_aspect_width: var_displayAspectWidth,
             display_aspect_height: var_displayAspectHeight,
+            interlaced: var_interlaced,
+            color_matrix: var_colorMatrix,
+            color_range: var_colorRange,
+            hdr_format: var_hdrFormat,
             is_seekable: var_isSeekable,
         };
     }
@@ -1562,8 +1574,14 @@ impl flutter_rust_bridge::IntoDart for crate::player_events::PlayerEvent {
             self.state.into_into_dart().into_dart(),
             self.message.into_into_dart().into_dart(),
             self.fps.into_into_dart().into_dart(),
+            self.pixel_aspect_width.into_into_dart().into_dart(),
+            self.pixel_aspect_height.into_into_dart().into_dart(),
             self.display_aspect_width.into_into_dart().into_dart(),
             self.display_aspect_height.into_into_dart().into_dart(),
+            self.interlaced.into_into_dart().into_dart(),
+            self.color_matrix.into_into_dart().into_dart(),
+            self.color_range.into_into_dart().into_dart(),
+            self.hdr_format.into_into_dart().into_dart(),
             self.is_seekable.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -1857,8 +1875,14 @@ impl SseEncode for crate::player_events::PlayerEvent {
         <crate::player_events::PlayerState>::sse_encode(self.state, serializer);
         <String>::sse_encode(self.message, serializer);
         <f64>::sse_encode(self.fps, serializer);
+        <i32>::sse_encode(self.pixel_aspect_width, serializer);
+        <i32>::sse_encode(self.pixel_aspect_height, serializer);
         <i32>::sse_encode(self.display_aspect_width, serializer);
         <i32>::sse_encode(self.display_aspect_height, serializer);
+        <bool>::sse_encode(self.interlaced, serializer);
+        <String>::sse_encode(self.color_matrix, serializer);
+        <String>::sse_encode(self.color_range, serializer);
+        <String>::sse_encode(self.hdr_format, serializer);
         <bool>::sse_encode(self.is_seekable, serializer);
     }
 }

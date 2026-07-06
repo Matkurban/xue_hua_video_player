@@ -9,8 +9,10 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::media::AppSrcFeedState;
+use crate::playback::tracks::TrackCache;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::asset_pipeline::build_asset_pipeline;
+use crate::playback::capabilities::PipelineCapabilities;
 use crate::playback::uri_pipeline::build_uri_playbin;
 use crate::video::attach_overlay_bus_sync_handler;
 
@@ -31,6 +33,12 @@ pub struct PipelineShell {
     pub position_source: Option<gst::glib::SourceId>,
 }
 
+impl PipelineShell {
+    pub fn capabilities(&self) -> PipelineCapabilities {
+        PipelineCapabilities::from_source_kind(self.kind)
+    }
+}
+
 pub fn install_uri_shell(
     emitter: &Arc<Mutex<Option<Emitter>>>,
     looping: &Arc<AtomicBool>,
@@ -38,6 +46,7 @@ pub fn install_uri_shell(
     at_eos: &Arc<AtomicBool>,
     running: &Arc<AtomicBool>,
     metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
+    track_cache: Option<Arc<Mutex<TrackCache>>>,
 ) -> Result<PipelineShell> {
     let (pipeline, video_sink) = build_uri_playbin(emitter, metadata_cache)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
@@ -48,6 +57,7 @@ pub fn install_uri_shell(
         at_eos,
         running,
         true,
+        track_cache,
     )?;
     Ok(PipelineShell {
         pipeline,
@@ -78,6 +88,7 @@ pub fn install_asset_shell(
         at_eos,
         running,
         false,
+        None,
     )?;
     Ok(PipelineShell {
         pipeline,

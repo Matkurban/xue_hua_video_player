@@ -177,12 +177,12 @@ pub fn player_load_source(player_id: i64, source: MediaSourceDto) -> Result<()> 
 
 /// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.
 pub fn player_set_source(player_id: i64, uri: String) -> Result<()> {
-    get_player(player_id)?.set_uri(&uri)
+    get_player(player_id)?.load(MediaSourceDto::Uri(uri).into())
 }
 
 /// Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
 pub fn player_set_asset_source(player_id: i64, asset_key: String) -> Result<()> {
-    get_player(player_id)?.set_asset_source(&asset_key)
+    get_player(player_id)?.load(MediaSourceDto::FlutterAsset(asset_key).into())
 }
 
 pub fn player_play(player_id: i64) -> Result<()> {

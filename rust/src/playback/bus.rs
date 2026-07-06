@@ -11,6 +11,7 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::player_events::{map_state, PlayerEvent, PlayerState};
+use crate::playback::tracks::{mark_selected_streams, update_cache_from_collection, TrackCache};
 
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
@@ -23,13 +24,14 @@ pub fn attach_gst_bus_handlers(
     at_eos: &Arc<AtomicBool>,
     running: &Arc<AtomicBool>,
     is_playbin: bool,
+    track_cache: Option<Arc<Mutex<TrackCache>>>,
 ) -> Result<(gst::bus::BusWatchGuard, gst::glib::SourceId)> {
     let bus = pipeline
         .bus()
         .ok_or_else(|| anyhow!("pipeline has no bus"))?;
     let pipeline_bus = pipeline.clone();
     let pipeline_pos = pipeline.clone();
-    let pipeline_tracks = pipeline.clone();
+    let track_cache_bus = track_cache.clone();
     let emitter_bus = emitter.clone();
     let emitter_pos = emitter.clone();
     let looping = looping.clone();
@@ -88,6 +90,9 @@ pub fn attach_gst_bus_handlers(
                         if let Err(e) = pipeline_bus.set_state(target) {
                             log::warn!("buffering set_state({target:?}): {e}");
                         }
+                        if percent >= 100 {
+                            emit(PlayerEvent::state(PlayerState::Playing));
+                        }
                     }
                 }
                 MessageView::DurationChanged(..) => {
@@ -104,29 +109,23 @@ pub fn attach_gst_bus_handlers(
                             if let Some(d) = pipeline_bus.query_duration::<gst::ClockTime>() {
                                 emit(PlayerEvent::duration(d.mseconds() as i64));
                             }
-                            if is_playbin {
-                                emit(PlayerEvent::tracks_changed());
-                            }
                         }
                     }
                 }
-                MessageView::AsyncDone(..) => {
-                    if is_playbin {
-                        emit(PlayerEvent::tracks_changed());
+                MessageView::StreamCollection(sc) if is_playbin => {
+                    if let Some(cache) = track_cache_bus.as_ref() {
+                        update_cache_from_collection(&sc.stream_collection(), cache);
                     }
+                    emit(PlayerEvent::tracks_changed());
                 }
-                MessageView::Element(el) => {
-                    if is_playbin {
-                        if let Some(structure) = el.structure() {
-                            if structure.name() == "stream-collection" {
-                                emit(PlayerEvent::tracks_changed());
-                            }
-                        }
+                MessageView::StreamsSelected(ss) if is_playbin => {
+                    if let Some(cache) = track_cache_bus.as_ref() {
+                        mark_selected_streams(&ss, cache);
                     }
+                    emit(PlayerEvent::tracks_changed());
                 }
                 _ => {}
             }
-            let _ = pipeline_tracks;
             gst::glib::ControlFlow::Continue
         })
         .map_err(|e| anyhow!("bus watch failed: {e}"))?;

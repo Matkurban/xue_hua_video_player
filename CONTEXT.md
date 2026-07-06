@@ -32,7 +32,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 ## GStreamer runtime (all platforms)
 
 - A dedicated **`xhvp-gst`** thread owns a `MainContext` (`MainContext::new()`, not `default()`) and runs `MainLoop::run()`.
-- All pipeline operations (`play`, `pause`, `set_uri`, `set_asset_source`, `seek`, `dispose`) are marshalled onto that thread via `spawn_on_gst_thread_and_wait`.
+- All pipeline operations (`play`, `pause`, `load`, `seek`, `dispose`) are marshalled onto that thread via `spawn_on_gst_thread_and_wait`.
 - Bus events use `bus.add_watch_local` on the Gst thread (no `spawn_bus_thread` polling).
 - Position polling uses `timeout_source_new` **attached to the owned Gst `MainContext`** (`gst_main_context()`). Do **not** use `glib::timeout_add_local` — in glib 0.22 it binds to `g_main_context_default()`, which is not the context running `MainLoop::run()` on `xhvp-gst`.
 - State transitions call `set_state` then `get_state` with a timeout (`set_state_sync`) so failures surface as explicit errors.
@@ -42,7 +42,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 
 - `glimagesink` + [`VideoOverlay`](https://gstreamer.freedesktop.org/documentation/rust/stable/latest/docs/gstreamer_video/index.html) bind via `ANativeWindow_fromSurface` from `SurfaceView` callbacks.
 - **Never** call `spawn_on_gst_thread_and_wait` from Android JNI / main thread (`surfaceCreated` / `surfaceChanged`). Cache the native window handle on the JNI thread, then apply overlay + `set_render_rectangle` + `expose` via `spawn_on_gst_thread` (fire-and-forget).
-- If no overlay handle is cached when `set_uri` / `set_asset_source` runs, defer `PAUSED` preroll until the first surface bind (`maybe_preroll_after_overlay_bind`).
+- If no overlay handle is cached when `load` runs, defer `PAUSED` preroll until the first surface bind (`maybe_preroll_after_overlay_bind`).
 - Answer `prepare-window-handle` in the pipeline bus sync handler; proactive `set_window_handle` before preroll is preferred.
 - Flutter Android uses `PlatformViewLink` + `initSurfaceAndroidView` (hybrid composition) — not legacy virtual-display `AndroidView` — so `SurfaceView` gets a reliable surface.
 - `GStreamerInitProvider` loads `gstreamer_android` then `xue_hua_video_player` before Dart FRB `dlopen`.
@@ -55,9 +55,17 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 
 ## Asset playback (AppSrc)
 
-- Flutter assets are opened in Rust (`asset_resolver`): `flutter_assets/{key}` on desktop, `AssetManager` on Android.
+- Flutter assets are resolved in Rust (`media/resolver`): `flutter_assets/{key}` on desktop, `AssetManager` on Android.
 - Bytes are pushed through `gstreamer-app` `AppSrc` into `decodebin`, sharing the same `VideoOverlay` video sink as URI mode.
-- Dart calls `playerSetAssetSource(assetKey)` — no temp-file copy under `xhvp_assets`.
+- Prefer `playerLoadSource` / `PlaybackEngine::load(MediaSource)` — legacy `playerSetAssetSource` delegates to the same path.
+- Local files use `MediaSource::Uri` with a `file://` URI (Dart: `VideoSource.file`).
+
+## Source switching
+
+- `playback/switch.rs` exposes `switch_shell(resolved, ctx)` — the single Gst-thread entry for URI ↔ asset transitions.
+- `VideoSurface` (`playback/surface.rs`) owns cached overlay handles and platform bind scheduling (Android defer, macOS main-thread apply).
+- `PipelineCapabilities` (`playback/capabilities.rs`) types playbin-only features (seek, tracks, orientation); AppSrc pipelines report reduced capability.
+- Playbin track lists are cached on bus `StreamCollection` / `StreamsSelected` and enriched from `GstStream::tags()` — playbin3 does not expose legacy `n-audio` properties.
 
 ## macOS VideoOverlay requirements
 
