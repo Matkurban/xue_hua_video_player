@@ -8,26 +8,20 @@ import 'rust/api/player.dart' as rust;
 import 'rust/player_events.dart';
 import 'model/video_source.dart';
 
-export 'rust/player_events.dart' show PlayerState, PlayerEvent, PlayerEventKind;
+export 'rust/player_events.dart'
+    show
+        AspectRatioMode,
+        MediaTrack,
+        PlayerState,
+        PlayerEvent,
+        PlayerEventKind,
+        TrackType,
+        VideoMetadata,
+        VideoOrientationConfig;
 export 'model/video_source.dart';
 
-/// Drives a single GStreamer-backed video player living in Rust and exposes its
+/// Drives a single GStreamer-backed player living in Rust and exposes its
 /// state to Flutter widgets through fine-grained [signals].
-///
-/// Every piece of state is a [ReadonlySignal]; read `.value` inside a
-/// `SignalBuilder` (or `Watch`) so only the widgets that depend on a given
-/// field rebuild when it changes.
-///
-/// Typical usage:
-/// ```dart
-/// final controller = XueHuaPlayerController();
-/// await controller.initialize();
-/// await controller.open(VideoSource.network('https://.../video.mp4'), autoPlay: true);
-/// // ...
-/// XueHuaVideoView(controller: controller);
-/// // ...
-/// await controller.dispose();
-/// ```
 class XueHuaPlayerController {
   StreamSubscription<PlayerEvent>? _sub;
   bool _disposed = false;
@@ -44,60 +38,47 @@ class XueHuaPlayerController {
   final FlutterSignal<String?> _error = signal<String?>(null);
   final FlutterSignal<int?> _playerId = signal<int?>(null);
   final FlutterSignal<bool> _initialized = signal(false);
+  final FlutterSignal<List<MediaTrack>> _tracks = signal(const []);
+  final FlutterSignal<VideoMetadata?> _videoMetadata = signal(null);
+  final FlutterSignal<bool> _isSeekable = signal(true);
 
-  /// Whether [initialize] has completed.
   ReadonlySignal<bool> get initialized => _initialized;
-
-  /// Native player id passed to the Platform View `creationParams`.
   ReadonlySignal<int?> get playerId => _playerId;
-
-  /// High-level playback state reported by the pipeline.
   ReadonlySignal<PlayerState> get state => _state;
-
-  /// Latest known playback position.
   ReadonlySignal<Duration> get position => _position;
-
-  /// Media duration, or [Duration.zero] until known.
   ReadonlySignal<Duration> get duration => _duration;
-
-  /// Decoded video size in pixels, or [Size.zero] until the first frame.
   ReadonlySignal<Size> get videoSize => _videoSize;
-
-  /// Buffering fill level in the range `0..100`.
   ReadonlySignal<int> get bufferingPercent => _bufferingPercent;
-
-  /// Current volume in the range `0.0..1.0`.
   ReadonlySignal<double> get volume => _volume;
-
-  /// Current playback speed multiplier.
   ReadonlySignal<double> get speed => _speed;
-
-  /// Whether the media loops when it reaches the end.
   ReadonlySignal<bool> get looping => _looping;
-
-  /// Whether audio output is muted.
   ReadonlySignal<bool> get muted => _muted;
-
-  /// Last error message, or null when healthy.
   ReadonlySignal<String?> get error => _error;
+  ReadonlySignal<List<MediaTrack>> get tracks => _tracks;
+  ReadonlySignal<VideoMetadata?> get videoMetadata => _videoMetadata;
+  ReadonlySignal<bool> get isSeekable => _isSeekable;
 
-  /// Whether the pipeline is currently playing.
   late final ReadonlySignal<bool> isPlaying = computed(
     () => _state.value == PlayerState.playing,
   );
 
-  /// Whether playback reached the end of the media.
   late final ReadonlySignal<bool> isCompleted = computed(
     () => _state.value == PlayerState.completed,
   );
 
-  /// Aspect ratio of the decoded video, or 16:9 until the size is known.
   late final ReadonlySignal<double> aspectRatio = computed(() {
+    final meta = _videoMetadata.value;
+    if (meta != null &&
+        meta.displayAspectWidth > 0 &&
+        meta.displayAspectHeight > 0) {
+      return meta.displayAspectWidth / meta.displayAspectHeight;
+    }
     final s = _videoSize.value;
     return (s.width > 0 && s.height > 0) ? s.width / s.height : 16 / 9;
   });
 
-  /// Creates the native player and subscribes to events.
+  late final ReadonlySignal<double> displayAspectRatio = aspectRatio;
+
   Future<void> initialize() async {
     if (_initialized.value) return;
     final result = await rust.createPlayer();
@@ -123,6 +104,22 @@ class XueHuaPlayerController {
           event.height.toDouble(),
         );
         break;
+      case PlayerEventKind.metadataChanged:
+        _videoMetadata.value = VideoMetadata(
+          width: event.width,
+          height: event.height,
+          fps: event.fps,
+          pixelAspectWidth: 1,
+          pixelAspectHeight: 1,
+          displayAspectWidth: event.displayAspectWidth,
+          displayAspectHeight: event.displayAspectHeight,
+          interlaced: false,
+          colorMatrix: '',
+          colorRange: '',
+          hdrFormat: '',
+        );
+        _isSeekable.value = event.isSeekable;
+        break;
       case PlayerEventKind.stateChanged:
         _state.value = event.state;
         break;
@@ -144,6 +141,9 @@ class XueHuaPlayerController {
           _state.value = PlayerState.error;
         });
         break;
+      case PlayerEventKind.tracksChanged:
+        unawaited(refreshTracks());
+        break;
     }
   }
 
@@ -155,9 +155,6 @@ class XueHuaPlayerController {
     return id;
   }
 
-  /// Runs a control call, converting failures into an [error] state update
-  /// instead of an unhandled exception (playback errors are also delivered
-  /// asynchronously via the event stream).
   Future<void> _guard(Future<void> Function() action) async {
     try {
       await action();
@@ -166,27 +163,33 @@ class XueHuaPlayerController {
     }
   }
 
-  /// Loads [source]. Pass a [VideoSource] describing a network URL, a local
-  /// file, or a bundled Flutter asset (streamed via AppSrc in Rust).
+  MediaSourceDto _toMediaSourceDto(VideoSource source) {
+    switch (source.type) {
+      case VideoSourceType.asset:
+        return MediaSourceDto.flutterAsset(source.uri.trim());
+      case VideoSourceType.network:
+      case VideoSourceType.file:
+        return MediaSourceDto.uri(_resolveGstUri(source));
+    }
+  }
+
+  /// Loads [source] via the unified Rust media resolver.
   Future<void> open(VideoSource source, {bool autoPlay = false}) async {
     batch(() {
       _error.value = null;
       _bufferingPercent.value = 100;
       _videoSize.value = Size.zero;
+      _videoMetadata.value = null;
+      _tracks.value = const [];
       _state.value = PlayerState.buffering;
     });
     await _guard(() async {
-      switch (source.type) {
-        case VideoSourceType.asset:
-          await rust.playerSetAssetSource(
-            playerId: _id,
-            assetKey: source.uri.trim(),
-          );
-        case VideoSourceType.network:
-        case VideoSourceType.file:
-          final uri = _resolveGstUri(source);
-          await rust.playerSetSource(playerId: _id, uri: uri);
-      }
+      await rust.playerLoadSource(
+        playerId: _id,
+        source: _toMediaSourceDto(source),
+      );
+      _isSeekable.value = await rust.playerIsSeekable(playerId: _id);
+      await refreshTracks();
       if (autoPlay) await rust.playerPlay(playerId: _id);
     });
   }
@@ -197,7 +200,6 @@ class XueHuaPlayerController {
 
   Future<void> stop() => _guard(() => rust.playerStop(playerId: _id));
 
-  /// Toggles between play and pause based on the current [state].
   Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
 
   Future<void> seek(Duration position) => _guard(
@@ -216,7 +218,6 @@ class XueHuaPlayerController {
     await _guard(() => rust.playerSetMute(playerId: _id, mute: muted));
   }
 
-  /// Flips the current mute state.
   Future<void> toggleMuted() => setMuted(!_muted.value);
 
   Future<void> setSpeed(double speed) async {
@@ -230,16 +231,40 @@ class XueHuaPlayerController {
     await _guard(() => rust.playerSetLooping(playerId: _id, looping: looping));
   }
 
-  /// Queries the current position directly from the pipeline.
+  Future<void> refreshTracks() async {
+    final list = await rust.playerGetTracks(playerId: _id);
+    _tracks.value = list;
+  }
+
+  Future<void> selectTrack(MediaTrack track, {bool enable = true}) => _guard(
+    () => rust.playerSelectTrack(
+      playerId: _id,
+      trackId: track.id,
+      trackType: track.trackType,
+      enable: enable,
+    ),
+  );
+
+  Future<VideoMetadata?> queryVideoMetadata() async {
+    final meta = await rust.playerGetVideoMetadata(playerId: _id);
+    _videoMetadata.value = meta;
+    return meta;
+  }
+
+  Future<void> setVideoOrientation(VideoOrientationConfig config) => _guard(
+    () => rust.playerSetVideoOrientation(playerId: _id, config: config),
+  );
+
+  Future<void> setAspectRatioMode(AspectRatioMode mode) => _guard(
+    () => rust.playerSetAspectRatioMode(playerId: _id, mode: mode),
+  );
+
   Future<Duration> queryPosition() async =>
       Duration(milliseconds: await rust.playerPosition(playerId: _id));
 
-  /// Queries the media duration directly from the pipeline.
   Future<Duration> queryDuration() async =>
       Duration(milliseconds: await rust.playerDuration(playerId: _id));
 
-  /// Cancels the event stream, disposes the native player, and releases every
-  /// signal owned by this controller.
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
@@ -251,6 +276,7 @@ class XueHuaPlayerController {
     isPlaying.dispose();
     isCompleted.dispose();
     aspectRatio.dispose();
+    displayAspectRatio.dispose();
     _state.dispose();
     _position.dispose();
     _duration.dispose();
@@ -263,9 +289,11 @@ class XueHuaPlayerController {
     _error.dispose();
     _playerId.dispose();
     _initialized.dispose();
+    _tracks.dispose();
+    _videoMetadata.dispose();
+    _isSeekable.dispose();
   }
 
-  /// Turns a network or file [VideoSource] into a URI GStreamer can open.
   static String _resolveGstUri(VideoSource source) {
     switch (source.type) {
       case VideoSourceType.network:
@@ -278,7 +306,7 @@ class XueHuaPlayerController {
         }
         return Uri.file(trimmed).toString();
       case VideoSourceType.asset:
-        throw StateError('asset sources use playerSetAssetSource, not URI');
+        return source.uri.trim();
     }
   }
 }

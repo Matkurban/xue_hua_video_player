@@ -22,12 +22,14 @@ pub fn attach_gst_bus_handlers(
     desired_playing: &Arc<AtomicBool>,
     at_eos: &Arc<AtomicBool>,
     running: &Arc<AtomicBool>,
+    is_playbin: bool,
 ) -> Result<(gst::bus::BusWatchGuard, gst::glib::SourceId)> {
     let bus = pipeline
         .bus()
         .ok_or_else(|| anyhow!("pipeline has no bus"))?;
     let pipeline_bus = pipeline.clone();
     let pipeline_pos = pipeline.clone();
+    let pipeline_tracks = pipeline.clone();
     let emitter_bus = emitter.clone();
     let emitter_pos = emitter.clone();
     let looping = looping.clone();
@@ -83,8 +85,6 @@ pub fn attach_gst_bus_handlers(
                         } else {
                             gst::State::Playing
                         };
-                        // Non-blocking: bus watch runs on the xhvp-gst MainLoop thread;
-                        // set_state_sync here would deadlock with JNI overlay invoke.
                         if let Err(e) = pipeline_bus.set_state(target) {
                             log::warn!("buffering set_state({target:?}): {e}");
                         }
@@ -104,17 +104,33 @@ pub fn attach_gst_bus_handlers(
                             if let Some(d) = pipeline_bus.query_duration::<gst::ClockTime>() {
                                 emit(PlayerEvent::duration(d.mseconds() as i64));
                             }
+                            if is_playbin {
+                                emit(PlayerEvent::tracks_changed());
+                            }
+                        }
+                    }
+                }
+                MessageView::AsyncDone(..) => {
+                    if is_playbin {
+                        emit(PlayerEvent::tracks_changed());
+                    }
+                }
+                MessageView::Element(el) => {
+                    if is_playbin {
+                        if let Some(structure) = el.structure() {
+                            if structure.name() == "stream-collection" {
+                                emit(PlayerEvent::tracks_changed());
+                            }
                         }
                     }
                 }
                 _ => {}
             }
+            let _ = pipeline_tracks;
             gst::glib::ControlFlow::Continue
         })
         .map_err(|e| anyhow!("bus watch failed: {e}"))?;
 
-    // Must attach to the owned Gst MainContext — `timeout_add_local` binds to
-    // `g_main_context_default()`, which is not the context running MainLoop.
     let ctx = crate::gst_runtime::gst_main_context()?.clone();
     let position_source = source::timeout_source_new(
         Duration::from_millis(200),

@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -21,7 +21,7 @@ impl AssetByteSource {
     pub fn open(asset_key: &str) -> Result<Self> {
         #[cfg(target_os = "android")]
         {
-            if let Ok(source) = crate::asset_resolver_android::open_asset_fd(asset_key) {
+            if let Ok(source) = super::asset_android::open_asset_fd(asset_key) {
                 return Ok(source);
             }
         }
@@ -69,41 +69,50 @@ impl AssetByteSource {
 pub fn resolve_flutter_asset_path(asset_key: &str) -> Result<PathBuf> {
     let key = asset_key.trim_start_matches('/');
     let candidates = flutter_asset_candidates(key);
-    for path in candidates {
+    for path in &candidates {
         if path.is_file() {
-            return Ok(path);
+            return Ok(path.clone());
         }
     }
     Err(anyhow!(
         "flutter asset not found: {asset_key} (searched {} paths)",
-        flutter_asset_candidates(key).len()
+        candidates.len()
     ))
 }
 
 fn flutter_asset_candidates(asset_key: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
+
+    if let Ok(dir) = std::env::var("FLUTTER_ASSETS_DIR") {
+        if !dir.is_empty() {
+            out.push(PathBuf::from(dir).join(asset_key));
+        }
+    }
+
     if let Ok(exe) = std::env::current_exe() {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             if let Some(contents) = exe.parent().and_then(|p| p.parent()) {
-                out.push(
-                    contents
-                        .join("Frameworks")
-                        .join("App.framework")
-                        .join("Resources")
-                        .join("flutter_assets")
-                        .join(asset_key),
-                );
-                out.push(
-                    contents
-                        .join("Frameworks")
-                        .join("App.framework")
-                        .join("Versions")
-                        .join("A")
-                        .join("Resources")
-                        .join("flutter_assets")
-                        .join(asset_key),
-                );
+                for framework in ["App.framework", "Flutter.framework"] {
+                    out.push(
+                        contents
+                            .join("Frameworks")
+                            .join(framework)
+                            .join("Resources")
+                            .join("flutter_assets")
+                            .join(asset_key),
+                    );
+                    out.push(
+                        contents
+                            .join("Frameworks")
+                            .join(framework)
+                            .join("Versions")
+                            .join("A")
+                            .join("Resources")
+                            .join("flutter_assets")
+                            .join(asset_key),
+                    );
+                }
             }
         }
         #[cfg(target_os = "windows")]
@@ -120,12 +129,7 @@ fn flutter_asset_candidates(asset_key: &str) -> Vec<PathBuf> {
             }
         }
     }
-    #[cfg(target_os = "ios")]
-    {
-        out.push(
-            PathBuf::from(std::env::var("FLUTTER_ASSETS_DIR").unwrap_or_default()).join(asset_key),
-        );
-    }
+
     out
 }
 

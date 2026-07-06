@@ -2,7 +2,12 @@
 use anyhow::{anyhow, Result};
 
 #[cfg(target_os = "android")]
-use crate::asset_resolver::AssetByteSource;
+use super::resolver::AssetByteSource;
+
+#[cfg(target_os = "android")]
+pub fn can_open_asset_fd(asset_key: &str) -> bool {
+    open_asset_fd(asset_key).is_ok()
+}
 
 /// Opens a Flutter asset via `AssetManager.openFd` and returns a byte source.
 #[cfg(target_os = "android")]

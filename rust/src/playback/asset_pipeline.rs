@@ -6,10 +6,10 @@ use gstreamer::prelude::*;
 use gstreamer_app::{AppSrc, AppSrcCallbacks};
 use parking_lot::Mutex;
 
-use crate::asset_resolver::AppSrcFeedState;
-use crate::gst_bus::Emitter;
-use crate::pipeline_builder::{attach_video_size_probe, build_audio_sink_bin};
-use crate::platform_overlay::create_platform_video_sink;
+use crate::media::AppSrcFeedState;
+use crate::playback::bus::Emitter;
+use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
+use crate::video::{create_platform_video_sink, info::InternalVideoMetadata};
 
 const APPSRC_CHUNK: usize = 64 * 1024;
 
@@ -17,10 +17,11 @@ const APPSRC_CHUNK: usize = 64 * 1024;
 pub fn build_asset_pipeline(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
+    metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
 ) -> Result<(gst::Pipeline, gst::Element, Arc<AppSrcFeedState>)> {
     let pipeline = gst::Pipeline::new();
     let video_sink = create_platform_video_sink()?;
-    attach_video_size_probe(&video_sink, emitter.clone());
+    attach_video_probe(&video_sink, emitter.clone(), metadata_cache);
     let audio_bin = build_audio_sink_bin()?;
 
     let appsrc = gst::ElementFactory::make("appsrc")

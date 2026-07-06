@@ -55,10 +55,31 @@ Future<void> setVideoOverlayWindow({
   windowHandle: windowHandle,
 );
 
+Future<void> notifyAndroidSurface({
+  required PlatformInt64 playerId,
+  required PlatformInt64 handle,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerNotifyAndroidSurface(
+  playerId: playerId,
+  handle: handle,
+  width: width,
+  height: height,
+);
+
 /// Subscribes to the player's event stream (state, position, duration, size,
 /// buffering, EOS, errors). Should be called once right after `create_player`.
 Stream<PlayerEvent> playerEventStream({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerEventStream(playerId: playerId);
+
+/// Loads media from a unified source descriptor (URI or Flutter asset).
+Future<void> playerLoadSource({
+  required PlatformInt64 playerId,
+  required MediaSourceDto source,
+}) => RustLib.instance.api.crateApiPlayerPlayerLoadSource(
+  playerId: playerId,
+  source: source,
+);
 
 /// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.
 Future<void> playerSetSource({
@@ -132,6 +153,46 @@ Future<PlatformInt64> playerPosition({required PlatformInt64 playerId}) =>
 
 Future<PlatformInt64> playerDuration({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerDuration(playerId: playerId);
+
+Future<bool> playerIsSeekable({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerIsSeekable(playerId: playerId);
+
+Future<List<MediaTrack>> playerGetTracks({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerGetTracks(playerId: playerId);
+
+Future<void> playerSelectTrack({
+  required PlatformInt64 playerId,
+  required int trackId,
+  required TrackType trackType,
+  required bool enable,
+}) => RustLib.instance.api.crateApiPlayerPlayerSelectTrack(
+  playerId: playerId,
+  trackId: trackId,
+  trackType: trackType,
+  enable: enable,
+);
+
+Future<VideoMetadata> playerGetVideoMetadata({
+  required PlatformInt64 playerId,
+}) => RustLib.instance.api.crateApiPlayerPlayerGetVideoMetadata(
+  playerId: playerId,
+);
+
+Future<void> playerSetVideoOrientation({
+  required PlatformInt64 playerId,
+  required VideoOrientationConfig config,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetVideoOrientation(
+  playerId: playerId,
+  config: config,
+);
+
+Future<void> playerSetAspectRatioMode({
+  required PlatformInt64 playerId,
+  required AspectRatioMode mode,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetAspectRatioMode(
+  playerId: playerId,
+  mode: mode,
+);
 
 /// Tears down the player and stops the pipeline.
 Future<void> disposePlayer({required PlatformInt64 playerId}) =>

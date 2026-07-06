@@ -5,6 +5,55 @@
 
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'player_events.freezed.dart';
+
+enum AspectRatioMode { fit, fill, stretch }
+
+@freezed
+sealed class MediaSourceDto with _$MediaSourceDto {
+  const MediaSourceDto._();
+
+  const factory MediaSourceDto.uri(String field0) = MediaSourceDto_Uri;
+  const factory MediaSourceDto.flutterAsset(String field0) =
+      MediaSourceDto_FlutterAsset;
+}
+
+/// Audio, video, or subtitle stream inside the current media.
+class MediaTrack {
+  final int id;
+  final TrackType trackType;
+  final String language;
+  final String label;
+  final bool selected;
+
+  const MediaTrack({
+    required this.id,
+    required this.trackType,
+    required this.language,
+    required this.label,
+    required this.selected,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      trackType.hashCode ^
+      language.hashCode ^
+      label.hashCode ^
+      selected.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaTrack &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          trackType == other.trackType &&
+          language == other.language &&
+          label == other.label &&
+          selected == other.selected;
+}
 
 /// A flat event struct pushed to Dart over a broadcast stream.
 class PlayerEvent {
@@ -16,6 +65,10 @@ class PlayerEvent {
   final int bufferingPercent;
   final PlayerState state;
   final String message;
+  final double fps;
+  final int displayAspectWidth;
+  final int displayAspectHeight;
+  final bool isSeekable;
 
   const PlayerEvent({
     required this.kind,
@@ -26,6 +79,10 @@ class PlayerEvent {
     required this.bufferingPercent,
     required this.state,
     required this.message,
+    required this.fps,
+    required this.displayAspectWidth,
+    required this.displayAspectHeight,
+    required this.isSeekable,
   });
 
   @override
@@ -37,7 +94,11 @@ class PlayerEvent {
       height.hashCode ^
       bufferingPercent.hashCode ^
       state.hashCode ^
-      message.hashCode;
+      message.hashCode ^
+      fps.hashCode ^
+      displayAspectWidth.hashCode ^
+      displayAspectHeight.hashCode ^
+      isSeekable.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -51,7 +112,11 @@ class PlayerEvent {
           height == other.height &&
           bufferingPercent == other.bufferingPercent &&
           state == other.state &&
-          message == other.message;
+          message == other.message &&
+          fps == other.fps &&
+          displayAspectWidth == other.displayAspectWidth &&
+          displayAspectHeight == other.displayAspectHeight &&
+          isSeekable == other.isSeekable;
 }
 
 /// Discriminates which fields of [`PlayerEvent`] are meaningful.
@@ -63,6 +128,8 @@ enum PlayerEventKind {
   buffering,
   eos,
   error,
+  tracksChanged,
+  metadataChanged,
 }
 
 /// High-level playback state reported to Dart.
@@ -75,4 +142,92 @@ enum PlayerState {
   stopped,
   completed,
   error,
+}
+
+enum TrackType { audio, video, subtitle }
+
+/// Decoded video metadata surfaced to Dart.
+class VideoMetadata {
+  final int width;
+  final int height;
+  final double fps;
+  final int pixelAspectWidth;
+  final int pixelAspectHeight;
+  final int displayAspectWidth;
+  final int displayAspectHeight;
+  final bool interlaced;
+  final String colorMatrix;
+  final String colorRange;
+  final String hdrFormat;
+
+  const VideoMetadata({
+    required this.width,
+    required this.height,
+    required this.fps,
+    required this.pixelAspectWidth,
+    required this.pixelAspectHeight,
+    required this.displayAspectWidth,
+    required this.displayAspectHeight,
+    required this.interlaced,
+    required this.colorMatrix,
+    required this.colorRange,
+    required this.hdrFormat,
+  });
+
+  @override
+  int get hashCode =>
+      width.hashCode ^
+      height.hashCode ^
+      fps.hashCode ^
+      pixelAspectWidth.hashCode ^
+      pixelAspectHeight.hashCode ^
+      displayAspectWidth.hashCode ^
+      displayAspectHeight.hashCode ^
+      interlaced.hashCode ^
+      colorMatrix.hashCode ^
+      colorRange.hashCode ^
+      hdrFormat.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VideoMetadata &&
+          runtimeType == other.runtimeType &&
+          width == other.width &&
+          height == other.height &&
+          fps == other.fps &&
+          pixelAspectWidth == other.pixelAspectWidth &&
+          pixelAspectHeight == other.pixelAspectHeight &&
+          displayAspectWidth == other.displayAspectWidth &&
+          displayAspectHeight == other.displayAspectHeight &&
+          interlaced == other.interlaced &&
+          colorMatrix == other.colorMatrix &&
+          colorRange == other.colorRange &&
+          hdrFormat == other.hdrFormat;
+}
+
+/// Video flip/rotate configuration for Dart.
+class VideoOrientationConfig {
+  final bool flipHorizontal;
+  final bool flipVertical;
+  final int rotateDegrees;
+
+  const VideoOrientationConfig({
+    required this.flipHorizontal,
+    required this.flipVertical,
+    required this.rotateDegrees,
+  });
+
+  @override
+  int get hashCode =>
+      flipHorizontal.hashCode ^ flipVertical.hashCode ^ rotateDegrees.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VideoOrientationConfig &&
+          runtimeType == other.runtimeType &&
+          flipHorizontal == other.flipHorizontal &&
+          flipVertical == other.flipVertical &&
+          rotateDegrees == other.rotateDegrees;
 }

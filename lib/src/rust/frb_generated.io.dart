@@ -31,7 +31,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AspectRatioMode dco_decode_aspect_ratio_mode(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  MediaSourceDto dco_decode_box_autoadd_media_source_dto(dynamic raw);
+
+  @protected
+  VideoOrientationConfig dco_decode_box_autoadd_video_orientation_config(
+    dynamic raw,
+  );
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -43,7 +54,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  List<MediaTrack> dco_decode_list_media_track(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  MediaSourceDto dco_decode_media_source_dto(dynamic raw);
+
+  @protected
+  MediaTrack dco_decode_media_track(dynamic raw);
 
   @protected
   PlayerEvent dco_decode_player_event(dynamic raw);
@@ -58,10 +78,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlayerState dco_decode_player_state(dynamic raw);
 
   @protected
+  TrackType dco_decode_track_type(dynamic raw);
+
+  @protected
+  int dco_decode_u_32(dynamic raw);
+
+  @protected
   int dco_decode_u_8(dynamic raw);
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  VideoMetadata dco_decode_video_metadata(dynamic raw);
+
+  @protected
+  VideoOrientationConfig dco_decode_video_orientation_config(dynamic raw);
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
@@ -75,7 +107,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AspectRatioMode sse_decode_aspect_ratio_mode(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  MediaSourceDto sse_decode_box_autoadd_media_source_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VideoOrientationConfig sse_decode_box_autoadd_video_orientation_config(
+    SseDeserializer deserializer,
+  );
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -87,7 +132,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  List<MediaTrack> sse_decode_list_media_track(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  MediaSourceDto sse_decode_media_source_dto(SseDeserializer deserializer);
+
+  @protected
+  MediaTrack sse_decode_media_track(SseDeserializer deserializer);
 
   @protected
   PlayerEvent sse_decode_player_event(SseDeserializer deserializer);
@@ -102,10 +156,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlayerState sse_decode_player_state(SseDeserializer deserializer);
 
   @protected
+  TrackType sse_decode_track_type(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer);
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  VideoMetadata sse_decode_video_metadata(SseDeserializer deserializer);
+
+  @protected
+  VideoOrientationConfig sse_decode_video_orientation_config(
+    SseDeserializer deserializer,
+  );
 
   @protected
   void sse_encode_AnyhowException(
@@ -123,7 +191,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_aspect_ratio_mode(
+    AspectRatioMode self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_media_source_dto(
+    MediaSourceDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_video_orientation_config(
+    VideoOrientationConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
@@ -135,10 +221,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_media_track(
+    List<MediaTrack> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_media_source_dto(
+    MediaSourceDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_media_track(MediaTrack self, SseSerializer serializer);
 
   @protected
   void sse_encode_player_event(PlayerEvent self, SseSerializer serializer);
@@ -156,10 +257,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_player_state(PlayerState self, SseSerializer serializer);
 
   @protected
+  void sse_encode_track_type(TrackType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_video_metadata(VideoMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_video_orientation_config(
+    VideoOrientationConfig self,
+    SseSerializer serializer,
+  );
 }
 
 // Section: wire_class

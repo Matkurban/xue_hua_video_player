@@ -23,6 +23,139 @@ pub enum PlayerEventKind {
     Buffering,
     Eos,
     Error,
+    TracksChanged,
+    MetadataChanged,
+}
+
+/// Audio, video, or subtitle stream inside the current media.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaTrack {
+    pub id: u32,
+    pub track_type: TrackType,
+    pub language: String,
+    pub label: String,
+    pub selected: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackType {
+    Audio,
+    Video,
+    Subtitle,
+}
+
+/// Decoded video metadata surfaced to Dart.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VideoMetadata {
+    pub width: i32,
+    pub height: i32,
+    pub fps: f64,
+    pub pixel_aspect_width: i32,
+    pub pixel_aspect_height: i32,
+    pub display_aspect_width: i32,
+    pub display_aspect_height: i32,
+    pub interlaced: bool,
+    pub color_matrix: String,
+    pub color_range: String,
+    pub hdr_format: String,
+}
+
+impl Default for VideoMetadata {
+    fn default() -> Self {
+        Self {
+            width: 0,
+            height: 0,
+            fps: 0.0,
+            pixel_aspect_width: 1,
+            pixel_aspect_height: 1,
+            display_aspect_width: 16,
+            display_aspect_height: 9,
+            interlaced: false,
+            color_matrix: String::new(),
+            color_range: String::new(),
+            hdr_format: String::new(),
+        }
+    }
+}
+
+impl From<crate::video::info::InternalVideoMetadata> for VideoMetadata {
+    fn from(m: crate::video::info::InternalVideoMetadata) -> Self {
+        Self {
+            width: m.width,
+            height: m.height,
+            fps: m.fps,
+            pixel_aspect_width: m.pixel_aspect_width,
+            pixel_aspect_height: m.pixel_aspect_height,
+            display_aspect_width: m.display_aspect_width,
+            display_aspect_height: m.display_aspect_height,
+            interlaced: m.interlaced,
+            color_matrix: m.color_matrix,
+            color_range: m.color_range,
+            hdr_format: m.hdr_format,
+        }
+    }
+}
+
+/// Video flip/rotate configuration for Dart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VideoOrientationConfig {
+    pub flip_horizontal: bool,
+    pub flip_vertical: bool,
+    pub rotate_degrees: i32,
+}
+
+impl From<VideoOrientationConfig> for crate::video::orientation::InternalVideoOrientationConfig {
+    fn from(c: VideoOrientationConfig) -> Self {
+        Self {
+            flip_horizontal: c.flip_horizontal,
+            flip_vertical: c.flip_vertical,
+            rotate_degrees: c.rotate_degrees,
+        }
+    }
+}
+
+impl From<crate::video::orientation::InternalVideoOrientationConfig> for VideoOrientationConfig {
+    fn from(c: crate::video::orientation::InternalVideoOrientationConfig) -> Self {
+        Self {
+            flip_horizontal: c.flip_horizontal,
+            flip_vertical: c.flip_vertical,
+            rotate_degrees: c.rotate_degrees,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AspectRatioMode {
+    #[default]
+    Fit,
+    Fill,
+    Stretch,
+}
+
+impl From<AspectRatioMode> for crate::video::orientation::InternalAspectRatioMode {
+    fn from(m: AspectRatioMode) -> Self {
+        match m {
+            AspectRatioMode::Fit => Self::Fit,
+            AspectRatioMode::Fill => Self::Fill,
+            AspectRatioMode::Stretch => Self::Stretch,
+        }
+    }
+}
+
+/// Media input for unified load API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaSourceDto {
+    Uri(String),
+    FlutterAsset(String),
+}
+
+impl From<MediaSourceDto> for crate::media::MediaSource {
+    fn from(dto: MediaSourceDto) -> Self {
+        match dto {
+            MediaSourceDto::Uri(u) => Self::Uri(u),
+            MediaSourceDto::FlutterAsset(k) => Self::FlutterAsset(k),
+        }
+    }
 }
 
 /// A flat event struct pushed to Dart over a broadcast stream.
@@ -36,6 +169,10 @@ pub struct PlayerEvent {
     pub buffering_percent: i32,
     pub state: PlayerState,
     pub message: String,
+    pub fps: f64,
+    pub display_aspect_width: i32,
+    pub display_aspect_height: i32,
+    pub is_seekable: bool,
 }
 
 impl PlayerEvent {
@@ -49,6 +186,10 @@ impl PlayerEvent {
             buffering_percent: 0,
             state: PlayerState::Idle,
             message: String::new(),
+            fps: 0.0,
+            display_aspect_width: 16,
+            display_aspect_height: 9,
+            is_seekable: true,
         }
     }
 
@@ -74,6 +215,18 @@ impl PlayerEvent {
         }
     }
 
+    pub(crate) fn metadata(meta: crate::video::info::InternalVideoMetadata) -> Self {
+        Self {
+            kind: PlayerEventKind::MetadataChanged,
+            width: meta.width,
+            height: meta.height,
+            fps: meta.fps,
+            display_aspect_width: meta.display_aspect_width,
+            display_aspect_height: meta.display_aspect_height,
+            ..Self::base(PlayerEventKind::MetadataChanged)
+        }
+    }
+
     pub(crate) fn state(state: PlayerState) -> Self {
         Self {
             state,
@@ -84,6 +237,7 @@ impl PlayerEvent {
     pub(crate) fn buffering(buffering_percent: i32) -> Self {
         Self {
             buffering_percent,
+            state: PlayerState::Buffering,
             ..Self::base(PlayerEventKind::Buffering)
         }
     }
@@ -95,8 +249,13 @@ impl PlayerEvent {
     pub(crate) fn error(message: String) -> Self {
         Self {
             message,
+            state: PlayerState::Error,
             ..Self::base(PlayerEventKind::Error)
         }
+    }
+
+    pub(crate) fn tracks_changed() -> Self {
+        Self::base(PlayerEventKind::TracksChanged)
     }
 }
 

@@ -7,10 +7,13 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
 use crate::frb_generated::StreamSink;
-use crate::player::GstPlayer;
-pub use crate::player_events::{PlayerEvent, PlayerEventKind, PlayerState};
+use crate::playback::PlaybackEngine;
+pub use crate::player_events::{
+    AspectRatioMode, MediaSourceDto, MediaTrack, PlayerEvent, PlayerEventKind, PlayerState,
+    TrackType, VideoMetadata, VideoOrientationConfig,
+};
 
-static PLAYERS: Lazy<Mutex<HashMap<i64, Arc<GstPlayer>>>> =
+static PLAYERS: Lazy<Mutex<HashMap<i64, Arc<PlaybackEngine>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 static PENDING_OVERLAYS: Lazy<Mutex<HashMap<i64, i64>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -22,7 +25,7 @@ pub struct PlayerHandle {
     pub player_id: i64,
 }
 
-fn get_player(id: i64) -> Result<Arc<GstPlayer>> {
+fn get_player(id: i64) -> Result<Arc<PlaybackEngine>> {
     PLAYERS
         .lock()
         .get(&id)
@@ -35,7 +38,7 @@ pub fn create_player() -> Result<PlayerHandle> {
     #[cfg(target_os = "android")]
     crate::diag::ensure_android_diagnostics_initialized();
 
-    let player = GstPlayer::new()?;
+    let player = PlaybackEngine::new()?;
     let player_id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     PLAYERS.lock().insert(player_id, Arc::new(player));
     if let Some(handle) = PENDING_OVERLAYS.lock().remove(&player_id) {
@@ -167,6 +170,11 @@ pub fn player_event_stream(player_id: i64, sink: StreamSink<PlayerEvent>) -> Res
     Ok(())
 }
 
+/// Loads media from a unified source descriptor (URI or Flutter asset).
+pub fn player_load_source(player_id: i64, source: MediaSourceDto) -> Result<()> {
+    get_player(player_id)?.load(source.into())
+}
+
 /// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.
 pub fn player_set_source(player_id: i64, uri: String) -> Result<()> {
     get_player(player_id)?.set_uri(&uri)
@@ -218,6 +226,39 @@ pub fn player_position(player_id: i64) -> Result<i64> {
 
 pub fn player_duration(player_id: i64) -> Result<i64> {
     Ok(get_player(player_id)?.duration_ms())
+}
+
+pub fn player_is_seekable(player_id: i64) -> Result<bool> {
+    Ok(get_player(player_id)?.is_seekable())
+}
+
+pub fn player_get_tracks(player_id: i64) -> Result<Vec<MediaTrack>> {
+    Ok(get_player(player_id)?.tracks())
+}
+
+pub fn player_select_track(
+    player_id: i64,
+    track_id: u32,
+    track_type: TrackType,
+    enable: bool,
+) -> Result<()> {
+    get_player(player_id)?.select_track(track_id, track_type, enable)
+}
+
+pub fn player_get_video_metadata(player_id: i64) -> Result<VideoMetadata> {
+    let meta = get_player(player_id)?.video_metadata();
+    Ok(meta)
+}
+
+pub fn player_set_video_orientation(
+    player_id: i64,
+    config: VideoOrientationConfig,
+) -> Result<()> {
+    get_player(player_id)?.set_video_orientation(config.into())
+}
+
+pub fn player_set_aspect_ratio_mode(player_id: i64, mode: AspectRatioMode) -> Result<()> {
+    get_player(player_id)?.set_aspect_ratio_mode(mode.into())
 }
 
 /// Tears down the player and stops the pipeline.

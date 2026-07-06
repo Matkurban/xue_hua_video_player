@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -2097021269;
+  int get rustContentHash => -228891666;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -96,12 +96,36 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiSimpleInitApp();
 
+  Future<void> crateApiPlayerNotifyAndroidSurface({
+    required PlatformInt64 playerId,
+    required PlatformInt64 handle,
+    required int width,
+    required int height,
+  });
+
   Future<PlatformInt64> crateApiPlayerPlayerDuration({
     required PlatformInt64 playerId,
   });
 
   Stream<PlayerEvent> crateApiPlayerPlayerEventStream({
     required PlatformInt64 playerId,
+  });
+
+  Future<List<MediaTrack>> crateApiPlayerPlayerGetTracks({
+    required PlatformInt64 playerId,
+  });
+
+  Future<VideoMetadata> crateApiPlayerPlayerGetVideoMetadata({
+    required PlatformInt64 playerId,
+  });
+
+  Future<bool> crateApiPlayerPlayerIsSeekable({
+    required PlatformInt64 playerId,
+  });
+
+  Future<void> crateApiPlayerPlayerLoadSource({
+    required PlatformInt64 playerId,
+    required MediaSourceDto source,
   });
 
   Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId});
@@ -115,6 +139,18 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiPlayerPlayerSeek({
     required PlatformInt64 playerId,
     required PlatformInt64 positionMs,
+  });
+
+  Future<void> crateApiPlayerPlayerSelectTrack({
+    required PlatformInt64 playerId,
+    required int trackId,
+    required TrackType trackType,
+    required bool enable,
+  });
+
+  Future<void> crateApiPlayerPlayerSetAspectRatioMode({
+    required PlatformInt64 playerId,
+    required AspectRatioMode mode,
   });
 
   Future<void> crateApiPlayerPlayerSetAssetSource({
@@ -140,6 +176,11 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiPlayerPlayerSetSpeed({
     required PlatformInt64 playerId,
     required double speed,
+  });
+
+  Future<void> crateApiPlayerPlayerSetVideoOrientation({
+    required PlatformInt64 playerId,
+    required VideoOrientationConfig config,
   });
 
   Future<void> crateApiPlayerPlayerSetVolume({
@@ -325,6 +366,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: []);
 
   @override
+  Future<void> crateApiPlayerNotifyAndroidSurface({
+    required PlatformInt64 playerId,
+    required PlatformInt64 handle,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_i_64(handle, serializer);
+          sse_encode_i_32(width, serializer);
+          sse_encode_i_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerNotifyAndroidSurfaceConstMeta,
+        argValues: [playerId, handle, width, height],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerNotifyAndroidSurfaceConstMeta =>
+      const TaskConstMeta(
+        debugName: "notify_android_surface",
+        argNames: ["playerId", "handle", "width", "height"],
+      );
+
+  @override
   Future<PlatformInt64> crateApiPlayerPlayerDuration({
     required PlatformInt64 playerId,
   }) {
@@ -336,7 +416,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -369,7 +449,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 7,
+              funcId: 8,
               port: port_,
             );
           },
@@ -393,6 +473,140 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<MediaTrack>> crateApiPlayerPlayerGetTracks({
+    required PlatformInt64 playerId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_media_track,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerGetTracksConstMeta,
+        argValues: [playerId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerGetTracksConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_get_tracks",
+        argNames: ["playerId"],
+      );
+
+  @override
+  Future<VideoMetadata> crateApiPlayerPlayerGetVideoMetadata({
+    required PlatformInt64 playerId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_video_metadata,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerGetVideoMetadataConstMeta,
+        argValues: [playerId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerGetVideoMetadataConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_get_video_metadata",
+        argNames: ["playerId"],
+      );
+
+  @override
+  Future<bool> crateApiPlayerPlayerIsSeekable({
+    required PlatformInt64 playerId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerIsSeekableConstMeta,
+        argValues: [playerId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerIsSeekableConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_is_seekable",
+        argNames: ["playerId"],
+      );
+
+  @override
+  Future<void> crateApiPlayerPlayerLoadSource({
+    required PlatformInt64 playerId,
+    required MediaSourceDto source,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_box_autoadd_media_source_dto(source, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerLoadSourceConstMeta,
+        argValues: [playerId, source],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerLoadSourceConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_load_source",
+        argNames: ["playerId", "source"],
+      );
+
+  @override
   Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId}) {
     return handler.executeNormal(
       NormalTask(
@@ -402,7 +616,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 13,
             port: port_,
           );
         },
@@ -430,7 +644,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 14,
             port: port_,
           );
         },
@@ -460,7 +674,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 15,
             port: port_,
           );
         },
@@ -492,7 +706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 16,
             port: port_,
           );
         },
@@ -513,6 +727,80 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<void> crateApiPlayerPlayerSelectTrack({
+    required PlatformInt64 playerId,
+    required int trackId,
+    required TrackType trackType,
+    required bool enable,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_u_32(trackId, serializer);
+          sse_encode_track_type(trackType, serializer);
+          sse_encode_bool(enable, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerSelectTrackConstMeta,
+        argValues: [playerId, trackId, trackType, enable],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerSelectTrackConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_select_track",
+        argNames: ["playerId", "trackId", "trackType", "enable"],
+      );
+
+  @override
+  Future<void> crateApiPlayerPlayerSetAspectRatioMode({
+    required PlatformInt64 playerId,
+    required AspectRatioMode mode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_aspect_ratio_mode(mode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerSetAspectRatioModeConstMeta,
+        argValues: [playerId, mode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerSetAspectRatioModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_set_aspect_ratio_mode",
+        argNames: ["playerId", "mode"],
+      );
+
+  @override
   Future<void> crateApiPlayerPlayerSetAssetSource({
     required PlatformInt64 playerId,
     required String assetKey,
@@ -526,7 +814,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 19,
             port: port_,
           );
         },
@@ -561,7 +849,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 20,
             port: port_,
           );
         },
@@ -596,7 +884,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 21,
             port: port_,
           );
         },
@@ -631,7 +919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 22,
             port: port_,
           );
         },
@@ -666,7 +954,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 23,
             port: port_,
           );
         },
@@ -688,6 +976,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiPlayerPlayerSetVideoOrientation({
+    required PlatformInt64 playerId,
+    required VideoOrientationConfig config,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_box_autoadd_video_orientation_config(config, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerSetVideoOrientationConstMeta,
+        argValues: [playerId, config],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerSetVideoOrientationConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_set_video_orientation",
+        argNames: ["playerId", "config"],
+      );
+
+  @override
   Future<void> crateApiPlayerPlayerSetVolume({
     required PlatformInt64 playerId,
     required double volume,
@@ -701,7 +1024,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 25,
             port: port_,
           );
         },
@@ -732,7 +1055,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 26,
             port: port_,
           );
         },
@@ -764,7 +1087,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 27,
             port: port_,
           );
         },
@@ -803,7 +1126,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 28,
             port: port_,
           );
         },
@@ -845,9 +1168,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AspectRatioMode dco_decode_aspect_ratio_mode(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AspectRatioMode.values[raw as int];
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  MediaSourceDto dco_decode_box_autoadd_media_source_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_media_source_dto(raw);
+  }
+
+  @protected
+  VideoOrientationConfig dco_decode_box_autoadd_video_orientation_config(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_video_orientation_config(raw);
   }
 
   @protected
@@ -869,17 +1212,51 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MediaTrack> dco_decode_list_media_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_media_track).toList();
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
   }
 
   @protected
+  MediaSourceDto dco_decode_media_source_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return MediaSourceDto_Uri(dco_decode_String(raw[1]));
+      case 1:
+        return MediaSourceDto_FlutterAsset(dco_decode_String(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  MediaTrack dco_decode_media_track(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MediaTrack(
+      id: dco_decode_u_32(arr[0]),
+      trackType: dco_decode_track_type(arr[1]),
+      language: dco_decode_String(arr[2]),
+      label: dco_decode_String(arr[3]),
+      selected: dco_decode_bool(arr[4]),
+    );
+  }
+
+  @protected
   PlayerEvent dco_decode_player_event(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return PlayerEvent(
       kind: dco_decode_player_event_kind(arr[0]),
       positionMs: dco_decode_i_64(arr[1]),
@@ -889,6 +1266,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       bufferingPercent: dco_decode_i_32(arr[5]),
       state: dco_decode_player_state(arr[6]),
       message: dco_decode_String(arr[7]),
+      fps: dco_decode_f_64(arr[8]),
+      displayAspectWidth: dco_decode_i_32(arr[9]),
+      displayAspectHeight: dco_decode_i_32(arr[10]),
+      isSeekable: dco_decode_bool(arr[11]),
     );
   }
 
@@ -914,6 +1295,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TrackType dco_decode_track_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TrackType.values[raw as int];
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   int dco_decode_u_8(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -923,6 +1316,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void dco_decode_unit(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return;
+  }
+
+  @protected
+  VideoMetadata dco_decode_video_metadata(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return VideoMetadata(
+      width: dco_decode_i_32(arr[0]),
+      height: dco_decode_i_32(arr[1]),
+      fps: dco_decode_f_64(arr[2]),
+      pixelAspectWidth: dco_decode_i_32(arr[3]),
+      pixelAspectHeight: dco_decode_i_32(arr[4]),
+      displayAspectWidth: dco_decode_i_32(arr[5]),
+      displayAspectHeight: dco_decode_i_32(arr[6]),
+      interlaced: dco_decode_bool(arr[7]),
+      colorMatrix: dco_decode_String(arr[8]),
+      colorRange: dco_decode_String(arr[9]),
+      hdrFormat: dco_decode_String(arr[10]),
+    );
+  }
+
+  @protected
+  VideoOrientationConfig dco_decode_video_orientation_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return VideoOrientationConfig(
+      flipHorizontal: dco_decode_bool(arr[0]),
+      flipVertical: dco_decode_bool(arr[1]),
+      rotateDegrees: dco_decode_i_32(arr[2]),
+    );
   }
 
   @protected
@@ -948,9 +1375,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AspectRatioMode sse_decode_aspect_ratio_mode(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return AspectRatioMode.values[inner];
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  MediaSourceDto sse_decode_box_autoadd_media_source_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_media_source_dto(deserializer));
+  }
+
+  @protected
+  VideoOrientationConfig sse_decode_box_autoadd_video_orientation_config(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_video_orientation_config(deserializer));
   }
 
   @protected
@@ -972,10 +1422,56 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MediaTrack> sse_decode_list_media_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MediaTrack>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_media_track(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  MediaSourceDto sse_decode_media_source_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_String(deserializer);
+        return MediaSourceDto_Uri(var_field0);
+      case 1:
+        var var_field0 = sse_decode_String(deserializer);
+        return MediaSourceDto_FlutterAsset(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  MediaTrack sse_decode_media_track(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_trackType = sse_decode_track_type(deserializer);
+    var var_language = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_selected = sse_decode_bool(deserializer);
+    return MediaTrack(
+      id: var_id,
+      trackType: var_trackType,
+      language: var_language,
+      label: var_label,
+      selected: var_selected,
+    );
   }
 
   @protected
@@ -989,6 +1485,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_bufferingPercent = sse_decode_i_32(deserializer);
     var var_state = sse_decode_player_state(deserializer);
     var var_message = sse_decode_String(deserializer);
+    var var_fps = sse_decode_f_64(deserializer);
+    var var_displayAspectWidth = sse_decode_i_32(deserializer);
+    var var_displayAspectHeight = sse_decode_i_32(deserializer);
+    var var_isSeekable = sse_decode_bool(deserializer);
     return PlayerEvent(
       kind: var_kind,
       positionMs: var_positionMs,
@@ -998,6 +1498,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       bufferingPercent: var_bufferingPercent,
       state: var_state,
       message: var_message,
+      fps: var_fps,
+      displayAspectWidth: var_displayAspectWidth,
+      displayAspectHeight: var_displayAspectHeight,
+      isSeekable: var_isSeekable,
     );
   }
 
@@ -1023,6 +1527,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TrackType sse_decode_track_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TrackType.values[inner];
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8();
@@ -1031,6 +1548,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_decode_unit(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  VideoMetadata sse_decode_video_metadata(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_width = sse_decode_i_32(deserializer);
+    var var_height = sse_decode_i_32(deserializer);
+    var var_fps = sse_decode_f_64(deserializer);
+    var var_pixelAspectWidth = sse_decode_i_32(deserializer);
+    var var_pixelAspectHeight = sse_decode_i_32(deserializer);
+    var var_displayAspectWidth = sse_decode_i_32(deserializer);
+    var var_displayAspectHeight = sse_decode_i_32(deserializer);
+    var var_interlaced = sse_decode_bool(deserializer);
+    var var_colorMatrix = sse_decode_String(deserializer);
+    var var_colorRange = sse_decode_String(deserializer);
+    var var_hdrFormat = sse_decode_String(deserializer);
+    return VideoMetadata(
+      width: var_width,
+      height: var_height,
+      fps: var_fps,
+      pixelAspectWidth: var_pixelAspectWidth,
+      pixelAspectHeight: var_pixelAspectHeight,
+      displayAspectWidth: var_displayAspectWidth,
+      displayAspectHeight: var_displayAspectHeight,
+      interlaced: var_interlaced,
+      colorMatrix: var_colorMatrix,
+      colorRange: var_colorRange,
+      hdrFormat: var_hdrFormat,
+    );
+  }
+
+  @protected
+  VideoOrientationConfig sse_decode_video_orientation_config(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_flipHorizontal = sse_decode_bool(deserializer);
+    var var_flipVertical = sse_decode_bool(deserializer);
+    var var_rotateDegrees = sse_decode_i_32(deserializer);
+    return VideoOrientationConfig(
+      flipHorizontal: var_flipHorizontal,
+      flipVertical: var_flipVertical,
+      rotateDegrees: var_rotateDegrees,
+    );
   }
 
   @protected
@@ -1066,9 +1627,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_aspect_ratio_mode(
+    AspectRatioMode self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_media_source_dto(
+    MediaSourceDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_media_source_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_video_orientation_config(
+    VideoOrientationConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_video_orientation_config(self, serializer);
   }
 
   @protected
@@ -1090,6 +1678,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_media_track(
+    List<MediaTrack> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_media_track(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -1097,6 +1697,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_media_source_dto(
+    MediaSourceDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case MediaSourceDto_Uri(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_String(field0, serializer);
+      case MediaSourceDto_FlutterAsset(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_String(field0, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_media_track(MediaTrack self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_track_type(self.trackType, serializer);
+    sse_encode_String(self.language, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_bool(self.selected, serializer);
   }
 
   @protected
@@ -1110,6 +1736,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.bufferingPercent, serializer);
     sse_encode_player_state(self.state, serializer);
     sse_encode_String(self.message, serializer);
+    sse_encode_f_64(self.fps, serializer);
+    sse_encode_i_32(self.displayAspectWidth, serializer);
+    sse_encode_i_32(self.displayAspectHeight, serializer);
+    sse_encode_bool(self.isSeekable, serializer);
   }
 
   @protected
@@ -1134,6 +1764,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_track_type(TrackType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
+  }
+
+  @protected
   void sse_encode_u_8(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self);
@@ -1142,5 +1784,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  void sse_encode_video_metadata(VideoMetadata self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.width, serializer);
+    sse_encode_i_32(self.height, serializer);
+    sse_encode_f_64(self.fps, serializer);
+    sse_encode_i_32(self.pixelAspectWidth, serializer);
+    sse_encode_i_32(self.pixelAspectHeight, serializer);
+    sse_encode_i_32(self.displayAspectWidth, serializer);
+    sse_encode_i_32(self.displayAspectHeight, serializer);
+    sse_encode_bool(self.interlaced, serializer);
+    sse_encode_String(self.colorMatrix, serializer);
+    sse_encode_String(self.colorRange, serializer);
+    sse_encode_String(self.hdrFormat, serializer);
+  }
+
+  @protected
+  void sse_encode_video_orientation_config(
+    VideoOrientationConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.flipHorizontal, serializer);
+    sse_encode_bool(self.flipVertical, serializer);
+    sse_encode_i_32(self.rotateDegrees, serializer);
   }
 }

@@ -6,7 +6,10 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 
 | Term | Meaning |
 |------|---------|
-| `GstPlayer` | Rust player; URI mode uses `playbin3`, asset mode uses `AppSrc` + `decodebin` |
+| `PlaybackEngine` | Rust player (formerly `GstPlayer`); URI mode uses `playbin3`, asset mode uses `AppSrc` + `decodebin` |
+| `PipelineShell` | Shared sinks, bus handlers, and overlay sync wiring for both source adapters |
+| `MediaSource` | Unified load descriptor: `Uri` or `FlutterAsset`, resolved in `media/` |
+| `GstPlayer` | Type alias for `PlaybackEngine` (backward compatible) |
 | `XueHuaPlayerController` | Dart controller; exposes signals and playback API |
 | `XueHuaVideoView` | Flutter widget embedding a native Platform View for video |
 | `playbin3` | GStreamer high-level playback element (URI in, A/V out) |

@@ -6,10 +6,8 @@ use gstreamer::prelude::*;
 use gstreamer_video as gst_video;
 use parking_lot::Mutex;
 
-use crate::gst_bus::Emitter;
-use crate::platform_overlay::create_platform_video_sink;
-#[cfg(not(target_os = "macos"))]
-use crate::platform_overlay::expose_overlay;
+use crate::playback::bus::Emitter;
+use crate::video::{expose_overlay, info::InternalVideoMetadata};
 
 /// Configures an HTTP(S) source element for permissive TLS and a mobile user-agent.
 pub fn configure_http_source(element: &gst::Element) {
@@ -48,9 +46,7 @@ pub fn build_audio_sink_bin() -> Result<gst::Bin> {
             scaletempo
         }
         _ => {
-            log::warn!(
-                "scaletempo unavailable: playback speed may change pitch"
-            );
+            log::warn!("scaletempo unavailable: playback speed may change pitch");
             audio_bin.add(&audiosink)?;
             audiosink
         }
@@ -66,8 +62,28 @@ pub fn build_audio_sink_bin() -> Result<gst::Bin> {
     Ok(audio_bin)
 }
 
-/// Emits [`crate::player_events::PlayerEvent::video_size`] when decoded dimensions change.
-pub fn attach_video_size_probe(video_sink: &gst::Element, emitter: Arc<Mutex<Option<Emitter>>>) {
+/// Builds a fakesink text bin so playbin exposes subtitle track metadata without rendering.
+pub fn build_text_sink_bin() -> Result<gst::Bin> {
+    let text_bin = gst::Bin::new();
+    let fakesink = gst::ElementFactory::make("fakesink")
+        .build()
+        .map_err(|_| anyhow!("failed to create fakesink for text"))?;
+    text_bin.add(&fakesink)?;
+    let sink_pad = fakesink
+        .static_pad("sink")
+        .ok_or_else(|| anyhow!("fakesink has no sink pad"))?;
+    let ghost = gst::GhostPad::with_target(&sink_pad)?;
+    ghost.set_active(true)?;
+    text_bin.add_pad(&ghost)?;
+    Ok(text_bin)
+}
+
+/// Emits video size and metadata events when decoded dimensions change.
+pub fn attach_video_probe(
+    video_sink: &gst::Element,
+    emitter: Arc<Mutex<Option<Emitter>>>,
+    metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
+) {
     let sink_pad = match video_sink.static_pad("sink") {
         Some(pad) => pad,
         None => return,
@@ -88,6 +104,11 @@ pub fn attach_video_size_probe(video_sink: &gst::Element, emitter: Arc<Mutex<Opt
                         if let Some(cb) = emitter.lock().as_ref() {
                             use crate::player_events::PlayerEvent;
                             cb(PlayerEvent::video_size(width, height));
+                            let meta = InternalVideoMetadata::from_video_info(&video_info);
+                            if let Some(cache) = metadata_cache.as_ref() {
+                                *cache.lock() = meta.clone();
+                            }
+                            cb(PlayerEvent::metadata(meta));
                         }
                         #[cfg(not(target_os = "macos"))]
                         if first && width > 0 && height > 0 {
@@ -99,37 +120,4 @@ pub fn attach_video_size_probe(video_sink: &gst::Element, emitter: Arc<Mutex<Opt
         }
         gst::PadProbeReturn::Ok
     });
-}
-
-/// Builds a `playbin3` pipeline for URI/network/file sources.
-pub fn build_uri_pipeline(emitter: &Arc<Mutex<Option<Emitter>>>) -> Result<(gst::Pipeline, gst::Element)> {
-    let playbin = gst::ElementFactory::make("playbin3")
-        .build()
-        .map_err(|_| anyhow!("failed to create playbin3"))?;
-
-    let video_sink = create_platform_video_sink()?;
-    attach_video_size_probe(&video_sink, emitter.clone());
-
-    playbin.set_property("video-sink", &video_sink);
-
-    let audio_bin = build_audio_sink_bin()?;
-    playbin.set_property("audio-sink", &audio_bin);
-
-    playbin.connect("source-setup", false, |values| {
-        if let Ok(element) = values[1].get::<gst::Element>() {
-            configure_http_source(&element);
-        }
-        None
-    });
-    playbin.connect("element-setup", false, |values| {
-        if let Ok(element) = values[1].get::<gst::Element>() {
-            configure_http_source(&element);
-        }
-        None
-    });
-
-    let pipeline = playbin
-        .dynamic_cast::<gst::Pipeline>()
-        .map_err(|_| anyhow!("playbin3 is not a pipeline"))?;
-    Ok((pipeline, video_sink))
 }
