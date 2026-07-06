@@ -159,6 +159,25 @@ impl VideoSurface {
         apply_overlay_handle(&shell.video_sink, handle, &self.stored)
     }
 
+    /// Applies render rectangle + expose on the Gst thread (iOS / desktop).
+    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+    pub fn schedule_overlay_rectangle_sync(
+        &self,
+        shell: std::sync::Arc<Mutex<PipelineShell>>,
+        width: i32,
+        height: i32,
+    ) {
+        let stored = self.stored.clone();
+        spawn_on_gst_thread(move || {
+            let guard = shell.lock();
+            if width > 0 && height > 0 {
+                set_overlay_render_rectangle(&guard.video_sink, width, height);
+            } else if stored.lock().is_some() {
+                expose_overlay(&guard.video_sink);
+            }
+        });
+    }
+
     /// Shares overlay state for [`super::switch::SwitchContext`].
     pub fn clone_for_switch(&self) -> Self {
         Self {

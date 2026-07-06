@@ -199,7 +199,9 @@ class _PlayerPageState extends State<PlayerPage> {
           SignalBuilder(
             builder: (context) {
               final tracks = _controller.tracks.value;
-              if (tracks.isEmpty) return const SizedBox.shrink();
+              if (!_controller.supportsTracks.value || tracks.isEmpty) {
+                return const SizedBox.shrink();
+              }
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

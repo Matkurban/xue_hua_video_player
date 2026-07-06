@@ -2,6 +2,9 @@
 
 extern "C" void player_set_video_overlay_window(int64_t player_id,
                                                 int64_t window_handle);
+extern "C" void player_sync_video_overlay_rectangle(int64_t player_id,
+                                                    int32_t width,
+                                                    int32_t height);
 
 DesktopVideoOverlay::DesktopVideoOverlay(HWND parent) : parent_(parent) {}
 
@@ -71,4 +74,5 @@ void DesktopVideoOverlay::SetBounds(int64_t player_id,
   const int h = static_cast<int>(height);
   ::MoveWindow(it->second, pt.x, pt.y, w > 0 ? w : 1, h > 0 ? h : 1, TRUE);
   BindOverlay(player_id, it->second);
+  player_sync_video_overlay_rectangle(player_id, w > 0 ? w : 1, h > 0 ? h : 1);
 }

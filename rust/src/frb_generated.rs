@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -228891666;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1579868826;
 
 // Section: executor
 
@@ -340,6 +340,42 @@ fn wire__crate__api__player__player_event_stream_impl(
                     (move || {
                         let output_ok =
                             crate::api::player::player_event_stream(api_player_id, api_sink)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__player__player_get_pipeline_capabilities_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "player_get_pipeline_capabilities",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::player::player_get_pipeline_capabilities(api_player_id)?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1095,6 +1131,47 @@ fn wire__crate__api__player__sync_macos_video_layer_impl(
         },
     )
 }
+fn wire__crate__api__player__sync_video_overlay_rectangle_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_video_overlay_rectangle",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            let api_width = <i32>::sse_decode(&mut deserializer);
+            let api_height = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::player::sync_video_overlay_rectangle(
+                            api_player_id,
+                            api_width,
+                            api_height,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -1223,6 +1300,20 @@ impl SseDecode for crate::player_events::MediaTrack {
             language: var_language,
             label: var_label,
             selected: var_selected,
+        };
+    }
+}
+
+impl SseDecode for crate::player_events::PipelineCapabilitiesDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_seek = <bool>::sse_decode(deserializer);
+        let mut var_tracks = <bool>::sse_decode(deserializer);
+        let mut var_orientation = <bool>::sse_decode(deserializer);
+        return crate::player_events::PipelineCapabilitiesDto {
+            seek: var_seek,
+            tracks: var_tracks,
+            orientation: var_orientation,
         };
     }
 }
@@ -1423,53 +1514,65 @@ fn pde_ffi_dispatcher_primary_impl(
         }
         7 => wire__crate__api__player__player_duration_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__player__player_event_stream_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__player__player_get_tracks_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__player__player_get_video_metadata_impl(
+        9 => wire__crate__api__player__player_get_pipeline_capabilities_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__player__player_is_seekable_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__player__player_load_source_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__player__player_pause_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__player__player_play_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__player__player_position_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__player__player_seek_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__player__player_select_track_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__player__player_set_aspect_ratio_mode_impl(
+        10 => wire__crate__api__player__player_get_tracks_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__player__player_get_video_metadata_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__player__player_set_asset_source_impl(
+        12 => wire__crate__api__player__player_is_seekable_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__player__player_load_source_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__player__player_pause_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__player__player_play_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__player__player_position_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__player__player_seek_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__player__player_select_track_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__player__player_set_aspect_ratio_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__player__player_set_looping_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__player__player_set_mute_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__player__player_set_source_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__player__player_set_video_orientation_impl(
+        20 => wire__crate__api__player__player_set_asset_source_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__player__set_video_overlay_window_impl(
+        21 => wire__crate__api__player__player_set_looping_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__player__player_set_mute_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__player__player_set_source_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__player__player_set_video_orientation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => {
+        26 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__player__set_video_overlay_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        29 => {
             wire__crate__api__player__sync_macos_video_layer_impl(port, ptr, rust_vec_len, data_len)
         }
+        30 => wire__crate__api__player__sync_video_overlay_rectangle_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -1558,6 +1661,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::player_events::MediaTrack>
     for crate::player_events::MediaTrack
 {
     fn into_into_dart(self) -> crate::player_events::MediaTrack {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::player_events::PipelineCapabilitiesDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.seek.into_into_dart().into_dart(),
+            self.tracks.into_into_dart().into_dart(),
+            self.orientation.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::player_events::PipelineCapabilitiesDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::player_events::PipelineCapabilitiesDto>
+    for crate::player_events::PipelineCapabilitiesDto
+{
+    fn into_into_dart(self) -> crate::player_events::PipelineCapabilitiesDto {
         self
     }
 }
@@ -1860,6 +1985,15 @@ impl SseEncode for crate::player_events::MediaTrack {
         <String>::sse_encode(self.language, serializer);
         <String>::sse_encode(self.label, serializer);
         <bool>::sse_encode(self.selected, serializer);
+    }
+}
+
+impl SseEncode for crate::player_events::PipelineCapabilitiesDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.seek, serializer);
+        <bool>::sse_encode(self.tracks, serializer);
+        <bool>::sse_encode(self.orientation, serializer);
     }
 }
 

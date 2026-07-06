@@ -68,6 +68,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaTrack dco_decode_media_track(dynamic raw);
 
   @protected
+  PipelineCapabilitiesDto dco_decode_pipeline_capabilities_dto(dynamic raw);
+
+  @protected
   PlayerEvent dco_decode_player_event(dynamic raw);
 
   @protected
@@ -144,6 +147,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaTrack sse_decode_media_track(SseDeserializer deserializer);
+
+  @protected
+  PipelineCapabilitiesDto sse_decode_pipeline_capabilities_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlayerEvent sse_decode_player_event(SseDeserializer deserializer);
@@ -242,6 +250,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_media_track(MediaTrack self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pipeline_capabilities_dto(
+    PipelineCapabilitiesDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_player_event(PlayerEvent self, SseSerializer serializer);

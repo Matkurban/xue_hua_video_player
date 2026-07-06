@@ -12,6 +12,7 @@ export 'rust/player_events.dart'
     show
         AspectRatioMode,
         MediaTrack,
+        PipelineCapabilitiesDto,
         PlayerState,
         PlayerEvent,
         PlayerEventKind,
@@ -41,6 +42,8 @@ class XueHuaPlayerController {
   final FlutterSignal<List<MediaTrack>> _tracks = signal(const []);
   final FlutterSignal<VideoMetadata?> _videoMetadata = signal(null);
   final FlutterSignal<bool> _isSeekable = signal(true);
+  final FlutterSignal<bool> _supportsTracks = signal(true);
+  final FlutterSignal<bool> _supportsOrientation = signal(true);
 
   ReadonlySignal<bool> get initialized => _initialized;
   ReadonlySignal<int?> get playerId => _playerId;
@@ -57,6 +60,8 @@ class XueHuaPlayerController {
   ReadonlySignal<List<MediaTrack>> get tracks => _tracks;
   ReadonlySignal<VideoMetadata?> get videoMetadata => _videoMetadata;
   ReadonlySignal<bool> get isSeekable => _isSeekable;
+  ReadonlySignal<bool> get supportsTracks => _supportsTracks;
+  ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
 
   late final ReadonlySignal<bool> isPlaying = computed(
     () => _state.value == PlayerState.playing,
@@ -122,14 +127,12 @@ class XueHuaPlayerController {
         break;
       case PlayerEventKind.stateChanged:
         _state.value = event.state;
+        if (event.state == PlayerState.playing) {
+          _bufferingPercent.value = 100;
+        }
         break;
       case PlayerEventKind.buffering:
-        batch(() {
-          _bufferingPercent.value = event.bufferingPercent;
-          if (event.bufferingPercent < 100) {
-            _state.value = PlayerState.buffering;
-          }
-        });
+        _bufferingPercent.value = event.bufferingPercent;
         break;
       case PlayerEventKind.eos:
         batch(() {
@@ -191,7 +194,10 @@ class XueHuaPlayerController {
         playerId: _id,
         source: _toMediaSourceDto(source),
       );
-      _isSeekable.value = await rust.playerIsSeekable(playerId: _id);
+      final caps = await rust.playerGetPipelineCapabilities(playerId: _id);
+      _isSeekable.value = caps.seek;
+      _supportsTracks.value = caps.tracks;
+      _supportsOrientation.value = caps.orientation;
       await refreshTracks();
       if (autoPlay) await rust.playerPlay(playerId: _id);
     });
@@ -205,9 +211,15 @@ class XueHuaPlayerController {
 
   Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
 
-  Future<void> seek(Duration position) => _guard(
-    () => rust.playerSeek(playerId: _id, positionMs: position.inMilliseconds),
-  );
+  Future<void> seek(Duration position) async {
+    _position.value = position;
+    if (isPlaying.value) {
+      _state.value = PlayerState.buffering;
+    }
+    await _guard(
+      () => rust.playerSeek(playerId: _id, positionMs: position.inMilliseconds),
+    );
+  }
 
   Future<void> setVolume(double volume) async {
     final v = volume.clamp(0.0, 1.0);
@@ -295,6 +307,8 @@ class XueHuaPlayerController {
     _tracks.dispose();
     _videoMetadata.dispose();
     _isSeekable.dispose();
+    _supportsTracks.dispose();
+    _supportsOrientation.dispose();
   }
 
   static String _resolveGstUri(VideoSource source) {

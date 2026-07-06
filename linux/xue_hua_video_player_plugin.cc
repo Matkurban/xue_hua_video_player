@@ -23,6 +23,9 @@ G_DEFINE_TYPE(XueHuaVideoPlayerPlugin, xue_hua_video_player_plugin,
 
 extern "C" void player_set_video_overlay_window(int64_t player_id,
                                                 int64_t window_handle);
+extern "C" void player_sync_video_overlay_rectangle(int64_t player_id,
+                                                    int32_t width,
+                                                    int32_t height);
 
 namespace {
 
@@ -140,6 +143,7 @@ void SetOverlayBounds(XueHuaVideoPlayerPlugin* self,
   if (area && gtk_widget_get_realized(area)) {
     BindGdkWindow(player_id, area);
   }
+  player_sync_video_overlay_rectangle(player_id, w > 0 ? w : 1, h > 0 ? h : 1);
 }
 
 static void method_call_cb(FlMethodChannel* channel,

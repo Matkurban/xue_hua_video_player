@@ -9,8 +9,8 @@ use parking_lot::Mutex;
 use crate::frb_generated::StreamSink;
 use crate::playback::PlaybackEngine;
 pub use crate::player_events::{
-    AspectRatioMode, MediaSourceDto, MediaTrack, PlayerEvent, PlayerEventKind, PlayerState,
-    TrackType, VideoMetadata, VideoOrientationConfig,
+    AspectRatioMode, MediaSourceDto, MediaTrack, PipelineCapabilitiesDto, PlayerEvent,
+    PlayerEventKind, PlayerState, TrackType, VideoMetadata, VideoOrientationConfig,
 };
 
 static PLAYERS: Lazy<Mutex<HashMap<i64, Arc<PlaybackEngine>>>> =
@@ -230,6 +230,20 @@ pub fn player_duration(player_id: i64) -> Result<i64> {
 
 pub fn player_is_seekable(player_id: i64) -> Result<bool> {
     Ok(get_player(player_id)?.is_seekable())
+}
+
+pub fn player_get_pipeline_capabilities(
+    player_id: i64,
+) -> Result<PipelineCapabilitiesDto> {
+    Ok(get_player(player_id)?.pipeline_capabilities().into())
+}
+
+pub fn sync_video_overlay_rectangle(
+    player_id: i64,
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    get_player(player_id)?.sync_video_overlay_rectangle(width, height)
 }
 
 pub fn player_get_tracks(player_id: i64) -> Result<Vec<MediaTrack>> {

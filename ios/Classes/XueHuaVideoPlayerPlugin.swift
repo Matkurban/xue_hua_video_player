@@ -69,6 +69,11 @@ enum XueHuaVideoPlayerBindings {
   static func onViewResized(playerId: Int64, view: UIView) {
     let handle = UInt(bitPattern: Unmanaged.passUnretained(view).toOpaque())
     player_set_video_overlay_window(playerId, Int64(handle))
+    let width = Int32(view.bounds.width)
+    let height = Int32(view.bounds.height)
+    if width > 0 && height > 0 {
+      player_sync_video_overlay_rectangle(playerId, width, height)
+    }
   }
 
   static func onViewDestroyed(playerId: Int64) {
@@ -78,3 +83,6 @@ enum XueHuaVideoPlayerBindings {
 
 @_silgen_name("player_set_video_overlay_window")
 func player_set_video_overlay_window(_ playerId: Int64, _ windowHandle: Int64)
+
+@_silgen_name("player_sync_video_overlay_rectangle")
+func player_sync_video_overlay_rectangle(_ playerId: Int64, _ width: Int32, _ height: Int32)

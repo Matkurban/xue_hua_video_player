@@ -157,6 +157,22 @@ Future<PlatformInt64> playerDuration({required PlatformInt64 playerId}) =>
 Future<bool> playerIsSeekable({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerIsSeekable(playerId: playerId);
 
+Future<PipelineCapabilitiesDto> playerGetPipelineCapabilities({
+  required PlatformInt64 playerId,
+}) => RustLib.instance.api.crateApiPlayerPlayerGetPipelineCapabilities(
+  playerId: playerId,
+);
+
+Future<void> syncVideoOverlayRectangle({
+  required PlatformInt64 playerId,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerSyncVideoOverlayRectangle(
+  playerId: playerId,
+  width: width,
+  height: height,
+);
+
 Future<List<MediaTrack>> playerGetTracks({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerGetTracks(playerId: playerId);
 

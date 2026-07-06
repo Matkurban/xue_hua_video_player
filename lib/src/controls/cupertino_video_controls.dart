@@ -117,28 +117,35 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls>
                               .toDouble();
                           final pos = controller.position.value.inMilliseconds
                               .toDouble();
+                          final seekable = controller.isSeekable.value;
                           final value = sliderValue(dur, pos);
                           Widget buildSlider(double v) {
                             return GlassSlider(
                               value: v,
                               activeColor: theme.activeTrackColor,
                               thumbColor: theme.thumbColor,
-                              onChanged: (v) => onSeekChanged(v, dur),
-                              onChangeEnd: dur > 0
+                              onChangeStart: seekable && dur > 0
+                                  ? (_) => onSeekStart()
+                                  : null,
+                              onChanged: seekable && dur > 0
+                                  ? (v) => onSeekChanged(v, dur)
+                                  : null,
+                              onChangeEnd: seekable && dur > 0
                                   ? (v) => onSeekEnd(v, dur)
                                   : null,
                             );
                           }
 
-                          if (isScrubbing) {
-                            return buildSlider(value);
-                          }
                           return TweenAnimationBuilder<double>(
                             tween: Tween<double>(end: value),
-                            duration: const Duration(milliseconds: 200),
+                            duration: isScrubbing
+                                ? Duration.zero
+                                : const Duration(milliseconds: 200),
                             curve: Curves.linear,
-                            builder: (context, animatedValue, child) =>
-                                buildSlider(animatedValue),
+                            builder: (context, animatedValue, _) =>
+                                buildSlider(
+                              isScrubbing ? value : animatedValue,
+                            ),
                           );
                         },
                       ),

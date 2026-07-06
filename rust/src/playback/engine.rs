@@ -201,7 +201,18 @@ impl PlaybackEngine {
     pub fn seek(&self, position_ms: i64) -> Result<()> {
         let rate = *self.rate.lock();
         let at_eos = self.at_eos.clone();
-        self.run_on_gst(move |shell| pipeline_seek(&shell.pipeline, &at_eos, position_ms, rate))
+        let desired_playing = self.desired_playing.load(Ordering::SeqCst);
+        let emitter = self.emitter.clone();
+        self.run_on_gst(move |shell| {
+            pipeline_seek(
+                &shell.pipeline,
+                &at_eos,
+                position_ms,
+                rate,
+                desired_playing,
+                Some(&emitter),
+            )
+        })
     }
 
     pub fn set_volume(&self, volume: f64) {
@@ -327,6 +338,31 @@ impl PlaybackEngine {
         }
     }
 
+    /// Syncs VideoOverlay render rectangle after native surface resize.
+    pub fn sync_video_overlay_rectangle(&self, width: i32, height: i32) -> Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            return self.surface.apply_macos_overlay_gstreamer(width, height);
+        }
+        #[cfg(target_os = "android")]
+        {
+            let _ = (width, height);
+            return Ok(());
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "android")))]
+        {
+            let shell = self.shell.clone();
+            let surface = self.surface.clone_for_switch();
+            surface.schedule_overlay_rectangle_sync(shell, width, height);
+            Ok(())
+        }
+    }
+
+    pub fn pipeline_capabilities(&self) -> crate::playback::capabilities::PipelineCapabilities {
+        self.run_on_gst(|shell| Ok(shell.capabilities()))
+            .unwrap_or(crate::playback::capabilities::PipelineCapabilities::PLAYBIN)
+    }
+
     #[cfg(target_os = "android")]
     pub fn notify_android_surface(
         &self,
@@ -382,6 +418,8 @@ fn pipeline_seek(
     at_eos: &AtomicBool,
     position_ms: i64,
     rate: f64,
+    desired_playing: bool,
+    emitter: Option<&Mutex<Option<Emitter>>>,
 ) -> Result<()> {
     at_eos.store(false, Ordering::SeqCst);
     let pos = gst::ClockTime::from_mseconds(position_ms.max(0) as u64);
@@ -393,12 +431,20 @@ fn pipeline_seek(
         gst::SeekType::None,
         gst::ClockTime::ZERO,
     )?;
+    if let Some(emitter_mutex) = emitter {
+        if let Some(cb) = emitter_mutex.lock().as_ref() {
+            cb(PlayerEvent::position(position_ms));
+            if desired_playing {
+                cb(PlayerEvent::state(PlayerState::Buffering));
+            }
+        }
+    }
     Ok(())
 }
 
 fn pipeline_play(pipeline: &gst::Pipeline, at_eos: &AtomicBool, rate: f64) -> Result<()> {
     if at_eos.swap(false, Ordering::SeqCst) {
-        pipeline_seek(pipeline, at_eos, 0, rate)?;
+        pipeline_seek(pipeline, at_eos, 0, rate, true, None)?;
     }
     set_state_sync(pipeline, gst::State::Playing)
 }

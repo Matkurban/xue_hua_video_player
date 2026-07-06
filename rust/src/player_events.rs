@@ -96,6 +96,24 @@ impl From<crate::video::info::InternalVideoMetadata> for VideoMetadata {
     }
 }
 
+/// Features available on the active pipeline (playbin vs AppSrc).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PipelineCapabilitiesDto {
+    pub seek: bool,
+    pub tracks: bool,
+    pub orientation: bool,
+}
+
+impl From<crate::playback::capabilities::PipelineCapabilities> for PipelineCapabilitiesDto {
+    fn from(caps: crate::playback::capabilities::PipelineCapabilities) -> Self {
+        Self {
+            seek: caps.seek,
+            tracks: caps.tracks,
+            orientation: caps.orientation,
+        }
+    }
+}
+
 /// Video flip/rotate configuration for Dart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct VideoOrientationConfig {

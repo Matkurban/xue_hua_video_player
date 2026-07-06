@@ -86,10 +86,12 @@ class _DesktopVideoOverlay extends StatefulWidget {
   State<_DesktopVideoOverlay> createState() => _DesktopVideoOverlayState();
 }
 
-class _DesktopVideoOverlayState extends State<_DesktopVideoOverlay> {
+class _DesktopVideoOverlayState extends State<_DesktopVideoOverlay>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _desktopOverlayChannel.invokeMethod<void>(
       'attach',
       <String, dynamic>{'playerId': widget.playerId},
@@ -99,11 +101,17 @@ class _DesktopVideoOverlayState extends State<_DesktopVideoOverlay> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _desktopOverlayChannel.invokeMethod<void>(
       'detach',
       <String, dynamic>{'playerId': widget.playerId},
     );
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncBounds());
   }
 
   void _syncBounds() {

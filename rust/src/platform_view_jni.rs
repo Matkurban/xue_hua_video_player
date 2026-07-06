@@ -3,7 +3,7 @@ use crate::api::player::{apply_macos_overlay_gstreamer, cache_macos_overlay_hand
 #[cfg(target_os = "android")]
 use crate::api::player::notify_android_surface;
 #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
-use crate::api::player::set_video_overlay_window;
+use crate::api::player::{set_video_overlay_window, sync_video_overlay_rectangle};
 
 #[cfg(target_os = "android")]
 use jni::objects::{JClass, JObject};
@@ -42,6 +42,37 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
     if let Err(e) = set_video_overlay_window(player_id, window_handle) {
         log::warn!(
             "player_set_video_overlay_window(player_id={player_id}, handle={window_handle}): {e:#}"
+        );
+    }
+}
+
+/// C ABI: sync VideoOverlay render rectangle after native view resize (iOS / desktop).
+#[no_mangle]
+pub extern "C" fn player_sync_video_overlay_rectangle(
+    player_id: i64,
+    width: i32,
+    height: i32,
+) {
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::api::player::apply_macos_overlay_gstreamer(player_id, width, height) {
+            log::warn!(
+                "player_sync_video_overlay_rectangle(player_id={player_id}, \
+                 {width}x{height}): {e:#}"
+            );
+        }
+        return;
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (player_id, width, height);
+        return;
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "android")))]
+    if let Err(e) = sync_video_overlay_rectangle(player_id, width, height) {
+        log::warn!(
+            "player_sync_video_overlay_rectangle(player_id={player_id}, \
+             {width}x{height}): {e:#}"
         );
     }
 }

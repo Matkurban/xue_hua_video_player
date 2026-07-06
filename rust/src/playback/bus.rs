@@ -82,6 +82,9 @@ pub fn attach_gst_bus_handlers(
                     let percent = b.percent();
                     emit(PlayerEvent::buffering(percent));
                     if desired_playing.load(Ordering::SeqCst) {
+                        if percent < 100 {
+                            emit(PlayerEvent::state(PlayerState::Buffering));
+                        }
                         let target = if percent < 100 {
                             gst::State::Paused
                         } else {
@@ -100,11 +103,28 @@ pub fn attach_gst_bus_handlers(
                         emit(PlayerEvent::duration(d.mseconds() as i64));
                     }
                 }
+                MessageView::AsyncDone(..) => {
+                    if desired_playing.load(Ordering::SeqCst) {
+                        if let Some(p) = pipeline_bus.query_position::<gst::ClockTime>() {
+                            emit(PlayerEvent::position(p.mseconds() as i64));
+                        }
+                    }
+                }
                 MessageView::StateChanged(sc) => {
                     if sc.src().map(|s| s == &pipeline_bus).unwrap_or(false) {
-                        emit(PlayerEvent::state(map_state(sc.current())));
-                        if sc.current() == gst::State::Paused
-                            || sc.current() == gst::State::Playing
+                        let current = sc.current();
+                        if !(current == gst::State::Paused
+                            && desired_playing.load(Ordering::SeqCst))
+                        {
+                            emit(PlayerEvent::state(map_state(current)));
+                        }
+                        if current == gst::State::Playing
+                            && desired_playing.load(Ordering::SeqCst)
+                        {
+                            emit(PlayerEvent::buffering(100));
+                        }
+                        if current == gst::State::Paused
+                            || current == gst::State::Playing
                         {
                             if let Some(d) = pipeline_bus.query_duration::<gst::ClockTime>() {
                                 emit(PlayerEvent::duration(d.mseconds() as i64));

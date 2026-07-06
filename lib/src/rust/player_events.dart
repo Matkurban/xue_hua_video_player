@@ -55,6 +55,31 @@ class MediaTrack {
           selected == other.selected;
 }
 
+/// Features available on the active pipeline (playbin vs AppSrc).
+class PipelineCapabilitiesDto {
+  final bool seek;
+  final bool tracks;
+  final bool orientation;
+
+  const PipelineCapabilitiesDto({
+    required this.seek,
+    required this.tracks,
+    required this.orientation,
+  });
+
+  @override
+  int get hashCode => seek.hashCode ^ tracks.hashCode ^ orientation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PipelineCapabilitiesDto &&
+          runtimeType == other.runtimeType &&
+          seek == other.seek &&
+          tracks == other.tracks &&
+          orientation == other.orientation;
+}
+
 /// A flat event struct pushed to Dart over a broadcast stream.
 class PlayerEvent {
   final PlayerEventKind kind;
