@@ -8,7 +8,7 @@ Pod::Spec.new do |s|
   s.summary          = 'GStreamer-backed video player Flutter plugin.'
   s.description      = <<-DESC
 A Flutter video player plugin that decodes local/network video with GStreamer
-(via a Rust flutter_rust_bridge core) and renders into a Flutter texture.
+(via a Rust flutter_rust_bridge core) and renders into Flutter Platform Views.
                        DESC
   s.homepage         = 'https://github.com/Matkurban/xue_hua_video_player'
   s.license          = { :file => '../LICENSE' }

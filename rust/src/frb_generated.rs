@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1229154124;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -943445919;
 
 // Section: executor
 
@@ -68,12 +68,11 @@ fn wire__crate__api__player__create_player_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_engine_handle = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok = crate::api::player::create_player(api_engine_handle)?;
+                        let output_ok = crate::api::player::create_player()?;
                         Ok(output_ok)
                     })(),
                 )
@@ -587,6 +586,45 @@ fn wire__crate__api__player__player_stop_impl(
         },
     )
 }
+fn wire__crate__api__player__set_video_overlay_window_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_video_overlay_window",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            let api_window_handle = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::player::set_video_overlay_window(
+                            api_player_id,
+                            api_window_handle,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -701,10 +739,8 @@ impl SseDecode for crate::api::player::PlayerHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_playerId = <i64>::sse_decode(deserializer);
-        let mut var_textureId = <i64>::sse_decode(deserializer);
         return crate::api::player::PlayerHandle {
             player_id: var_playerId,
-            texture_id: var_textureId,
         };
     }
 }
@@ -763,6 +799,12 @@ fn pde_ffi_dispatcher_primary_impl(
         13 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
         14 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
         15 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__player__set_video_overlay_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -832,11 +874,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::player::PlayerEventKind>
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::player::PlayerHandle {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.player_id.into_into_dart().into_dart(),
-            self.texture_id.into_into_dart().into_dart(),
-        ]
-        .into_dart()
+        [self.player_id.into_into_dart().into_dart()].into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -973,7 +1011,6 @@ impl SseEncode for crate::api::player::PlayerHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.player_id, serializer);
-        <i64>::sse_encode(self.texture_id, serializer);
     }
 }
 

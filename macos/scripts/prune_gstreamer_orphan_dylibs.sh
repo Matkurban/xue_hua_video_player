@@ -17,6 +17,7 @@ is_protected() {
     libMoltenVK.dylib|libgstreamer-1.0.0.dylib|libgstbase-1.0.0.dylib|\
     libgstreamer-1.0.dylib|libgstbase-1.0.dylib|libglib-2.0.0.dylib|\
     libgobject-2.0.0.dylib|libgio-2.0.0.dylib|libgmodule-2.0.0.dylib|\
+    libgiolibopenssl.so|libgioopenssl.so|\
     libintl.8.dylib|liborc-0.4.0.dylib|libavcodec.61.dylib|libavformat.61.dylib|\
     libavutil.59.dylib|libswresample.5.dylib|libcrypto.3.dylib|libssl.3.dylib)
       return 0

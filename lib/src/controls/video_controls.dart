@@ -34,16 +34,25 @@ class _VideoControlsState extends State<VideoControls> {
   final FlutterSignal<bool> _visible = signal(true);
 
   Timer? _hideTimer;
+  late final void Function() _disposeStateEffect;
 
   @override
   void initState() {
     super.initState();
     _scheduleHide();
+    _disposeStateEffect = effect(() {
+      final state = widget.controller.state.value;
+      if (state == PlayerState.buffering || state == PlayerState.idle) {
+        _visible.value = true;
+        _scheduleHide();
+      }
+    });
   }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _disposeStateEffect();
     super.dispose();
   }
 

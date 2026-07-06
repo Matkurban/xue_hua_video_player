@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
-import 'package:irondash_engine_context/irondash_engine_context.dart';
 import 'package:signals/signals_flutter.dart';
 
 import 'enum/video_source_type.dart';
@@ -32,7 +31,6 @@ export 'model/video_source.dart';
 /// await controller.dispose();
 /// ```
 class XueHuaPlayerController {
-  int? _playerId;
   StreamSubscription<PlayerEvent>? _sub;
   bool _disposed = false;
 
@@ -46,14 +44,14 @@ class XueHuaPlayerController {
   final FlutterSignal<bool> _looping = signal(false);
   final FlutterSignal<bool> _muted = signal(false);
   final FlutterSignal<String?> _error = signal<String?>(null);
-  final FlutterSignal<int?> _textureId = signal<int?>(null);
+  final FlutterSignal<int?> _playerId = signal<int?>(null);
   final FlutterSignal<bool> _initialized = signal(false);
 
   /// Whether [initialize] has completed.
   ReadonlySignal<bool> get initialized => _initialized;
 
-  /// The Flutter external texture id, or null before [initialize].
-  ReadonlySignal<int?> get textureId => _textureId;
+  /// Native player id passed to the Platform View `creationParams`.
+  ReadonlySignal<int?> get playerId => _playerId;
 
   /// High-level playback state reported by the pipeline.
   ReadonlySignal<PlayerState> get state => _state;
@@ -101,15 +99,13 @@ class XueHuaPlayerController {
     return (s.width > 0 && s.height > 0) ? s.width / s.height : 16 / 9;
   });
 
-  /// Creates the native player and its texture, and subscribes to events.
+  /// Creates the native player and subscribes to events.
   Future<void> initialize() async {
     if (_initialized.value) return;
-    final handle = await EngineContext.instance.getEngineHandle();
-    final result = await rust.createPlayer(engineHandle: handle);
-    _playerId = result.playerId;
-    _textureId.value = result.textureId;
+    final result = await rust.createPlayer();
+    _playerId.value = result.playerId;
     _sub = rust
-        .playerEventStream(playerId: _playerId!)
+        .playerEventStream(playerId: result.playerId)
         .listen(_onEvent, onError: (Object e) => _error.value = e.toString());
     _initialized.value = true;
   }
@@ -154,7 +150,7 @@ class XueHuaPlayerController {
   }
 
   int get _id {
-    final id = _playerId;
+    final id = _playerId.value;
     if (id == null) {
       throw StateError('XueHuaPlayerController used before initialize()');
     }
@@ -176,7 +172,12 @@ class XueHuaPlayerController {
   /// file, or a bundled asset; assets are copied to a temporary file first
   /// since GStreamer can only read files and URLs.
   Future<void> open(VideoSource source, {bool autoPlay = false}) async {
-    _error.value = null;
+    batch(() {
+      _error.value = null;
+      _bufferingPercent.value = 100;
+      _videoSize.value = Size.zero;
+      _state.value = PlayerState.buffering;
+    });
     await _guard(() async {
       final uri = await _resolveGstUri(source);
       await rust.playerSetSource(playerId: _id, uri: uri);
@@ -237,7 +238,7 @@ class XueHuaPlayerController {
     if (_disposed) return;
     _disposed = true;
     await _sub?.cancel();
-    final id = _playerId;
+    final id = _playerId.value;
     if (id != null) {
       await rust.disposePlayer(playerId: id);
     }
@@ -254,7 +255,7 @@ class XueHuaPlayerController {
     _looping.dispose();
     _muted.dispose();
     _error.dispose();
-    _textureId.dispose();
+    _playerId.dispose();
     _initialized.dispose();
   }
 

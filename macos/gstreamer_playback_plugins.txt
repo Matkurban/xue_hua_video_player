@@ -63,8 +63,10 @@ dvdsub
 dvbsuboverlay
 closedcaption
 
-# macOS audio / autodetect
+# macOS audio / video autodetect
 osxaudio
+osxvideo
+opengl
 autodetect
 
 # Network sources (HTTPS / HLS / RTSP / RTP)

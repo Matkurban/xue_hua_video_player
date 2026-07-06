@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Weak,
+    Arc,
 };
 #[cfg(not(target_os = "android"))]
 use std::thread::JoinHandle;
@@ -11,14 +11,14 @@ use std::time::Instant;
 use anyhow::{anyhow, Result};
 use gstreamer as gst;
 use gstreamer::prelude::*;
-use gstreamer_app as gst_app;
 use gstreamer_video as gst_video;
-use gstreamer_video::prelude::VideoFrameExt;
-use irondash_run_loop::RunLoop;
-use irondash_texture::{BoxedPixelData, SendableTexture, Texture};
 use parking_lot::Mutex;
 
-use crate::video_texture::{FrameBuffer, FrameProvider};
+#[cfg(not(target_os = "android"))]
+use crate::platform_overlay::{
+    attach_overlay_bus_sync_handler, clear_overlay_window_handle, create_platform_video_sink,
+    expose_overlay, set_overlay_render_rectangle, set_overlay_window_handle,
+};
 
 /// High-level playback state reported to Dart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,6 +198,7 @@ extern "C" {
     fn gst_plugin_tcp_register();
     fn gst_plugin_srtp_register();
     fn gst_plugin_dtls_register();
+    fn gst_plugin_opengl_register();
 }
 
 // GIO TLS backend (glib-networking, OpenSSL) bundled in the iOS framework.
@@ -207,18 +208,13 @@ extern "C" {
 // `G_IO_MODULES := openssl`.
 #[cfg(target_os = "ios")]
 extern "C" {
-    // Registers the standard GIO extension points (incl. `gio-tls-backend`) so
-    // the OpenSSL module's `g_io_extension_point_implement` call below succeeds
-    // under static linking. GLib-internal but exported by the framework.
     fn _g_io_modules_ensure_extension_points_registered();
-    // glib-networking OpenSSL module entry point; registers the TLS/DTLS backend
-    // implementations. Takes an (optional) `GIOModule*`; NULL is fine here.
     fn g_io_openssl_load(module: *mut std::ffi::c_void);
 }
 
 /// Registers the OpenSSL-based GIO TLS backend so `https://` sources work.
 #[cfg(target_os = "ios")]
-fn register_ios_tls_backend() {
+fn register_gio_tls_backend() {
     // SAFETY: both symbols are statically linked from the GStreamer iOS SDK
     // framework. The extension points are registered first so the OpenSSL
     // module can implement `gio-tls-backend`; both calls are idempotent.
@@ -226,6 +222,11 @@ fn register_ios_tls_backend() {
         _g_io_modules_ensure_extension_points_registered();
         g_io_openssl_load(std::ptr::null_mut());
     }
+}
+
+#[cfg(target_os = "macos")]
+fn register_gio_tls_backend() {
+    crate::macos_gio_tls::register_gio_tls_backend(bundled_gstreamer_lib_dir().as_deref());
 }
 
 /// Prepares the process environment GStreamer/GLib expect, before `gst::init()`.
@@ -372,6 +373,7 @@ fn register_ios_static_plugins() {
         gst_plugin_tcp_register();
         gst_plugin_srtp_register();
         gst_plugin_dtls_register();
+        gst_plugin_opengl_register();
     }
 }
 
@@ -406,8 +408,10 @@ pub fn ensure_gst_init() -> Result<()> {
                 #[cfg(target_os = "ios")]
                 {
                     register_ios_static_plugins();
-                    register_ios_tls_backend();
+                    register_gio_tls_backend();
                 }
+                #[cfg(target_os = "macos")]
+                register_gio_tls_backend();
                 Ok(())
             })());
         });
@@ -419,13 +423,11 @@ pub fn ensure_gst_init() -> Result<()> {
     }
 }
 
-/// A single GStreamer `playbin3`-backed video player rendering into a Flutter
-/// external texture.
+/// A single GStreamer `playbin3`-backed video player rendering into a native
+/// Platform View via VideoOverlay.
 pub struct GstPlayer {
-    engine_handle: i64,
     pipeline: gst::Pipeline,
-    texture_id: i64,
-    frame_buffer: Arc<FrameBuffer>,
+    video_sink: gst::Element,
     emitter: Arc<Mutex<Option<Emitter>>>,
     rate: Arc<Mutex<f64>>,
     looping: Arc<AtomicBool>,
@@ -439,83 +441,15 @@ pub struct GstPlayer {
     bus_watch: Mutex<Option<gst::bus::BusWatchGuard>>,
     #[cfg(target_os = "android")]
     position_source: Mutex<Option<gst::glib::SourceId>>,
-    // The sole strong reference to the texture; frames are pushed through it.
-    // The appsink callback holds only a `Weak`, so this is guaranteed to be the
-    // last owner and can be released on the main thread in `Drop` (see
-    // `drop_sendable_on_main`). Wrapped in `Option` so `Drop` can take it.
-    sendable: Option<Arc<SendableTexture<BoxedPixelData>>>,
-}
-
-/// Releases a `SendableTexture` on the platform (main) thread.
-///
-/// The texture is wrapped in an irondash `Capsule` that remembers the thread it
-/// was created on (the main thread, inside `send_and_wait` in `GstPlayer::new`).
-/// Dropping it on any other thread panics with "Capsule was dropped on wrong
-/// thread". Since `GstPlayer` is created and dropped on flutter_rust_bridge
-/// worker threads, hand the final `Arc` to the main-thread run loop so its
-/// `Texture` is destroyed there.
-fn drop_sendable_on_main(sendable: Arc<SendableTexture<BoxedPixelData>>) {
-    match RunLoop::sender_for_main_thread() {
-        Ok(sender) => sender.send(move || drop(sendable)),
-        // If the main-thread run loop is unreachable there is no safe thread to
-        // drop on; leak rather than panic (this should not happen in practice).
-        Err(_) => std::mem::forget(sendable),
-    }
+    native_window: Arc<Mutex<Option<usize>>>,
 }
 
 impl GstPlayer {
-    /// Creates a player and its Flutter texture. Must be able to reach the
-    /// engine's platform thread (via irondash run loop) to register the texture.
-    pub fn new(
-        engine_handle: i64,
-        #[cfg(target_os = "android")] capsule_sender: irondash_run_loop::RunLoopSender,
-    ) -> Result<Self> {
+    /// Creates a player with a platform VideoOverlay sink (window bound later).
+    pub fn new() -> Result<Self> {
         crate::diag::logcat_info("GstPlayer::new enter");
 
-        let frame_buffer = FrameBuffer::new();
         let emitter: Arc<Mutex<Option<Emitter>>> = Arc::new(Mutex::new(None));
-
-        // Register the Flutter texture first — it only needs JNI/irondash, not GStreamer.
-        // On Android, `gst::init` can abort when another in-process SDK (e.g. xue_hua_sdk)
-        // already initialized the shared `libgstreamer_android.so`.
-        crate::diag::logcat_info("GstPlayer::new creating texture");
-        let (texture_id, sendable) = {
-            let frame_buffer = frame_buffer.clone();
-            #[cfg(target_os = "android")]
-            {
-                // `create_player` already hops to the platform main thread on Android.
-                // Nested `send_and_wait` here would call `RunLoop::current()` on main
-                // (`ALooper_prepare`) and SIGABRT against Flutter's looper.
-                crate::diag::logcat_info("GstPlayer::new texture inline (android main)");
-                let provider = Arc::new(FrameProvider::new(frame_buffer));
-                let texture = Texture::new_with_provider(engine_handle, provider)
-                    .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
-                let id = texture.id();
-                crate::diag::logcat_info(&format!("GstPlayer::new texture id={id}"));
-                (id, texture.into_sendable_texture_with_sender(capsule_sender))
-            }
-            #[cfg(not(target_os = "android"))]
-            {
-                let sender = RunLoop::sender_for_main_thread()
-                    .map_err(|e| anyhow!("cannot reach main thread run loop: {e:?}"))?;
-                sender.send_and_wait(
-                    move || -> Result<(i64, Arc<SendableTexture<BoxedPixelData>>)> {
-                        crate::diag::logcat_info("GstPlayer::new texture callback on main thread");
-                        let provider = Arc::new(FrameProvider::new(frame_buffer));
-                        let texture = Texture::new_with_provider(engine_handle, provider)
-                            .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
-                        let id = texture.id();
-                        crate::diag::logcat_info(&format!("GstPlayer::new texture id={id}"));
-                        Ok((id, texture.into_sendable_texture()))
-                    },
-                )?
-            }
-        };
-        log::info!("xue_hua_video_player: texture created id={texture_id}");
-        crate::diag::logcat_info(&format!(
-            "xue_hua_video_player: texture created id={texture_id}"
-        ));
-
         let rate = Arc::new(Mutex::new(1.0));
         let looping = Arc::new(AtomicBool::new(false));
         let desired_playing = Arc::new(AtomicBool::new(false));
@@ -523,62 +457,48 @@ impl GstPlayer {
         let running = Arc::new(AtomicBool::new(true));
 
         #[cfg(target_os = "android")]
-        let (pipeline, bus_watch, position_source) = {
+        let (pipeline, video_sink, bus_watch, position_source) = {
             crate::diag::logcat_info("GstPlayer::new building pipeline on Gst thread");
-            let frame_buffer = frame_buffer.clone();
             let emitter = emitter.clone();
-            let sendable_for_pipeline = sendable.clone();
             let looping = looping.clone();
             let desired_playing = desired_playing.clone();
             let at_eos = at_eos.clone();
             let running = running.clone();
 
-            match crate::android_gst_runtime::spawn_on_gst_thread_and_wait(
-                move || -> Result<(gst::Pipeline, gst::bus::BusWatchGuard, gst::glib::SourceId)> {
-                    crate::diag::logcat_info("GstPlayer::new ensure_gst_init (Gst thread)");
-                    ensure_gst_init()?;
-                    crate::diag::logcat_info("GstPlayer::new gst ready");
-                    let pipeline = build_pipeline(&frame_buffer, &sendable_for_pipeline, &emitter)?;
-                    let (bus_watch, position_source) = attach_gst_bus_handlers(
-                        &pipeline,
-                        &emitter,
-                        &looping,
-                        &desired_playing,
-                        &at_eos,
-                        &running,
-                    )?;
-                    Ok((pipeline, bus_watch, position_source))
-                },
-            ) {
-                Ok(ok) => ok,
-                Err(e) => {
-                    drop_sendable_on_main(sendable);
-                    return Err(e);
-                }
-            }
+            crate::android_gst_runtime::spawn_on_gst_thread_and_wait(move || {
+                crate::diag::logcat_info("GstPlayer::new ensure_gst_init (Gst thread)");
+                ensure_gst_init()?;
+                crate::diag::logcat_info("GstPlayer::new gst ready");
+                let (pipeline, video_sink) = build_pipeline(&emitter)?;
+                let (bus_watch, position_source) = attach_gst_bus_handlers(
+                    &pipeline,
+                    &emitter,
+                    &looping,
+                    &desired_playing,
+                    &at_eos,
+                    &running,
+                )?;
+                Ok((pipeline, video_sink, bus_watch, position_source))
+            })?
         };
 
         #[cfg(not(target_os = "android"))]
-        {
+        let (pipeline, video_sink) = {
             crate::diag::logcat_info("GstPlayer::new ensure_gst_init");
             ensure_gst_init()?;
             crate::diag::logcat_info("GstPlayer::new gst ready");
+            build_pipeline(&emitter)?
+        };
 
-            let pipeline = match build_pipeline(&frame_buffer, &sendable, &emitter) {
-                Ok(pipeline) => pipeline,
-                Err(e) => {
-                    drop_sendable_on_main(sendable);
-                    return Err(e);
-                }
-            };
+        log::info!("xue_hua_video_player: GStreamer pipeline built");
 
-            log::info!("xue_hua_video_player: GStreamer pipeline built");
-
+        #[cfg(not(target_os = "android"))]
+        {
+            let overlay_handle = Arc::new(Mutex::new(None));
+            attach_overlay_bus_sync_handler(&pipeline, overlay_handle.clone());
             let player = Self {
-                engine_handle,
                 pipeline,
-                texture_id,
-                frame_buffer,
+                video_sink,
                 emitter,
                 rate,
                 looping,
@@ -586,40 +506,33 @@ impl GstPlayer {
                 at_eos,
                 running,
                 bus_thread: Mutex::new(None),
-                sendable: Some(sendable),
+                native_window: overlay_handle,
             };
-
             player.spawn_bus_thread();
-            log::info!(
-                "xue_hua_video_player: player ready texture_id={}",
-                player.texture_id
-            );
+            log::info!("xue_hua_video_player: player ready");
             return Ok(player);
         }
 
-        log::info!("xue_hua_video_player: GStreamer pipeline built");
-
-        let player = Self {
-            engine_handle,
-            pipeline,
-            texture_id,
-            frame_buffer,
-            emitter,
-            rate,
-            looping,
-            desired_playing,
-            at_eos,
-            running,
-            bus_watch: Mutex::new(Some(bus_watch)),
-            position_source: Mutex::new(Some(position_source)),
-            sendable: Some(sendable),
-        };
-
-        log::info!(
-            "xue_hua_video_player: player ready texture_id={}",
-            player.texture_id
-        );
-        Ok(player)
+        #[cfg(target_os = "android")]
+        {
+            let overlay_handle = Arc::new(Mutex::new(None));
+            attach_overlay_bus_sync_handler(&pipeline, overlay_handle.clone());
+            let player = Self {
+                pipeline,
+                video_sink,
+                emitter,
+                rate,
+                looping,
+                desired_playing,
+                at_eos,
+                running,
+                bus_watch: Mutex::new(Some(bus_watch)),
+                position_source: Mutex::new(Some(position_source)),
+                native_window: overlay_handle,
+            };
+            log::info!("xue_hua_video_player: player ready");
+            Ok(player)
+        }
     }
 
     #[cfg(target_os = "android")]
@@ -632,8 +545,59 @@ impl GstPlayer {
         crate::android_gst_runtime::spawn_on_gst_thread_and_wait(move || f(&pipeline))
     }
 
-    pub fn texture_id(&self) -> i64 {
-        self.texture_id
+    pub fn set_video_overlay_window(&self, window_handle: i64) -> Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            self.cache_macos_overlay_handle(window_handle);
+            return Ok(());
+        }
+        #[cfg(target_os = "android")]
+        {
+            let handle = window_handle as usize;
+            let video_sink = self.video_sink.clone();
+            let stored = self.native_window.clone();
+            return self.run_on_gst(move |_| apply_overlay_handle(&video_sink, handle, &stored));
+        }
+        #[cfg(not(any(target_os = "android", target_os = "macos")))]
+        {
+            let handle = window_handle as usize;
+            apply_overlay_handle(&self.video_sink, handle, &self.native_window)
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn cache_macos_overlay_handle(&self, view_ptr: i64) {
+        if view_ptr == 0 {
+            *self.native_window.lock() = None;
+        } else {
+            *self.native_window.lock() = Some(view_ptr as usize);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn apply_macos_overlay_gstreamer(&self, width: i32, height: i32) -> Result<()> {
+        match *self.native_window.lock() {
+            None => clear_overlay_window_handle(&self.video_sink),
+            Some(handle) => {
+                set_overlay_window_handle(&self.video_sink, handle)?;
+                if width > 0 && height > 0 {
+                    set_overlay_render_rectangle(&self.video_sink, width, height);
+                } else {
+                    expose_overlay(&self.video_sink);
+                }
+                Ok(())
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn ensure_macos_overlay_ready(&self) -> Result<()> {
+        if self.native_window.lock().is_none() {
+            log::warn!(
+                "macOS overlay handle not cached yet; playback may open a standalone window"
+            );
+        }
+        Ok(())
     }
 
     pub fn set_emitter(&self, emitter: Emitter) {
@@ -650,7 +614,7 @@ impl GstPlayer {
     pub fn set_uri(&self, uri: &str) -> Result<()> {
         #[cfg(target_os = "android")]
         {
-            crate::android_gst::ensure_java_gstreamer_for_network(self.engine_handle, uri)?;
+            crate::android_gst::ensure_java_gstreamer_for_network(uri)?;
             crate::diag::logcat_info(&format!("set_uri: {uri}"));
             let uri = uri.to_owned();
             let at_eos = self.at_eos.clone();
@@ -661,7 +625,19 @@ impl GstPlayer {
     }
 
     fn set_uri_impl(&self, uri: &str) -> Result<()> {
+        #[cfg(target_os = "macos")]
+        self.ensure_macos_overlay_ready()?;
+        #[cfg(not(target_os = "macos"))]
+        self.rebind_cached_overlay()?;
         pipeline_set_uri(&self.pipeline, uri, &self.at_eos)
+    }
+
+    #[cfg(all(not(target_os = "android"), not(target_os = "macos")))]
+    fn rebind_cached_overlay(&self) -> Result<()> {
+        if let Some(handle) = *self.native_window.lock() {
+            apply_overlay_handle(&self.video_sink, handle, &self.native_window)?;
+        }
+        Ok(())
     }
 
     pub fn play(&self) -> Result<()> {
@@ -674,6 +650,10 @@ impl GstPlayer {
         }
         #[cfg(not(target_os = "android"))]
         {
+            #[cfg(target_os = "macos")]
+            self.ensure_macos_overlay_ready()?;
+            #[cfg(not(target_os = "macos"))]
+            self.rebind_cached_overlay()?;
             if self.at_eos.swap(false, Ordering::SeqCst) {
                 self.seek(0)?;
             }
@@ -701,11 +681,9 @@ impl GstPlayer {
         self.at_eos.store(false, Ordering::SeqCst);
         #[cfg(target_os = "android")]
         {
-            let frame_buffer = self.frame_buffer.clone();
             let emitter = self.emitter.clone();
             return self.run_on_gst(move |pipeline| {
                 pipeline.set_state(gst::State::Ready)?;
-                frame_buffer.clear();
                 if let Some(cb) = emitter.lock().as_ref() {
                     cb(PlayerEvent::state(PlayerState::Stopped));
                 }
@@ -715,7 +693,6 @@ impl GstPlayer {
         #[cfg(not(target_os = "android"))]
         {
             self.pipeline.set_state(gst::State::Ready)?;
-            self.frame_buffer.clear();
             self.emit(PlayerEvent::state(PlayerState::Stopped));
             Ok(())
         }
@@ -884,6 +861,11 @@ impl GstPlayer {
                             }
                         }
                         MessageView::Error(err) => {
+                            log::error!(
+                                "GStreamer error: {} ({:?})",
+                                err.error(),
+                                err.debug()
+                            );
                             emit(PlayerEvent::error(format!(
                                 "{} ({:?})",
                                 err.error(),
@@ -909,12 +891,18 @@ impl GstPlayer {
                             }
                         }
                         MessageView::StateChanged(sc) => {
-                            if sc.src().map(|s| s == &pipeline).unwrap_or(false) {
+                            let src = sc.src();
+                            if src
+                                .as_ref()
+                                .map(|s| *s == pipeline.upcast_ref::<gst::Object>())
+                                .unwrap_or(false)
+                            {
                                 emit(PlayerEvent::state(map_state(sc.current())));
                                 if sc.current() == gst::State::Paused
                                     || sc.current() == gst::State::Playing
                                 {
-                                    if let Some(d) = pipeline.query_duration::<gst::ClockTime>() {
+                                    if let Some(d) = pipeline.query_duration::<gst::ClockTime>()
+                                    {
                                         emit(PlayerEvent::duration(d.mseconds() as i64));
                                     }
                                 }
@@ -940,6 +928,9 @@ impl GstPlayer {
 impl Drop for GstPlayer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
+        if let Some(bus) = self.pipeline.bus() {
+            bus.unset_sync_handler();
+        }
         #[cfg(target_os = "android")]
         {
             let pipeline = self.pipeline.clone();
@@ -956,9 +947,6 @@ impl Drop for GstPlayer {
             if let Some(handle) = self.bus_thread.lock().take() {
                 let _ = handle.join();
             }
-        }
-        if let Some(sendable) = self.sendable.take() {
-            drop_sendable_on_main(sendable);
         }
     }
 }
@@ -1179,147 +1167,21 @@ fn build_audio_sink_bin() -> Result<gst::Bin> {
     Ok(audio_bin)
 }
 
-/// Builds a `playbin3` pipeline whose video output is an RGBA `appsink` wrapped
-/// in a conversion bin (`videoconvert`, plus a `glcolorconvert ! gldownload` GL
-/// front-end on Android so MediaCodec's GL-texture output can be consumed). Each
-/// decoded frame is copied into `frame_buffer` and the texture is marked dirty.
-fn build_pipeline(
-    frame_buffer: &Arc<FrameBuffer>,
-    sendable: &Arc<SendableTexture<BoxedPixelData>>,
-    emitter: &Arc<Mutex<Option<Emitter>>>,
-) -> Result<gst::Pipeline> {
-        crate::diag::logcat_info("build_pipeline: creating playbin3");
-        let playbin = gst::ElementFactory::make("playbin3")
+/// Builds a `playbin3` pipeline whose video output uses the platform-recommended sink.
+fn build_pipeline(emitter: &Arc<Mutex<Option<Emitter>>>) -> Result<(gst::Pipeline, gst::Element)> {
+    crate::diag::logcat_info("build_pipeline: creating playbin3");
+    let playbin = gst::ElementFactory::make("playbin3")
         .build()
         .map_err(|_| anyhow!("failed to create playbin3 (is gst-plugins-base installed?)"))?;
 
-    let caps = gst::Caps::builder("video/x-raw")
-        .field("format", "RGBA")
-        .build();
-    let appsink = gst_app::AppSink::builder()
-        .caps(&caps)
-        .max_buffers(1)
-        .drop(true)
-        .enable_last_sample(false)
-        .build();
+    let video_sink = create_platform_video_sink()?;
+    attach_video_size_probe(&video_sink, emitter.clone());
 
-    let sink_bin = gst::Bin::new();
-
-    // Conversion elements between the bin's sink (ghosted) and the appsink.
-    //
-    // On Android the video comes from `amcvideodec` (MediaCodec HW decode), which
-    // for most Qualcomm/vendor decoders only emits GL textures
-    // (`video/x-raw(memory:GLMemory), texture-target=external-oes`) and refuses
-    // to negotiate with a plain system-memory `videoconvert`
-    // ("Codec only supports GL output but downstream does not" -> not-negotiated,
-    // with no software fallback bundled). So the chain must first advertise a
-    // GL-capable sink: `glcolorconvert` converts the external-OES texture to RGBA
-    // in GL, `gldownload` transfers it to system memory, then `videoconvert`
-    // normalizes to the RGBA the appsink requests. glcolorconvert/gldownload pick
-    // up the decoder's `GstGLContext` automatically via in-pipeline GstContext
-    // propagation. Other platforms (iOS/desktop) decode to system memory, so only
-    // `videoconvert` is needed there.
-    let mut chain: Vec<gst::Element> = Vec::new();
-
-    #[cfg(target_os = "android")]
-    {
-        // The GL front-end requires the `opengl` plugin in the bundled
-        // libgstreamer_android.so. If it is present, insert
-        // `glcolorconvert ! capsfilter(texture-target=2D) ! gldownload` so
-        // MediaCodec's GL-texture output can be consumed.
-        //
-        // The capsfilter is essential: MediaCodec decodes into an
-        // `external-oes` GL texture (a SurfaceTexture). Such textures can only
-        // be sampled in a shader - they cannot be CPU-mapped or copied
-        // (`gstglmemory`: "Cannot map/copy External OES textures"). Without the
-        // filter, `glcolorconvert` sees that `gldownload` also advertises
-        // GLMemory and simply passes the external-oes texture through unchanged,
-        // so `gldownload` then chokes trying to read it. Forcing
-        // `texture-target=2D` makes `glcolorconvert` actually sample the
-        // external-oes texture into a normal 2D RGBA texture that `gldownload`
-        // can transfer to system memory.
-        //
-        // If the plugin is missing (an older .so not rebuilt with `opengl`),
-        // fall back to a plain videoconvert chain: the pipeline still builds
-        // (audio/init succeed) instead of hard-failing, and only hardware video
-        // decode remains unavailable until the .so is rebuilt.
-        use std::str::FromStr;
-        let gl_2d_caps =
-            gst::Caps::from_str("video/x-raw(memory:GLMemory), texture-target=(string)2D")
-                .expect("static GL caps string is valid");
-        match (
-            gst::ElementFactory::make("glcolorconvert").build(),
-            gst::ElementFactory::make("capsfilter")
-                .property("caps", &gl_2d_caps)
-                .build(),
-            gst::ElementFactory::make("gldownload").build(),
-        ) {
-            (Ok(glcolorconvert), Ok(gl_2d_filter), Ok(gldownload)) => {
-                chain.push(glcolorconvert);
-                chain.push(gl_2d_filter);
-                chain.push(gldownload);
-            }
-            _ => {
-                gst::warning!(
-                    gst::CAT_DEFAULT,
-                    "opengl plugin missing from libgstreamer_android.so: \
-                     MediaCodec GL output cannot be consumed, hardware video \
-                     decode will fail to negotiate. Rebuild the .so with the \
-                     `opengl` plugin (see android/gstreamer_build/jni/Android.mk)."
-                );
-            }
-        }
-    }
-
-    chain.push(
-        gst::ElementFactory::make("videoconvert")
-            .build()
-            .map_err(|_| anyhow!("failed to create videoconvert"))?,
-    );
-
-    for element in &chain {
-        sink_bin.add(element)?;
-    }
-    sink_bin.add(appsink.upcast_ref::<gst::Element>())?;
-
-    let mut prev: Option<&gst::Element> = None;
-    for element in &chain {
-        if let Some(p) = prev {
-            p.link(element)?;
-        }
-        prev = Some(element);
-    }
-    prev.expect("sink chain is never empty (videoconvert is always present)")
-        .link(appsink.upcast_ref::<gst::Element>())?;
-
-    let head = chain
-        .first()
-        .expect("sink chain is never empty (videoconvert is always present)");
-    let sink_pad = head
-        .static_pad("sink")
-        .ok_or_else(|| anyhow!("sink chain head has no sink pad"))?;
-    let ghost = gst::GhostPad::with_target(&sink_pad)?;
-    ghost.set_active(true)?;
-    sink_bin.add_pad(&ghost)?;
-
-    playbin.set_property("video-sink", &sink_bin);
+    playbin.set_property("video-sink", &video_sink);
 
     let audio_bin = build_audio_sink_bin()?;
     playbin.set_property("audio-sink", &audio_bin);
 
-    // Disable TLS certificate verification for HTTP(S) sources on every
-    // platform. The bundled GStreamer runtimes ship no CA certificate database
-    // (the Android umbrella `.so` and the iOS `GStreamer.framework`), so the
-    // TLS backend cannot verify any server certificate and `souphttpsrc` aborts
-    // the handshake, delivering zero bytes ("Can't typefind stream"). Setting
-    // `ssl-strict = false` makes `souphttpsrc` accept the connection regardless
-    // of certificate validity so `https://` streams (incl. self-signed / expired
-    // certs) play. Trade-off: no MITM protection.
-    //
-    // We hook BOTH signals: `source-setup` reliably fires for the primary source
-    // element, while `element-setup` also catches sources nested inside
-    // `hlsdemux`/adaptivedemux (segment fetches). We also set a conventional
-    // `user-agent` because some servers return an empty body for blank UAs.
     playbin.connect("source-setup", false, |values| {
         if let Ok(element) = values[1].get::<gst::Element>() {
             configure_http_source(&element);
@@ -1333,48 +1195,24 @@ fn build_pipeline(
         None
     });
 
-    // Wire the frame callback. The callback holds only a `Weak` reference to the
-    // texture so the player's `sendable` field remains the sole strong owner and
-    // can be dropped on the main thread (see `drop_sendable_on_main`).
-    let fb = frame_buffer.clone();
-    let tex: Weak<SendableTexture<BoxedPixelData>> = Arc::downgrade(sendable);
-    let emitter = emitter.clone();
-    let last_size: Arc<Mutex<(i32, i32)>> = Arc::new(Mutex::new((0, 0)));
+    let pipeline = playbin
+        .dynamic_cast::<gst::Pipeline>()
+        .map_err(|_| anyhow!("playbin3 is not a pipeline"))?;
+    Ok((pipeline, video_sink))
+}
 
-    appsink.set_callbacks(
-        gst_app::AppSinkCallbacks::builder()
-            .new_sample(move |sink| {
-                let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
-                let caps = sample.caps().ok_or(gst::FlowError::Error)?;
-                let info =
-                    gst_video::VideoInfo::from_caps(caps).map_err(|_| gst::FlowError::Error)?;
-                let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, &info)
-                    .map_err(|_| gst::FlowError::Error)?;
-
-                let width = frame.width() as i32;
-                let height = frame.height() as i32;
-                let src_stride = frame.plane_stride()[0] as usize;
-                let plane = frame.plane_data(0).map_err(|_| gst::FlowError::Error)?;
-                let row_bytes = width as usize * 4;
-
-                let mut data = vec![0u8; row_bytes * height as usize];
-                if src_stride == row_bytes {
-                    data.copy_from_slice(&plane[..row_bytes * height as usize]);
-                } else {
-                    for y in 0..height as usize {
-                        let s = y * src_stride;
-                        let d = y * row_bytes;
-                        data[d..d + row_bytes].copy_from_slice(&plane[s..s + row_bytes]);
-                    }
-                }
-
-                fb.set(width, height, data);
-                if let Some(tex) = tex.upgrade() {
-                    tex.mark_frame_available();
-                }
-
-                {
+fn attach_video_size_probe(video_sink: &gst::Element, emitter: Arc<Mutex<Option<Emitter>>>) {
+    let sink_pad = match video_sink.static_pad("sink") {
+        Some(pad) => pad,
+        None => return,
+    };
+    let last_size = Arc::new(Mutex::new((0i32, 0i32)));
+    sink_pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_, info| {
+        if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
+            if let gst::EventView::Caps(caps) = ev.view() {
+                if let Ok(video_info) = gst_video::VideoInfo::from_caps(caps.caps()) {
+                    let width = video_info.width() as i32;
+                    let height = video_info.height() as i32;
                     let mut ls = last_size.lock();
                     if *ls != (width, height) {
                         *ls = (width, height);
@@ -1383,14 +1221,54 @@ fn build_pipeline(
                         }
                     }
                 }
+            }
+        }
+        gst::PadProbeReturn::Ok
+    });
+}
 
-                Ok(gst::FlowSuccess::Ok)
-            })
-            .build(),
-    );
+fn apply_overlay_handle(
+    video_sink: &gst::Element,
+    handle: usize,
+    stored: &Mutex<Option<usize>>,
+) -> Result<()> {
+    #[cfg(target_os = "android")]
+    {
+        if handle == 0 {
+            if let Some(old) = stored.lock().take() {
+                log::debug!("android overlay: releasing ANativeWindow {old:#x}");
+                crate::platform_view_android::release_native_window(old);
+            }
+            clear_overlay_window_handle(video_sink)?;
+            return Ok(());
+        }
+        let mut guard = stored.lock();
+        if let Some(old) = *guard {
+            if old != handle {
+                log::debug!(
+                    "android overlay: surface changed, releasing old ANativeWindow {old:#x}"
+                );
+                crate::platform_view_android::release_native_window(old);
+            }
+        }
+        log::debug!("android overlay: binding ANativeWindow {handle:#x}");
+        *guard = Some(handle);
+    }
 
-    let pipeline = playbin
-        .dynamic_cast::<gst::Pipeline>()
-        .map_err(|_| anyhow!("playbin3 is not a pipeline"))?;
-    Ok(pipeline)
+    #[cfg(not(target_os = "android"))]
+    {
+        if handle == 0 {
+            stored.lock().take();
+        } else {
+            *stored.lock() = Some(handle);
+        }
+    }
+
+    if handle == 0 {
+        clear_overlay_window_handle(video_sink)?;
+    } else {
+        set_overlay_window_handle(video_sink, handle)?;
+        expose_overlay(video_sink);
+    }
+    Ok(())
 }

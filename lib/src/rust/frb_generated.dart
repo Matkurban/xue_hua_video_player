@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1229154124;
+  int get rustContentHash => -943445919;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,9 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<PlayerHandle> crateApiPlayerCreatePlayer({
-    required PlatformInt64 engineHandle,
-  });
+  Future<PlayerHandle> crateApiPlayerCreatePlayer();
 
   Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId});
 
@@ -134,6 +132,11 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<void> crateApiPlayerPlayerStop({required PlatformInt64 playerId});
+
+  Future<void> crateApiPlayerSetVideoOverlayWindow({
+    required PlatformInt64 playerId,
+    required PlatformInt64 windowHandle,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -145,14 +148,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<PlayerHandle> crateApiPlayerCreatePlayer({
-    required PlatformInt64 engineHandle,
-  }) {
+  Future<PlayerHandle> crateApiPlayerCreatePlayer() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(engineHandle, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -165,16 +165,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiPlayerCreatePlayerConstMeta,
-        argValues: [engineHandle],
+        argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerCreatePlayerConstMeta => const TaskConstMeta(
-    debugName: "create_player",
-    argNames: ["engineHandle"],
-  );
+  TaskConstMeta get kCrateApiPlayerCreatePlayerConstMeta =>
+      const TaskConstMeta(debugName: "create_player", argNames: []);
 
   @override
   Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId}) {
@@ -622,6 +620,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiPlayerPlayerStopConstMeta =>
       const TaskConstMeta(debugName: "player_stop", argNames: ["playerId"]);
 
+  @override
+  Future<void> crateApiPlayerSetVideoOverlayWindow({
+    required PlatformInt64 playerId,
+    required PlatformInt64 windowHandle,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_i_64(windowHandle, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerSetVideoOverlayWindowConstMeta,
+        argValues: [playerId, windowHandle],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerSetVideoOverlayWindowConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_video_overlay_window",
+        argNames: ["playerId", "windowHandle"],
+      );
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -700,12 +733,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlayerHandle dco_decode_player_handle(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return PlayerHandle(
-      playerId: dco_decode_i_64(arr[0]),
-      textureId: dco_decode_i_64(arr[1]),
-    );
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return PlayerHandle(playerId: dco_decode_i_64(arr[0]));
   }
 
   @protected
@@ -813,8 +843,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlayerHandle sse_decode_player_handle(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_playerId = sse_decode_i_64(deserializer);
-    var var_textureId = sse_decode_i_64(deserializer);
-    return PlayerHandle(playerId: var_playerId, textureId: var_textureId);
+    return PlayerHandle(playerId: var_playerId);
   }
 
   @protected
@@ -927,7 +956,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_player_handle(PlayerHandle self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.playerId, serializer);
-    sse_encode_i_64(self.textureId, serializer);
   }
 
   @protected

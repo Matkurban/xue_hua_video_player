@@ -4,8 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 A cross-platform Flutter **video player** plugin that decodes local and network
 video with **GStreamer** (through a Rust [`flutter_rust_bridge`] core) and renders
-frames into a Flutter **external texture** via [`irondash_texture`] (zero-copy on
-the GPU where possible).
+into Flutter **Platform Views** via GStreamer-recommended VideoOverlay sinks.
 
 - Repository: <https://github.com/Matkurban/xue_hua_video_player>
 - Author: Matkurban &lt;3496354336@qq.com&gt;
@@ -42,7 +41,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
   size, aspect ratio, buffering %, volume, speed, looping, muted, and errors.
 - A drop-in `XueHuaVideoView` widget with a built-in, auto-hiding, themeable
   control bar (Material / Cupertino / adaptive).
-- GPU texture rendering (no per-frame copy to the Dart side).
+- GPU Platform View rendering via GStreamer VideoOverlay sinks (no per-frame copy to Dart).
 
 ## Platform support
 
@@ -150,11 +149,10 @@ read filesystem paths and URLs, not the Flutter asset bundle.
    (typically in `main()` after `WidgetsFlutterBinding.ensureInitialized()`). It
    is idempotent and safe to call again after a hot restart.
 2. **Create and `initialize()` a `XueHuaPlayerController` per video surface.** The
-   controller owns a native player plus a GPU texture; both are created during
-   `initialize()`.
+   controller owns a native player; it is created during `initialize()`.
 3. **Always `dispose()` the controller** when the surface goes away — this stops
-   the pipeline, cancels the event stream, and releases the texture on the
-   platform thread. Leaking a controller leaks a native pipeline.
+   the pipeline, cancels the event stream, and releases native resources. Leaking
+   a controller leaks a native pipeline.
 4. **Read state inside `SignalBuilder`/`Watch`.** Every state field is a
    `ReadonlySignal`; reading `.value` outside a reactive builder will not rebuild
    your widget when it changes.
@@ -222,67 +220,25 @@ Notes:
 
 #### Release builds (R8 / ProGuard)
 
-The plugin renders video through an external Flutter texture. The Rust core calls
-`IrondashEngineContextPlugin.getTextureRegistry()` via JNI on the Android main
-thread. If your release build enables code shrinking (`isMinifyEnabled = true`),
-R8 may strip that static method and the app crashes when opening a video page:
-
-```
-java.lang.NoSuchMethodError: IrondashEngineContextPlugin.getTextureRegistry(J)
-```
-
-**This plugin ships consumer ProGuard rules** in its AAR (`android/proguard-rules.pro`),
-so minified release builds should work without extra configuration once you depend
-on a version that includes them.
-
-If you still see crashes (or you are on an older plugin version), add this to
-your app's `android/app/proguard-rules.pro`:
+Video renders into a native `SurfaceView` Platform View; GStreamer binds via
+`VideoOverlay`. The plugin ships consumer ProGuard rules in its AAR
+(`android/proguard-rules.pro`). Keep GStreamer JNI helpers:
 
 ```proguard
--keep class dev.irondash.engine_context.** { *; }
--keep interface io.flutter.view.TextureRegistry { *; }
--keep class io.flutter.view.TextureRegistry$* { *; }
 -keep class org.freedesktop.gstreamer.** { *; }
 ```
 
-**v1.0.8+** also keeps GStreamer `androidmedia` JNI helpers (e.g.
-`GstAmcOnFrameAvailableListener`). Without them, release playback fails with
-`ClassNotFoundException` and GStreamer MediaCodec errors instead of a Java
-stack trace.
+Ensure your `release` build type references `proguard-rules.pro` when
+`isMinifyEnabled = true`.
 
-Ensure your `release` build type references that file:
-
-```kotlin
-buildTypes {
-    release {
-        isMinifyEnabled = true
-        proguardFiles(
-            getDefaultProguardFile("proguard-android-optimize.txt"),
-            "proguard-rules.pro",
-        )
-    }
-}
-```
-
-To confirm R8 is the cause, temporarily set `isMinifyEnabled = false` and rebuild;
-if the crash disappears, the keep rules above are the fix.
-
-**v1.0.9+** hardens the SurfaceProducer path: no silent fallback to legacy
-`createSurfaceTexture()` when `createSurfaceProducer()` is available, deferred
-`ANativeWindow` acquisition until the first frame, and a lifecycle callback for
-surface teardown. Upgrade to **1.0.10+**, run `flutter clean`, and ensure the APK
-contains a fresh `libxue_hua_video_player.so` (precompiled binaries must match
-the new `crate-hash`). Logcat should show `irondash_texture: using surface_producer path`.
+**v1.1.0+** migrates from external textures (`irondash_texture`) to Platform
+Views with `glimagesink` per the
+[GStreamer Android video tutorial](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html).
 
 **v1.0.19+** fixes Android SIGABRT by adopting the GStreamer Android tutorial
 thread model: a dedicated `xhvp-gst` thread with an **owned** `GMainContext`
 (`MainContext::new()`, not `default()`), `MainLoop::run()`, and all pipeline
-operations (`create_player`, `set_uri`, play/pause/seek, bus watch) marshalled
-onto that thread. Reverts v1.0.18's harmful `g_main_context_default()` loop and
-OpenSSL TLS re-registration (which caused `GTlsBackendOpenssl` duplicate errors
-and `xhvp-glib` SIGABRT). Flutter texture creation stays on the Android main
-thread. Network `https://` still plays via `playbin3` / `souphttpsrc` (no disk
-download).
+operations marshalled onto that thread.
 
 **v1.0.18** (superseded by 1.0.19) attempted a default-context `GMainLoop`; do
 not use.
@@ -309,21 +265,15 @@ and symbolicate with [`scripts/symbolicate_android_tombstone.sh`](scripts/symbol
 
 ### Consumer integration checklist (e.g. chat / IM apps)
 
-If `create_player` crashes right after `irondash_texture: using surface_producer path`:
-
-1. **Plugin version** — use **1.0.19+** (or **1.0.10+** minimum) and run `flutter clean` / full reinstall so
-   the APK contains a matching `libxue_hua_video_player.so` (not an older
-   precompiled artifact).
+1. **Plugin version** — use **1.1.0+** for Platform View rendering; run
+   `flutter clean` / full reinstall after upgrading.
 2. **Initialization order** — `XueHuaVideoPlayer.initialize()` →
    `controller.initialize()` → wait until media is on disk → `open(...)`.
-   Do not call `open` with an empty or missing `file://` path while
-   `localPath` is still empty.
-3. **`engine_handle`** — must come from `EngineContext.instance.getEngineHandle()`
-   on the same Flutter engine that hosts the `Texture` widget.
-4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR
-   (`consumerProguardFiles`); see [`android/proguard-rules.pro`](android/proguard-rules.pro).
-5. **Diagnosis** — filter logcat for `xue_hua_video_player` and `PANIC:` after
-   upgrading to 1.0.10; use the symbolication script above if needed.
+3. **Platform View** — embed `XueHuaVideoView` (or `buildXueHuaVideoPlatformView`)
+   with the same `playerId` as the controller. Overlay binding is buffered if
+   the view is created before `initialize()` completes.
+4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR.
+5. **Diagnosis** — filter logcat for `xue_hua_video_player` and `android overlay:`.
 
 ### iOS
 
@@ -396,7 +346,7 @@ before using any controller.
 
 | Method | Description |
 | --- | --- |
-| `initialize()` | Creates the native player + texture and subscribes to events. |
+| `initialize()` | Creates the native player and subscribes to events. |
 | `open(VideoSource, {bool autoPlay})` | Loads a source; optionally starts playback. |
 | `play()` / `pause()` / `stop()` | Playback transport. |
 | `togglePlayPause()` | Play if paused, pause if playing. |
@@ -411,7 +361,7 @@ before using any controller.
 Reactive state (all `ReadonlySignal`s; read `.value` in a `SignalBuilder`):
 `state`, `position`, `duration`, `videoSize`, `aspectRatio`, `bufferingPercent`,
 `volume`, `speed`, `looping`, `muted`, `isPlaying`, `isCompleted`, `error`,
-`textureId`, `initialized`.
+`playerId`, `initialized`.
 
 `PlayerState`: `idle`, `ready`, `buffering`, `playing`, `paused`, `stopped`,
 `completed`, `error`.
@@ -424,8 +374,8 @@ Reactive state (all `ReadonlySignal`s; read `.value` in a `SignalBuilder`):
 
 ### `XueHuaVideoView`
 
-A `StatelessWidget` that renders the controller's texture and, by default, an
-adaptive control bar.
+A `StatelessWidget` that embeds a Platform View for the controller's video and,
+by default, an adaptive control bar.
 
 | Parameter | Default | Description |
 | --- | --- | --- |
@@ -524,8 +474,8 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libgtk-3-dev
 ```
 
-Runtime uses the system GStreamer libraries. `libgtk-3-dev` is required because
-the texture backend links GTK 3.
+Runtime uses the system GStreamer libraries. `libgtk-3-dev` is required for the
+Linux desktop overlay (GTK popup window for `glimagesink` VideoOverlay).
 
 ### Windows
 
@@ -759,18 +709,14 @@ committed so the hash matches between CI and consumers.
 
 ```
 Dart:  XueHuaPlayerController ──FRB calls──► Rust API (rust/src/api/player.rs)
-       XueHuaVideoView (Texture) ◄──frames── irondash texture
-Rust:  GstPlayer  playbin3 ─► videoconvert ─► appsink (RGBA) ─► FrameBuffer
+       XueHuaVideoView (Platform View) ◄──VideoOverlay── GStreamer sink
+Rust:  GstPlayer  playbin3 ─► glimagesink / osxvideosink / d3d11videosink
                      │ bus messages ─► StreamSink<PlayerEvent> ─► Dart
 ```
 
-- Decoding: `playbin3` with the video sink set to an `appsink` (wrapped in a
-  `videoconvert` bin) forced to `video/x-raw,format=RGBA`, `max-buffers=1`,
-  `drop=true`.
-- Rendering: the appsink callback copies each frame into a shared buffer and
-  calls `mark_frame_available`; irondash requests the frame on the raster thread.
-- The texture is created on the platform main thread via the irondash run loop,
-  and its id is handed to a Flutter `Texture` widget.
+- Decoding: `playbin3` with platform video sink (`glimagesink`, `osxvideosink`, or `d3d11videosink`).
+- Rendering: native Platform View provides window/surface handle; GStreamer binds via `gst_video_overlay_set_window_handle`.
+- No CPU frame copy; no `irondash_texture` dependency.
 
 ### Regenerating bindings
 
@@ -782,17 +728,7 @@ flutter_rust_bridge_codegen generate
 
 ### Vendored dependency patch
 
-`rust/vendor/irondash_texture` is a local copy of `irondash_texture` 0.5.0 with
-patches for macOS/iOS and Android:
-
-- **macOS/iOS**: the upstream backing `IOSurface` uses `bytesPerRow = width * 4`,
-  which fails Metal's row-alignment requirement on the current Flutter renderer
-  (`Could not create Metal texture from pixel buffer: CVReturn -6684`). The
-  vendored copy aligns the stride to 256 bytes and uploads row-by-row.
-- **Android**: uses `createSurfaceProducer()` instead of legacy `createSurfaceTexture()`
-  to avoid `SIGABRT` on modern Flutter (Impeller/Vulkan).
-
-It is wired in through `[patch.crates-io]` in `rust/Cargo.toml`.
+Removed. Video rendering uses GStreamer Platform View sinks directly.
 
 ## Troubleshooting
 
@@ -822,5 +758,4 @@ It is wired in through `[patch.crates-io]` in `rust/Cargo.toml`.
 See [LICENSE](LICENSE).
 
 [`flutter_rust_bridge`]: https://pub.dev/packages/flutter_rust_bridge
-[`irondash_texture`]: https://crates.io/crates/irondash_texture
 [`signals`]: https://pub.dev/packages/signals

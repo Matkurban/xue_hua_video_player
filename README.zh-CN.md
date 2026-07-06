@@ -3,8 +3,8 @@
 [English](README.md) | 简体中文
 
 一个跨平台的 Flutter **视频播放器**插件：底层通过 Rust（[`flutter_rust_bridge`]）驱动
-**GStreamer** 解码本地与网络视频，并借助 [`irondash_texture`] 把画面渲染到 Flutter 的
-**外部纹理（external texture）**（在可行的平台上做到 GPU 零拷贝）。
+**GStreamer** 解码本地与网络视频，并通过 Flutter **Platform View** 与 GStreamer 推荐的
+**VideoOverlay** sink（`glimagesink` / `osxvideosink` / `d3d11videosink`）渲染画面。
 
 - 仓库地址：<https://github.com/Matkurban/xue_hua_video_player>
 - 作者：Matkurban &lt;3496354336@qq.com&gt;
@@ -40,7 +40,7 @@
   缓冲百分比、音量、倍速、循环、静音、错误等。
 - 开箱即用的 `XueHuaVideoView` 组件，内置可自动隐藏、可主题化的控制条
   （Material / Cupertino / 自适应）。
-- GPU 纹理渲染（不会把每一帧拷贝回 Dart 侧）。
+- 通过 GStreamer VideoOverlay 的 Platform View 渲染（无逐帧拷贝到 Dart）。
 
 ## 平台支持
 
@@ -143,10 +143,10 @@ URL，无法直接读取 Flutter 资源包。
 1. **在创建任何控制器之前，先调用一次 `XueHuaVideoPlayer.initialize()`**（通常放在
    `main()` 里、`WidgetsFlutterBinding.ensureInitialized()` 之后）。该方法幂等，热重启后
    再次调用也安全。
-2. **每个视频画面创建并 `initialize()` 一个 `XueHuaPlayerController`。** 控制器持有一个
-   原生播放器和一张 GPU 纹理，二者在 `initialize()` 时创建。
-3. **画面销毁时务必调用 `dispose()`** —— 它会停止管线、取消事件流，并在平台线程上释放
-   纹理。忘记释放会泄漏原生管线。
+2. **每个视频画面创建并 `initialize()` 一个 `XueHuaPlayerController`。** 控制器持有原生
+   播放器，在 `initialize()` 时创建。
+3. **画面销毁时务必调用 `dispose()`** —— 它会停止管线、取消事件流并释放原生资源。忘记
+   释放会泄漏原生管线。
 4. **在 `SignalBuilder`/`Watch` 内读取状态。** 所有状态字段都是 `ReadonlySignal`；在响应式
    builder 之外读取 `.value` 不会在其变化时触发重建。
 5. **Android 已内置全部四种 ABI**（`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`）。可按需用
@@ -205,53 +205,21 @@ GStreamer 运行时较大（每个 ABI 约 13–18 MB）。
 
 #### Release 构建（R8 / ProGuard）
 
-插件通过 Flutter 外部纹理渲染视频。Rust 核心会在 Android 主线程通过 JNI 调用
-`IrondashEngineContextPlugin.getTextureRegistry()`。若 release 构建开启了代码压缩
-（`isMinifyEnabled = true`），R8 可能移除该静态方法，进入视频页时闪退：
-
-```
-java.lang.NoSuchMethodError: IrondashEngineContextPlugin.getTextureRegistry(J)
-```
-
-**本插件 AAR 已内置 consumer ProGuard 规则**（`android/proguard-rules.pro`），依赖
-包含该修复的版本后，minify 的 release 包一般无需额外配置。
-
-若仍出现崩溃（或你使用的是旧版插件），在应用的 `android/app/proguard-rules.pro`
-中添加：
+视频通过原生 `SurfaceView` Platform View 渲染；GStreamer 经 `VideoOverlay` 绑定。
+插件 AAR 已内置 consumer ProGuard 规则（`android/proguard-rules.pro`）。请保留 GStreamer
+JNI 辅助类：
 
 ```proguard
--keep class dev.irondash.engine_context.** { *; }
--keep interface io.flutter.view.TextureRegistry { *; }
--keep class io.flutter.view.TextureRegistry$* { *; }
 -keep class org.freedesktop.gstreamer.** { *; }
 ```
 
-**v1.0.8+** 还会保留 GStreamer `androidmedia` 的 JNI 辅助类（如
-`GstAmcOnFrameAvailableListener`）。若被 R8 移除，release 播放会失败并出现
-`ClassNotFoundException` 与 GStreamer MediaCodec 错误，而不一定有 Java 堆栈。
+在 `isMinifyEnabled = true` 时确保 `release` 构建类型引用了 `proguard-rules.pro`。
 
-并确保 `release` 构建类型引用了该文件：
+**v1.1.0+** 从外部纹理（`irondash_texture`）迁移到 Platform View + `glimagesink`，遵循
+[GStreamer Android 视频教程](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html)。
 
-```kotlin
-buildTypes {
-    release {
-        isMinifyEnabled = true
-        proguardFiles(
-            getDefaultProguardFile("proguard-android-optimize.txt"),
-            "proguard-rules.pro",
-        )
-    }
-}
-```
-
-若要确认是否为 R8 导致，可临时设 `isMinifyEnabled = false` 重新打包；若不闪退，
-说明上述 keep 规则即为修复方案。
-
-**v1.0.9+** 进一步强化 SurfaceProducer：当存在 `createSurfaceProducer()` 时不再静默
-回退到废弃的 `createSurfaceTexture()`；延迟到首帧再获取 `ANativeWindow`；并注册
-surface 生命周期回调。请升级到 **1.0.9**、执行 `flutter clean`，并确保 APK 内含新的
-`libxue_hua_video_player.so`（预编译二进制需匹配新的 `crate-hash`）。logcat 应出现
-`irondash_texture: using surface_producer path`。
+**v1.0.19+** 采用 GStreamer Android 教程的线程模型：专用 `xhvp-gst` 线程与自有
+`GMainContext`，所有管线操作在该线程上执行。
 
 ### iOS
 
@@ -314,7 +282,7 @@ issue）。
 
 | 方法 | 说明 |
 | --- | --- |
-| `initialize()` | 创建原生播放器 + 纹理，并订阅事件。 |
+| `initialize()` | 创建原生播放器并订阅事件。 |
 | `open(VideoSource, {bool autoPlay})` | 加载数据源；可选自动播放。 |
 | `play()` / `pause()` / `stop()` | 播放传输控制。 |
 | `togglePlayPause()` | 暂停时播放，播放时暂停。 |
@@ -329,7 +297,7 @@ issue）。
 响应式状态（均为 `ReadonlySignal`，请在 `SignalBuilder` 中读取 `.value`）：
 `state`、`position`、`duration`、`videoSize`、`aspectRatio`、`bufferingPercent`、
 `volume`、`speed`、`looping`、`muted`、`isPlaying`、`isCompleted`、`error`、
-`textureId`、`initialized`。
+`playerId`、`initialized`。
 
 `PlayerState`：`idle`、`ready`、`buffering`、`playing`、`paused`、`stopped`、
 `completed`、`error`。
@@ -342,7 +310,7 @@ issue）。
 
 ### `XueHuaVideoView`
 
-一个 `StatelessWidget`，渲染控制器的纹理，并默认叠加一个自适应控制条。
+一个 `StatelessWidget`，为控制器嵌入 Platform View 视频画面，并默认叠加自适应控制条。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -635,16 +603,14 @@ Android arm64-v8a/armeabi-v7a/x86/x86_64），并上传到标签为 `precompiled
 
 ```
 Dart:  XueHuaPlayerController ──FRB 调用──► Rust API (rust/src/api/player.rs)
-       XueHuaVideoView (Texture) ◄──帧数据── irondash 纹理
-Rust:  GstPlayer  playbin3 ─► videoconvert ─► appsink (RGBA) ─► FrameBuffer
+       XueHuaVideoView (Platform View) ◄──VideoOverlay── GStreamer sink
+Rust:  GstPlayer  playbin3 ─► glimagesink / osxvideosink / d3d11videosink
                      │ 总线消息 ─► StreamSink<PlayerEvent> ─► Dart
 ```
 
-- 解码：`playbin3`，视频 sink 设为 `appsink`（包在 `videoconvert` bin 中），强制
-  `video/x-raw,format=RGBA`、`max-buffers=1`、`drop=true`。
-- 渲染：appsink 回调把每一帧拷贝到共享缓冲并调用 `mark_frame_available`；irondash 在光栅
-  线程请求该帧。
-- 纹理通过 irondash 的 run loop 在平台主线程创建，其 id 交给 Flutter 的 `Texture` 组件。
+- 解码：`playbin3`，各平台使用推荐视频 sink（`glimagesink`、`osxvideosink`、`d3d11videosink`）。
+- 渲染：Platform View 提供窗口/表面句柄；GStreamer 通过 `gst_video_overlay_set_window_handle` 绑定。
+- 无 CPU 逐帧拷贝；不依赖 `irondash_texture`。
 
 ### 重新生成绑定
 
@@ -656,16 +622,7 @@ flutter_rust_bridge_codegen generate
 
 ### 内置依赖补丁
 
-`rust/vendor/irondash_texture` 是 `irondash_texture` 0.5.0 的本地副本，包含 macOS/iOS 与
-Android 补丁：
-
-- **macOS/iOS**：上游底层 `IOSurface` 使用 `bytesPerRow = width * 4`，在当前 Flutter 渲染器上
-  不满足 Metal 的行对齐要求（`Could not create Metal texture from pixel buffer: CVReturn -6684`）。
-  该副本把 stride 对齐到 256 字节并逐行上传。
-- **Android**：改用 `createSurfaceProducer()` 替代废弃的 `createSurfaceTexture()`，避免新版
-  Flutter（Impeller/Vulkan）上进入视频页 `SIGABRT`。
-
-通过 `rust/Cargo.toml` 的 `[patch.crates-io]` 接入。
+已移除。视频渲染直接使用 GStreamer Platform View sink。
 
 ## 常见问题
 
@@ -692,5 +649,4 @@ Android 补丁：
 见 [LICENSE](LICENSE)。
 
 [`flutter_rust_bridge`]: https://pub.dev/packages/flutter_rust_bridge
-[`irondash_texture`]: https://crates.io/crates/irondash_texture
 [`signals`]: https://pub.dev/packages/signals

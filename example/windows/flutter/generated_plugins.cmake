@@ -3,11 +3,10 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  irondash_engine_context
+  xue_hua_video_player
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  xue_hua_video_player
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

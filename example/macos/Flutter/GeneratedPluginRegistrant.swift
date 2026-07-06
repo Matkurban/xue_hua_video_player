@@ -5,8 +5,8 @@
 import FlutterMacOS
 import Foundation
 
-import irondash_engine_context
+import xue_hua_video_player
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  IrondashEngineContextPlugin.register(with: registry.registrar(forPlugin: "IrondashEngineContextPlugin"))
+  XueHuaVideoPlayerPlugin.register(with: registry.registrar(forPlugin: "XueHuaVideoPlayerPlugin"))
 }

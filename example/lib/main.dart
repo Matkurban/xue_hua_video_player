@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
-// import 'package:xue_hua_video_player_example/video_url.dart';
+import 'package:xue_hua_video_player_example/video_url.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,18 +43,28 @@ class _PlayerPageState extends State<PlayerPage> {
   final XueHuaPlayerController _controller = XueHuaPlayerController();
   final TextEditingController _urlController = TextEditingController(
     text:
-        'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    // videoUrl,
+        // 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+        videoUrl,
   );
   bool _ready = false;
   bool _showControls = true;
   VideoControlsStyle _style = VideoControlsStyle.adaptive;
+  String? _initError;
 
   @override
   void initState() {
     super.initState();
     _controller.initialize().then((_) {
-      setState(() => _ready = true);
+      debugPrint('xue_hua_video_player: playerId=${_controller.playerId.value}');
+      if (mounted) setState(() => _ready = true);
+    }).catchError((Object e, StackTrace st) {
+      debugPrint('xue_hua_video_player initialize failed: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _initError = e.toString();
+          _ready = true;
+        });
+      }
     });
   }
 
@@ -87,6 +97,16 @@ class _PlayerPageState extends State<PlayerPage> {
       appBar: AppBar(title: const Text('雪花视频播放器')),
       body: !_ready
           ? const Center(child: CircularProgressIndicator())
+          : _initError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: SelectableText(
+                  '初始化失败: $_initError',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            )
           : Column(
               children: [
                 Padding(

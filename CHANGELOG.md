@@ -1,3 +1,16 @@
+## 1.1.0
+
+### Breaking
+
+- Replaced `irondash_texture` / `irondash_engine_context` with GStreamer VideoOverlay sinks (`glimagesink`, `osxvideosink`, `d3d11videosink`) rendering into Flutter Platform Views.
+- Removed `XueHuaPlayerController.textureId`; use `playerId` with `XueHuaVideoView`.
+- `createPlayer()` no longer requires `EngineContext`.
+
+### Added
+
+- Platform View factories on Android, iOS, macOS, Windows, and Linux.
+- Agent skills configuration (`AGENTS.md`, `docs/agents/*`, `CONTEXT.md`).
+
 ## 1.0.19
 
 ### Bug fixes

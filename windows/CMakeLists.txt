@@ -1,17 +1,8 @@
-# The Flutter tooling requires that developers have a version of Visual Studio
-# installed that includes CMake 3.14 or later. You should not increase this
-# version, as doing so will cause the plugin to fail to compile for some
-# customers of the plugin.
 cmake_minimum_required(VERSION 3.14)
 
-# Project-level configuration.
 set(PROJECT_NAME "xue_hua_video_player")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
-# --- GStreamer discovery ----------------------------------------------------
-# Locate the GStreamer MSVC install. The official installer sets the environment
-# variable GSTREAMER_1_0_ROOT_MSVC_X86_64 (install both the "runtime" and
-# "development" packages from https://gstreamer.freedesktop.org/download/).
 if(DEFINED ENV{GSTREAMER_1_0_ROOT_MSVC_X86_64})
   file(TO_CMAKE_PATH "$ENV{GSTREAMER_1_0_ROOT_MSVC_X86_64}" GSTREAMER_ROOT)
 else()
@@ -24,20 +15,30 @@ if(NOT EXISTS "${GSTREAMER_ROOT}/bin")
     "runtime + development packages and/or set GSTREAMER_1_0_ROOT_MSVC_X86_64.")
 endif()
 
-# Let the Rust build (system-deps/pkg-config) locate GStreamer. Requires a
-# pkg-config/pkgconf binary on PATH (e.g. `choco install pkgconfiglite`).
 set(ENV{PKG_CONFIG_PATH} "${GSTREAMER_ROOT}/lib/pkgconfig")
 
 include("../cargokit/cmake/cargokit.cmake")
 apply_cargokit(${PROJECT_NAME} ../rust xue_hua_video_player "")
 
-# Bundle the GStreamer runtime DLLs next to the built application so it can run
-# without a system-wide install. Plugin DLLs live under lib/gstreamer-1.0 and are
-# located at runtime via GST_PLUGIN_SYSTEM_PATH (see README for packaging notes).
+set(PLUGIN_NAME "xue_hua_video_player_plugin")
+
+add_library(${PLUGIN_NAME} SHARED
+  "xue_hua_video_player_plugin.cpp"
+  "xue_hua_video_platform_view.cpp"
+)
+apply_standard_settings(${PLUGIN_NAME})
+set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
+target_include_directories(${PLUGIN_NAME} INTERFACE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
+target_link_libraries(${PLUGIN_NAME} PRIVATE "${${PROJECT_NAME}_cargokit_lib}")
+
 file(GLOB GSTREAMER_RUNTIME_DLLS "${GSTREAMER_ROOT}/bin/*.dll")
 
 set(xue_hua_video_player_bundled_libraries
   "${${PROJECT_NAME}_cargokit_lib}"
+  $<TARGET_FILE:${PLUGIN_NAME}>
   ${GSTREAMER_RUNTIME_DLLS}
   PARENT_SCOPE
 )

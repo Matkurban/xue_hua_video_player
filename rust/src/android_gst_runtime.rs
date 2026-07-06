@@ -33,9 +33,7 @@ pub fn ensure_gst_runtime() {
 }
 
 fn gst_runtime_thread_main(ready_tx: mpsc::SyncSender<()>) {
-    if let Ok(vm) = irondash_engine_context::EngineContext::get_java_vm() {
-        let _ = vm.attach_current_thread(|_| -> Result<(), jni::errors::Error> { Ok(()) });
-    }
+    let _ = crate::platform_view_android::attach_java_vm();
 
     // GLib's `g_main_context_push_thread_default` uses a static `GPrivate`
     // that lazily calls `pthread_key_create` on first access.  If `gst_init`

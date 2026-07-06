@@ -1,27 +1,21 @@
 PODS:
   - FlutterMacOS (1.0.0)
-  - irondash_engine_context (0.0.1):
-    - FlutterMacOS
   - xue_hua_video_player (1.0.0):
     - FlutterMacOS
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
-  - irondash_engine_context (from `Flutter/ephemeral/.symlinks/plugins/irondash_engine_context/macos`)
   - xue_hua_video_player (from `Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
-  irondash_engine_context:
-    :path: Flutter/ephemeral/.symlinks/plugins/irondash_engine_context/macos
   xue_hua_video_player:
     :path: Flutter/ephemeral/.symlinks/plugins/xue_hua_video_player/macos
 
 SPEC CHECKSUMS:
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  irondash_engine_context: 893c7d96d20ce361d7e996f39d360c4c2f9869ba
-  xue_hua_video_player: 6ec1eb70293f8045a02ef04005d3eb63fb78cf86
+  xue_hua_video_player: 726115ebc6a15d57690d1bda80fe41a8bdb2a6da
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
 

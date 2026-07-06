@@ -9,12 +9,18 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `get_player`
 
-/// Creates a new player and its backing Flutter texture.
-///
-/// `engine_handle` must be obtained on the Dart side via
-/// `EngineContext.instance.getEngineHandle()`.
-Future<PlayerHandle> createPlayer({required PlatformInt64 engineHandle}) =>
-    RustLib.instance.api.crateApiPlayerCreatePlayer(engineHandle: engineHandle);
+/// Creates a new GStreamer-backed player.
+Future<PlayerHandle> createPlayer() =>
+    RustLib.instance.api.crateApiPlayerCreatePlayer();
+
+/// Binds a native window/surface handle to the player's VideoOverlay sink.
+Future<void> setVideoOverlayWindow({
+  required PlatformInt64 playerId,
+  required PlatformInt64 windowHandle,
+}) => RustLib.instance.api.crateApiPlayerSetVideoOverlayWindow(
+  playerId: playerId,
+  windowHandle: windowHandle,
+);
 
 /// Subscribes to the player's event stream (state, position, duration, size,
 /// buffering, EOS, errors). Should be called once right after `create_player`.
@@ -85,26 +91,24 @@ Future<PlatformInt64> playerPosition({required PlatformInt64 playerId}) =>
 Future<PlatformInt64> playerDuration({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerDuration(playerId: playerId);
 
-/// Tears down the player, stops the pipeline and releases the texture.
+/// Tears down the player and stops the pipeline.
 Future<void> disposePlayer({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerDisposePlayer(playerId: playerId);
 
-/// Identifiers returned when a player is created. `texture_id` is passed to the
-/// Flutter `Texture` widget; `player_id` addresses all further control calls.
+/// Identifiers returned when a player is created. `player_id` addresses all
+/// control calls; bind a Platform View with the same id via `creationParams`.
 class PlayerHandle {
   final PlatformInt64 playerId;
-  final PlatformInt64 textureId;
 
-  const PlayerHandle({required this.playerId, required this.textureId});
+  const PlayerHandle({required this.playerId});
 
   @override
-  int get hashCode => playerId.hashCode ^ textureId.hashCode;
+  int get hashCode => playerId.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is PlayerHandle &&
           runtimeType == other.runtimeType &&
-          playerId == other.playerId &&
-          textureId == other.textureId;
+          playerId == other.playerId;
 }
