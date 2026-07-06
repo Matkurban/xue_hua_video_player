@@ -10,6 +10,7 @@ use std::{
 };
 
 use irondash_engine_context::EngineContext;
+use jni::errors::LogErrorAndDefault;
 use jni::objects::{Global, JClass, JObject};
 use jni::{jni_sig, jni_str, Env, EnvUnowned, NativeMethod};
 use ndk_sys::{
@@ -34,6 +35,7 @@ struct Geometry {
 struct SurfaceProducerSlot {
     /// Stored as `usize` because raw pointers are not `Send`.
     native_window: usize,
+    producer: Option<Global<JObject<'static>>>,
 }
 
 fn slot_window_ptr(slot: &SurfaceProducerSlot) -> *mut ANativeWindow {
@@ -51,6 +53,29 @@ static SURFACE_PRODUCER_NATIVES_REGISTERED: AtomicBool = AtomicBool::new(false);
 const SURFACE_PRODUCER_CALLBACK_JAVA: &str =
     "com.flutter_rust_bridge.xue_hua_video_player.IrondashSurfaceProducerCallback";
 
+#[cfg(target_os = "android")]
+fn android_log_info(msg: &str) {
+    use std::ffi::CString;
+    #[link(name = "log")]
+    extern "C" {
+        fn __android_log_write(
+            prio: i32,
+            tag: *const std::ffi::c_char,
+            text: *const std::ffi::c_char,
+        ) -> i32;
+    }
+    let tag = CString::new("xue_hua_video_player").expect("tag");
+    let bytes = msg.as_bytes();
+    let len = bytes.len().min(3500);
+    let text = CString::new(&bytes[..len]).unwrap_or_else(|_| CString::new("…").unwrap());
+    unsafe {
+        __android_log_write(4, tag.as_ptr(), text.as_ptr());
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn android_log_info(_msg: &str) {}
+
 fn load_app_class<'local>(env: &mut Env<'local>, name: &str) -> Result<JClass<'local>> {
     let class_loader = EngineContext::get_class_loader()?;
     let class_name = env.new_string(name)?;
@@ -67,11 +92,14 @@ fn load_app_class<'local>(env: &mut Env<'local>, name: &str) -> Result<JClass<'l
     env.cast_local::<JClass>(obj.l()?).map_err(Into::into)
 }
 
-fn register_surface_producer_slot(id: i64) {
-    SURFACE_PRODUCER_SLOTS
-        .lock()
-        .unwrap()
-        .insert(id, SurfaceProducerSlot { native_window: 0 });
+fn register_surface_producer_slot(id: i64, producer: Global<JObject<'static>>) {
+    SURFACE_PRODUCER_SLOTS.lock().unwrap().insert(
+        id,
+        SurfaceProducerSlot {
+            native_window: 0,
+            producer: Some(producer),
+        },
+    );
 }
 
 fn unregister_surface_producer_slot(id: i64) {
@@ -98,18 +126,78 @@ fn set_surface_producer_slot_window(id: i64, wnd: *mut ANativeWindow) {
                 ANativeWindow_release(old);
             }
         }
-        set_slot_window_ptr(slot, wnd);
+        if old == wnd {
+            unsafe {
+                ANativeWindow_release(wnd);
+            }
+        } else {
+            set_slot_window_ptr(slot, wnd);
+        }
+    } else {
+        unsafe {
+            ANativeWindow_release(wnd);
+        }
     }
 }
 
+fn refresh_surface_producer_slot_window(env: &mut Env<'_>, texture_id: i64) -> Result<()> {
+    let mut slots = SURFACE_PRODUCER_SLOTS.lock().unwrap();
+    let slot = slots
+        .get_mut(&texture_id)
+        .ok_or(Error::TextureRegistrationFailed)?;
+    let producer = slot
+        .producer
+        .as_ref()
+        .ok_or(Error::TextureRegistrationFailed)?;
+    let surface = env
+        .call_method(
+            producer.as_obj(),
+            jni_str!("getSurface"),
+            jni_sig!("()Landroid/view/Surface;"),
+            &[],
+        )?
+        .l()?;
+    if env.is_same_object(&surface, JObject::null())? {
+        let wnd = slot_window_ptr(slot);
+        if !wnd.is_null() {
+            unsafe {
+                ANativeWindow_release(wnd);
+            }
+            set_slot_window_ptr(slot, std::ptr::null_mut());
+        }
+        return Err(Error::TextureRegistrationFailed);
+    }
+    let new_window = native_window_from_surface(env, &surface)?;
+    let old = slot_window_ptr(slot);
+    if !old.is_null() && old != new_window {
+        unsafe {
+            ANativeWindow_release(old);
+        }
+    }
+    if old == new_window {
+        unsafe {
+            ANativeWindow_release(new_window);
+        }
+    } else {
+        set_slot_window_ptr(slot, new_window);
+    }
+    Ok(())
+}
+
 extern "system" fn native_on_surface_available(
-    _env: EnvUnowned<'_>,
+    mut unowned_env: EnvUnowned<'_>,
     _class: jni::objects::JClass<'_>,
     texture_id: jni::sys::jlong,
 ) {
     log::info!(
         "irondash_texture: surface_producer onSurfaceAvailable id={texture_id}"
     );
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<()> {
+            refresh_surface_producer_slot_window(env, texture_id).ok_log();
+            Ok(())
+        })
+        .resolve::<LogErrorAndDefault>();
 }
 
 extern "system" fn native_on_surface_cleanup(
@@ -158,7 +246,7 @@ fn ensure_surface_producer_natives_registered(env: &mut Env<'_>) -> Result<()> {
 pub struct PlatformTexture<Type> {
     id: i64,
     texture_entry: Global<JObject<'static>>,
-    surface: Global<JObject<'static>>,
+    surface: RefCell<Global<JObject<'static>>>,
     native_window: RefCell<*mut ANativeWindow>,
     /// When true, `texture_entry` is a `SurfaceProducer` and surfaces must be
     /// obtained via `getSurface()` rather than wrapping a `SurfaceTexture`.
@@ -232,6 +320,7 @@ impl<Type> PlatformTexture<Type> {
         producer: &JObject,
         texture_id: i64,
     ) -> Result<()> {
+        android_log_info("irondash_texture: register_surface_producer natives");
         ensure_surface_producer_natives_registered(env)?;
         let callback_class = load_app_class(env, SURFACE_PRODUCER_CALLBACK_JAVA)?;
         let callback = env.new_object(callback_class, jni_sig!("(J)V"), &[texture_id.into()])?;
@@ -252,15 +341,16 @@ impl<Type> PlatformTexture<Type> {
         let id = env
             .call_method(producer, jni_str!("id"), jni_sig!("()J"), &[])?
             .j()?;
-        register_surface_producer_slot(id);
+        let producer_global = env.new_global_ref(producer)?;
+        register_surface_producer_slot(id, env.new_global_ref(producer)?);
         Self::install_surface_producer_callback(env, producer, id)?;
 
         log::info!("irondash_texture: using surface_producer path (id={id})");
 
         Ok(Self {
             id,
-            texture_entry: env.new_global_ref(producer)?,
-            surface: env.new_global_ref(JObject::null())?,
+            texture_entry: producer_global,
+            surface: RefCell::new(env.new_global_ref(JObject::null())?),
             native_window: RefCell::new(std::ptr::null_mut()),
             uses_surface_producer: true,
             last_geometry: RefCell::new(None),
@@ -309,7 +399,7 @@ impl<Type> PlatformTexture<Type> {
             Ok(Self {
                 id,
                 texture_entry: env.new_global_ref(texture_entry)?,
-                surface: env.new_global_ref(surface)?,
+                surface: RefCell::new(env.new_global_ref(surface)?),
                 native_window: RefCell::new(native_window),
                 uses_surface_producer: false,
                 last_geometry: RefCell::new(None),
@@ -323,17 +413,21 @@ impl<Type> PlatformTexture<Type> {
         engine_handle: i64,
         pixel_buffer_provider: Option<Arc<dyn PayloadProvider<BoxedPixelData>>>,
     ) -> Result<Self> {
+        android_log_info("irondash_texture: PlatformTexture::new enter");
         let java_vm = EngineContext::get_java_vm()?;
         java_vm.attach_current_thread(|env| -> Result<Self> {
+            android_log_info("irondash_texture: attached JNI for texture create");
             let engine_context = EngineContext::get()?;
             let texture_registry = engine_context.get_texture_registry(engine_handle)?;
             let registry_obj = texture_registry.as_obj();
 
             if Self::has_surface_producer_api(env, registry_obj)? {
+                android_log_info("irondash_texture: trying surface_producer");
                 let producer = Self::try_create_surface_producer(env, registry_obj)
                     .ok_or(Error::TextureRegistrationFailed)?;
                 Self::new_from_surface_producer(env, &producer, pixel_buffer_provider)
             } else {
+                android_log_info("irondash_texture: falling back to surface_texture");
                 Self::new_from_surface_texture(env, registry_obj, pixel_buffer_provider)
             }
         })
@@ -352,12 +446,25 @@ impl<Type> PlatformTexture<Type> {
             )?
             .l()?;
         if env.is_same_object(&surface, JObject::null())? {
-            *self.native_window.borrow_mut() = std::ptr::null_mut();
+            let wnd = *self.native_window.borrow();
+            if !wnd.is_null() {
+                unsafe {
+                    ANativeWindow_release(wnd);
+                }
+                *self.native_window.borrow_mut() = std::ptr::null_mut();
+            }
+            *self.surface.borrow_mut() = env.new_global_ref(JObject::null())?;
             return Err(Error::TextureRegistrationFailed);
         }
+
+        if env.is_same_object(self.surface.borrow().as_obj(), &surface)? {
+            return Ok(());
+        }
+
         let new_window = native_window_from_surface(env, &surface)?;
         set_surface_producer_slot_window(self.id, new_window);
         *self.native_window.borrow_mut() = new_window;
+        *self.surface.borrow_mut() = env.new_global_ref(surface)?;
         Ok(())
     }
 
@@ -445,26 +552,61 @@ impl<Type> PlatformTexture<Type> {
                 }
                 let mut buf: ANativeWindow_Buffer = unsafe { std::mem::zeroed() };
 
+                let lock_result = unsafe {
+                    ANativeWindow_lock(native_window, &mut buf as *mut _, std::ptr::null_mut())
+                };
+                if lock_result != 0 {
+                    log::error!(
+                        "irondash_texture: ANativeWindow_lock failed: {lock_result} \
+                         (id={}, {}x{})",
+                        self.id,
+                        geometry.width,
+                        geometry.height
+                    );
+                    return Err(Error::TextureRegistrationFailed);
+                }
+
+                let expected_payload_len =
+                    (payload.width as usize) * (payload.height as usize) * 4;
+                if payload.data.len() != expected_payload_len {
+                    log::error!(
+                        "irondash_texture: payload size mismatch id={} expected={expected_payload_len} \
+                         got={} ({}x{})",
+                        self.id,
+                        payload.data.len(),
+                        payload.width,
+                        payload.height
+                    );
+                    unsafe {
+                        ANativeWindow_unlockAndPost(native_window);
+                    }
+                    return Err(Error::TextureRegistrationFailed);
+                }
+
                 let data = unsafe {
-                    ANativeWindow_lock(native_window, &mut buf as *mut _, std::ptr::null_mut());
                     slice::from_raw_parts_mut(
                         buf.bits as *mut u8,
                         (buf.height * buf.stride * 4) as usize,
                     )
                 };
 
-                if buf.stride == buf.width {
-                    assert!(buf.stride * buf.height * 4 == payload.data.len() as i32);
-                    data.copy_from_slice(payload.data);
+                let copy_height = std::cmp::min(payload.height, buf.height);
+                if buf.stride == payload.width
+                    && buf.stride == buf.width
+                    && (buf.stride * buf.height * 4) as usize == payload.data.len()
+                {
+                    data[..payload.data.len()].copy_from_slice(payload.data);
                 } else {
                     let src_stride = payload.width * 4;
                     let dst_stride = buf.stride * 4;
-                    let min_stride = std::cmp::min(src_stride, dst_stride);
+                    let row_bytes = std::cmp::min(src_stride, dst_stride);
                     let mut src_offset: usize = 0;
                     let mut dst_offset: usize = 0;
-                    for _ in 0..payload.height {
-                        let src_slice = &payload.data[src_offset..src_offset + min_stride as usize];
-                        let dst_slice = &mut data[dst_offset..dst_offset + min_stride as usize];
+                    for _ in 0..copy_height {
+                        let src_slice =
+                            &payload.data[src_offset..src_offset + row_bytes as usize];
+                        let dst_slice =
+                            &mut data[dst_offset..dst_offset + row_bytes as usize];
                         dst_slice.copy_from_slice(src_slice);
                         src_offset += src_stride as usize;
                         dst_offset += dst_stride as usize;
@@ -553,7 +695,7 @@ impl PlatformTextureWithoutProvider for Surface {
         let java_vm = EngineContext::get_java_vm().expect("java vm");
         let surface = java_vm
             .attach_current_thread(|env| -> Result<Global<JObject<'static>>> {
-                Ok(env.new_global_ref(texture.surface.as_obj())?)
+                Ok(env.new_global_ref(texture.surface.borrow().as_obj())?)
             })
             .expect("global ref");
         Self(surface)

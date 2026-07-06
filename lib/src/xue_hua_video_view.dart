@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
 import 'controls/video_controls.dart';
@@ -37,35 +37,38 @@ class XueHuaVideoView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: backgroundColor,
-      child: Stack(
-        fit: StackFit.expand,
-        alignment: .center,
-        children: [
-          SignalBuilder(
-            builder: (context) {
-              final textureId = controller.textureId.value;
-              if (textureId == null) return const SizedBox.expand();
-              final size = controller.videoSize.value;
-              return AspectRatio(
-                aspectRatio: controller.aspectRatio.value,
-                child: FittedBox(
-                  fit: fit,
-                  clipBehavior: Clip.hardEdge,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: size.width > 0 ? size.width : 16,
-                    height: size.height > 0 ? size.height : 9,
-                    child: Texture(textureId: textureId),
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: backgroundColor,
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: .center,
+          children: [
+            SignalBuilder(
+              builder: (context) {
+                final textureId = controller.textureId.value;
+                if (textureId == null) return const SizedBox.expand();
+                final size = controller.videoSize.value;
+                return AspectRatio(
+                  aspectRatio: controller.aspectRatio.value,
+                  child: FittedBox(
+                    fit: fit,
+                    clipBehavior: Clip.hardEdge,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: size.width > 0 ? size.width : 16,
+                      height: size.height > 0 ? size.height : 9,
+                      child: Texture(textureId: textureId),
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
-          if (showControls)
-            VideoControls(controller: controller, style: controlsStyle),
-        ],
+                );
+              },
+            ),
+            if (showControls)
+              VideoControls(controller: controller, style: controlsStyle),
+          ],
+        ),
       ),
     );
   }

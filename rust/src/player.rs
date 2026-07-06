@@ -2,8 +2,11 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Weak,
 };
+#[cfg(not(target_os = "android"))]
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(not(target_os = "android"))]
+use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 use gstreamer as gst;
@@ -387,7 +390,14 @@ pub fn ensure_gst_init() -> Result<()> {
                 setup_ios_env();
                 #[cfg(target_os = "macos")]
                 setup_macos_env();
-                gst::init().map_err(|e| anyhow!("gst::init failed: {e}"))?;
+                #[cfg(target_os = "android")]
+                {
+                    crate::android_gst::ensure_gst_init_android()?;
+                }
+                #[cfg(not(target_os = "android"))]
+                {
+                    gst::init().map_err(|e| anyhow!("gst::init failed: {e}"))?;
+                }
                 // Android plugin registration + JavaVM/Context/ClassLoader setup
                 // is performed by the Java-side `GStreamer.init(context)` (see
                 // `GStreamerInitProvider`) before this runs; re-registering here
@@ -412,6 +422,7 @@ pub fn ensure_gst_init() -> Result<()> {
 /// A single GStreamer `playbin3`-backed video player rendering into a Flutter
 /// external texture.
 pub struct GstPlayer {
+    engine_handle: i64,
     pipeline: gst::Pipeline,
     texture_id: i64,
     frame_buffer: Arc<FrameBuffer>,
@@ -422,7 +433,12 @@ pub struct GstPlayer {
     /// Set when playback reaches EOS; cleared on seek or replay.
     at_eos: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
+    #[cfg(not(target_os = "android"))]
     bus_thread: Mutex<Option<JoinHandle<()>>>,
+    #[cfg(target_os = "android")]
+    bus_watch: Mutex<Option<gst::bus::BusWatchGuard>>,
+    #[cfg(target_os = "android")]
+    position_source: Mutex<Option<gst::glib::SourceId>>,
     // The sole strong reference to the texture; frames are pushed through it.
     // The appsink callback holds only a `Weak`, so this is guaranteed to be the
     // last owner and can be released on the main thread in `Drop` (see
@@ -450,56 +466,170 @@ fn drop_sendable_on_main(sendable: Arc<SendableTexture<BoxedPixelData>>) {
 impl GstPlayer {
     /// Creates a player and its Flutter texture. Must be able to reach the
     /// engine's platform thread (via irondash run loop) to register the texture.
-    pub fn new(engine_handle: i64) -> Result<Self> {
-        ensure_gst_init()?;
+    pub fn new(
+        engine_handle: i64,
+        #[cfg(target_os = "android")] capsule_sender: irondash_run_loop::RunLoopSender,
+    ) -> Result<Self> {
+        crate::diag::logcat_info("GstPlayer::new enter");
 
         let frame_buffer = FrameBuffer::new();
         let emitter: Arc<Mutex<Option<Emitter>>> = Arc::new(Mutex::new(None));
 
-        // Create the texture on the platform (main) thread.
+        // Register the Flutter texture first — it only needs JNI/irondash, not GStreamer.
+        // On Android, `gst::init` can abort when another in-process SDK (e.g. xue_hua_sdk)
+        // already initialized the shared `libgstreamer_android.so`.
+        crate::diag::logcat_info("GstPlayer::new creating texture");
         let (texture_id, sendable) = {
             let frame_buffer = frame_buffer.clone();
-            let sender = RunLoop::sender_for_main_thread()
-                .map_err(|e| anyhow!("cannot reach main thread run loop: {e:?}"))?;
-            sender.send_and_wait(
-                move || -> Result<(i64, Arc<SendableTexture<BoxedPixelData>>)> {
-                    let provider = Arc::new(FrameProvider::new(frame_buffer));
-                    let texture = Texture::new_with_provider(engine_handle, provider)
-                        .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
-                    let id = texture.id();
-                    Ok((id, texture.into_sendable_texture()))
-                },
-            )?
+            #[cfg(target_os = "android")]
+            {
+                // `create_player` already hops to the platform main thread on Android.
+                // Nested `send_and_wait` here would call `RunLoop::current()` on main
+                // (`ALooper_prepare`) and SIGABRT against Flutter's looper.
+                crate::diag::logcat_info("GstPlayer::new texture inline (android main)");
+                let provider = Arc::new(FrameProvider::new(frame_buffer));
+                let texture = Texture::new_with_provider(engine_handle, provider)
+                    .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
+                let id = texture.id();
+                crate::diag::logcat_info(&format!("GstPlayer::new texture id={id}"));
+                (id, texture.into_sendable_texture_with_sender(capsule_sender))
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                let sender = RunLoop::sender_for_main_thread()
+                    .map_err(|e| anyhow!("cannot reach main thread run loop: {e:?}"))?;
+                sender.send_and_wait(
+                    move || -> Result<(i64, Arc<SendableTexture<BoxedPixelData>>)> {
+                        crate::diag::logcat_info("GstPlayer::new texture callback on main thread");
+                        let provider = Arc::new(FrameProvider::new(frame_buffer));
+                        let texture = Texture::new_with_provider(engine_handle, provider)
+                            .map_err(|e| anyhow!("failed to create texture: {e:?}"))?;
+                        let id = texture.id();
+                        crate::diag::logcat_info(&format!("GstPlayer::new texture id={id}"));
+                        Ok((id, texture.into_sendable_texture()))
+                    },
+                )?
+            }
         };
+        log::info!("xue_hua_video_player: texture created id={texture_id}");
+        crate::diag::logcat_info(&format!(
+            "xue_hua_video_player: texture created id={texture_id}"
+        ));
 
-        // If building the pipeline fails, the last strong reference to the
-        // texture would otherwise be dropped here on this worker thread and
-        // panic in `Capsule::drop`, masking the real error. Release it on the
-        // main thread and propagate the original error instead.
-        let pipeline = match build_pipeline(&frame_buffer, &sendable, &emitter) {
-            Ok(pipeline) => pipeline,
-            Err(e) => {
-                drop_sendable_on_main(sendable);
-                return Err(e);
+        let rate = Arc::new(Mutex::new(1.0));
+        let looping = Arc::new(AtomicBool::new(false));
+        let desired_playing = Arc::new(AtomicBool::new(false));
+        let at_eos = Arc::new(AtomicBool::new(false));
+        let running = Arc::new(AtomicBool::new(true));
+
+        #[cfg(target_os = "android")]
+        let (pipeline, bus_watch, position_source) = {
+            crate::diag::logcat_info("GstPlayer::new building pipeline on Gst thread");
+            let frame_buffer = frame_buffer.clone();
+            let emitter = emitter.clone();
+            let sendable_for_pipeline = sendable.clone();
+            let looping = looping.clone();
+            let desired_playing = desired_playing.clone();
+            let at_eos = at_eos.clone();
+            let running = running.clone();
+
+            match crate::android_gst_runtime::spawn_on_gst_thread_and_wait(
+                move || -> Result<(gst::Pipeline, gst::bus::BusWatchGuard, gst::glib::SourceId)> {
+                    crate::diag::logcat_info("GstPlayer::new ensure_gst_init (Gst thread)");
+                    ensure_gst_init()?;
+                    crate::diag::logcat_info("GstPlayer::new gst ready");
+                    let pipeline = build_pipeline(&frame_buffer, &sendable_for_pipeline, &emitter)?;
+                    let (bus_watch, position_source) = attach_gst_bus_handlers(
+                        &pipeline,
+                        &emitter,
+                        &looping,
+                        &desired_playing,
+                        &at_eos,
+                        &running,
+                    )?;
+                    Ok((pipeline, bus_watch, position_source))
+                },
+            ) {
+                Ok(ok) => ok,
+                Err(e) => {
+                    drop_sendable_on_main(sendable);
+                    return Err(e);
+                }
             }
         };
 
+        #[cfg(not(target_os = "android"))]
+        {
+            crate::diag::logcat_info("GstPlayer::new ensure_gst_init");
+            ensure_gst_init()?;
+            crate::diag::logcat_info("GstPlayer::new gst ready");
+
+            let pipeline = match build_pipeline(&frame_buffer, &sendable, &emitter) {
+                Ok(pipeline) => pipeline,
+                Err(e) => {
+                    drop_sendable_on_main(sendable);
+                    return Err(e);
+                }
+            };
+
+            log::info!("xue_hua_video_player: GStreamer pipeline built");
+
+            let player = Self {
+                engine_handle,
+                pipeline,
+                texture_id,
+                frame_buffer,
+                emitter,
+                rate,
+                looping,
+                desired_playing,
+                at_eos,
+                running,
+                bus_thread: Mutex::new(None),
+                sendable: Some(sendable),
+            };
+
+            player.spawn_bus_thread();
+            log::info!(
+                "xue_hua_video_player: player ready texture_id={}",
+                player.texture_id
+            );
+            return Ok(player);
+        }
+
+        log::info!("xue_hua_video_player: GStreamer pipeline built");
+
         let player = Self {
+            engine_handle,
             pipeline,
             texture_id,
             frame_buffer,
             emitter,
-            rate: Arc::new(Mutex::new(1.0)),
-            looping: Arc::new(AtomicBool::new(false)),
-            desired_playing: Arc::new(AtomicBool::new(false)),
-            at_eos: Arc::new(AtomicBool::new(false)),
-            running: Arc::new(AtomicBool::new(true)),
-            bus_thread: Mutex::new(None),
+            rate,
+            looping,
+            desired_playing,
+            at_eos,
+            running,
+            bus_watch: Mutex::new(Some(bus_watch)),
+            position_source: Mutex::new(Some(position_source)),
             sendable: Some(sendable),
         };
 
-        player.spawn_bus_thread();
+        log::info!(
+            "xue_hua_video_player: player ready texture_id={}",
+            player.texture_id
+        );
         Ok(player)
+    }
+
+    #[cfg(target_os = "android")]
+    fn run_on_gst<R, F>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&gst::Pipeline) -> Result<R> + Send + 'static,
+        R: Send + 'static,
+    {
+        let pipeline = self.pipeline.clone();
+        crate::android_gst_runtime::spawn_on_gst_thread_and_wait(move || f(&pipeline))
     }
 
     pub fn texture_id(&self) -> i64 {
@@ -518,78 +648,159 @@ impl GstPlayer {
 
     /// Loads a media URI. Accepts `file://`, `http(s)://`, `rtsp://`, etc.
     pub fn set_uri(&self, uri: &str) -> Result<()> {
-        self.at_eos.store(false, Ordering::SeqCst);
-        self.pipeline.set_state(gst::State::Ready)?;
-        self.pipeline.set_property("uri", uri);
-        // Preroll so duration/size become available and the first frame renders.
-        self.pipeline.set_state(gst::State::Paused)?;
-        Ok(())
+        #[cfg(target_os = "android")]
+        {
+            crate::android_gst::ensure_java_gstreamer_for_network(self.engine_handle, uri)?;
+            crate::diag::logcat_info(&format!("set_uri: {uri}"));
+            let uri = uri.to_owned();
+            let at_eos = self.at_eos.clone();
+            return self.run_on_gst(move |pipeline| pipeline_set_uri(pipeline, &uri, &at_eos));
+        }
+        #[cfg(not(target_os = "android"))]
+        self.set_uri_impl(uri)
+    }
+
+    fn set_uri_impl(&self, uri: &str) -> Result<()> {
+        pipeline_set_uri(&self.pipeline, uri, &self.at_eos)
     }
 
     pub fn play(&self) -> Result<()> {
         self.desired_playing.store(true, Ordering::SeqCst);
-        if self.at_eos.swap(false, Ordering::SeqCst) {
-            self.seek(0)?;
+        #[cfg(target_os = "android")]
+        {
+            let at_eos = self.at_eos.clone();
+            let rate = *self.rate.lock();
+            return self.run_on_gst(move |pipeline| pipeline_play(pipeline, &at_eos, rate));
         }
-        self.pipeline.set_state(gst::State::Playing)?;
-        Ok(())
+        #[cfg(not(target_os = "android"))]
+        {
+            if self.at_eos.swap(false, Ordering::SeqCst) {
+                self.seek(0)?;
+            }
+            self.pipeline.set_state(gst::State::Playing)?;
+            Ok(())
+        }
     }
 
     pub fn pause(&self) -> Result<()> {
         self.desired_playing.store(false, Ordering::SeqCst);
-        self.pipeline.set_state(gst::State::Paused)?;
-        Ok(())
+        #[cfg(target_os = "android")]
+        return self.run_on_gst(|pipeline| {
+            pipeline.set_state(gst::State::Paused)?;
+            Ok(())
+        });
+        #[cfg(not(target_os = "android"))]
+        {
+            self.pipeline.set_state(gst::State::Paused)?;
+            Ok(())
+        }
     }
 
     pub fn stop(&self) -> Result<()> {
         self.desired_playing.store(false, Ordering::SeqCst);
         self.at_eos.store(false, Ordering::SeqCst);
-        self.pipeline.set_state(gst::State::Ready)?;
-        self.frame_buffer.clear();
-        self.emit(PlayerEvent::state(PlayerState::Stopped));
-        Ok(())
+        #[cfg(target_os = "android")]
+        {
+            let frame_buffer = self.frame_buffer.clone();
+            let emitter = self.emitter.clone();
+            return self.run_on_gst(move |pipeline| {
+                pipeline.set_state(gst::State::Ready)?;
+                frame_buffer.clear();
+                if let Some(cb) = emitter.lock().as_ref() {
+                    cb(PlayerEvent::state(PlayerState::Stopped));
+                }
+                Ok(())
+            });
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            self.pipeline.set_state(gst::State::Ready)?;
+            self.frame_buffer.clear();
+            self.emit(PlayerEvent::state(PlayerState::Stopped));
+            Ok(())
+        }
     }
 
     pub fn seek(&self, position_ms: i64) -> Result<()> {
-        self.at_eos.store(false, Ordering::SeqCst);
-        let rate = *self.rate.lock();
-        let pos = gst::ClockTime::from_mseconds(position_ms.max(0) as u64);
-        self.pipeline.seek(
-            rate,
-            gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
-            gst::SeekType::Set,
-            pos,
-            gst::SeekType::None,
-            gst::ClockTime::ZERO,
-        )?;
-        Ok(())
+        #[cfg(target_os = "android")]
+        {
+            let rate = *self.rate.lock();
+            let at_eos = self.at_eos.clone();
+            return self.run_on_gst(move |pipeline| {
+                pipeline_seek(pipeline, &at_eos, position_ms, rate)
+            });
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            self.at_eos.store(false, Ordering::SeqCst);
+            let rate = *self.rate.lock();
+            pipeline_seek(&self.pipeline, &self.at_eos, position_ms, rate)
+        }
     }
 
     pub fn set_volume(&self, volume: f64) {
-        // playbin exposes a `volume` property in [0.0, 1.0+] and a `mute` flag.
-        self.pipeline.set_property("volume", volume.clamp(0.0, 1.0));
+        let volume = volume.clamp(0.0, 1.0);
+        #[cfg(target_os = "android")]
+        {
+            let _ = self.run_on_gst(move |pipeline| {
+                pipeline.set_property("volume", volume);
+                Ok(())
+            });
+            return;
+        }
+        #[cfg(not(target_os = "android"))]
+        self.pipeline.set_property("volume", volume);
     }
 
     pub fn set_mute(&self, mute: bool) {
+        #[cfg(target_os = "android")]
+        {
+            let _ = self.run_on_gst(move |pipeline| {
+                pipeline.set_property("mute", mute);
+                Ok(())
+            });
+            return;
+        }
+        #[cfg(not(target_os = "android"))]
         self.pipeline.set_property("mute", mute);
     }
 
     pub fn set_speed(&self, speed: f64) -> Result<()> {
         let speed = if speed <= 0.0 { 1.0 } else { speed };
         *self.rate.lock() = speed;
-        let pos = self
-            .pipeline
-            .query_position::<gst::ClockTime>()
-            .unwrap_or(gst::ClockTime::ZERO);
-        self.pipeline.seek(
-            speed,
-            gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
-            gst::SeekType::Set,
-            pos,
-            gst::SeekType::None,
-            gst::ClockTime::ZERO,
-        )?;
-        Ok(())
+        #[cfg(target_os = "android")]
+        {
+            return self.run_on_gst(move |pipeline| {
+                let pos = pipeline
+                    .query_position::<gst::ClockTime>()
+                    .unwrap_or(gst::ClockTime::ZERO);
+                pipeline.seek(
+                    speed,
+                    gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
+                    gst::SeekType::Set,
+                    pos,
+                    gst::SeekType::None,
+                    gst::ClockTime::ZERO,
+                )?;
+                Ok(())
+            });
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let pos = self
+                .pipeline
+                .query_position::<gst::ClockTime>()
+                .unwrap_or(gst::ClockTime::ZERO);
+            self.pipeline.seek(
+                speed,
+                gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
+                gst::SeekType::Set,
+                pos,
+                gst::SeekType::None,
+                gst::ClockTime::ZERO,
+            )?;
+            Ok(())
+        }
     }
 
     pub fn set_looping(&self, looping: bool) {
@@ -597,6 +808,18 @@ impl GstPlayer {
     }
 
     pub fn position_ms(&self) -> i64 {
+        #[cfg(target_os = "android")]
+        {
+            return self
+                .run_on_gst(|pipeline| {
+                    Ok(pipeline
+                        .query_position::<gst::ClockTime>()
+                        .map(|p| p.mseconds() as i64)
+                        .unwrap_or(0))
+                })
+                .unwrap_or(0);
+        }
+        #[cfg(not(target_os = "android"))]
         self.pipeline
             .query_position::<gst::ClockTime>()
             .map(|p| p.mseconds() as i64)
@@ -604,12 +827,25 @@ impl GstPlayer {
     }
 
     pub fn duration_ms(&self) -> i64 {
+        #[cfg(target_os = "android")]
+        {
+            return self
+                .run_on_gst(|pipeline| {
+                    Ok(pipeline
+                        .query_duration::<gst::ClockTime>()
+                        .map(|d| d.mseconds() as i64)
+                        .unwrap_or(0))
+                })
+                .unwrap_or(0);
+        }
+        #[cfg(not(target_os = "android"))]
         self.pipeline
             .query_duration::<gst::ClockTime>()
             .map(|d| d.mseconds() as i64)
             .unwrap_or(0)
     }
 
+    #[cfg(not(target_os = "android"))]
     fn spawn_bus_thread(&self) {
         let bus = match self.pipeline.bus() {
             Some(b) => b,
@@ -704,17 +940,171 @@ impl GstPlayer {
 impl Drop for GstPlayer {
     fn drop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
-        // Stop dataflow first so the appsink callback (which holds only a `Weak`
-        // to the texture) can no longer run, then join the bus thread.
-        let _ = self.pipeline.set_state(gst::State::Null);
-        if let Some(handle) = self.bus_thread.lock().take() {
-            let _ = handle.join();
+        #[cfg(target_os = "android")]
+        {
+            let pipeline = self.pipeline.clone();
+            let _ = crate::android_gst_runtime::spawn_on_gst_thread_and_wait(move || {
+                pipeline.set_state(gst::State::Null)?;
+                Ok(())
+            });
+            *self.bus_watch.lock() = None;
+            *self.position_source.lock() = None;
         }
-        // Release the sole strong reference to the texture on the main thread.
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = self.pipeline.set_state(gst::State::Null);
+            if let Some(handle) = self.bus_thread.lock().take() {
+                let _ = handle.join();
+            }
+        }
         if let Some(sendable) = self.sendable.take() {
             drop_sendable_on_main(sendable);
         }
     }
+}
+
+fn pipeline_set_uri(
+    pipeline: &gst::Pipeline,
+    uri: &str,
+    at_eos: &AtomicBool,
+) -> Result<()> {
+    at_eos.store(false, Ordering::SeqCst);
+    pipeline.set_state(gst::State::Ready)?;
+    pipeline.set_property("uri", uri);
+    pipeline.set_state(gst::State::Paused)?;
+    Ok(())
+}
+
+fn pipeline_seek(
+    pipeline: &gst::Pipeline,
+    at_eos: &AtomicBool,
+    position_ms: i64,
+    rate: f64,
+) -> Result<()> {
+    at_eos.store(false, Ordering::SeqCst);
+    let pos = gst::ClockTime::from_mseconds(position_ms.max(0) as u64);
+    pipeline.seek(
+        rate,
+        gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
+        gst::SeekType::Set,
+        pos,
+        gst::SeekType::None,
+        gst::ClockTime::ZERO,
+    )?;
+    Ok(())
+}
+
+fn pipeline_play(pipeline: &gst::Pipeline, at_eos: &AtomicBool, rate: f64) -> Result<()> {
+    if at_eos.swap(false, Ordering::SeqCst) {
+        pipeline_seek(pipeline, at_eos, 0, rate)?;
+    }
+    pipeline.set_state(gst::State::Playing)?;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn attach_gst_bus_handlers(
+    pipeline: &gst::Pipeline,
+    emitter: &Arc<Mutex<Option<Emitter>>>,
+    looping: &Arc<AtomicBool>,
+    desired_playing: &Arc<AtomicBool>,
+    at_eos: &Arc<AtomicBool>,
+    running: &Arc<AtomicBool>,
+) -> Result<(gst::bus::BusWatchGuard, gst::glib::SourceId)> {
+    let bus = pipeline
+        .bus()
+        .ok_or_else(|| anyhow!("pipeline has no bus"))?;
+    let pipeline_bus = pipeline.clone();
+    let pipeline_pos = pipeline.clone();
+    let emitter_bus = emitter.clone();
+    let emitter_pos = emitter.clone();
+    let looping = looping.clone();
+    let desired_playing = desired_playing.clone();
+    let at_eos = at_eos.clone();
+    let running_bus = running.clone();
+    let running_pos = running.clone();
+
+    let bus_watch = bus
+        .add_watch_local(move |_, msg| {
+            if !running_bus.load(Ordering::SeqCst) {
+                return gst::glib::ControlFlow::Break;
+            }
+            let emit = |event: PlayerEvent| {
+                if let Some(cb) = emitter_bus.lock().as_ref() {
+                    cb(event);
+                }
+            };
+            use gst::MessageView;
+            match msg.view() {
+                MessageView::Eos(..) => {
+                    if looping.load(Ordering::SeqCst) {
+                        at_eos.store(false, Ordering::SeqCst);
+                        let _ = pipeline_bus.seek_simple(
+                            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                            gst::ClockTime::ZERO,
+                        );
+                    } else {
+                        at_eos.store(true, Ordering::SeqCst);
+                        emit(PlayerEvent::eos());
+                        emit(PlayerEvent::state(PlayerState::Completed));
+                    }
+                }
+                MessageView::Error(err) => {
+                    emit(PlayerEvent::error(format!(
+                        "{} ({:?})",
+                        err.error(),
+                        err.debug()
+                    )));
+                    emit(PlayerEvent::state(PlayerState::Error));
+                }
+                MessageView::Buffering(b) => {
+                    let percent = b.percent();
+                    emit(PlayerEvent::buffering(percent));
+                    if desired_playing.load(Ordering::SeqCst) {
+                        let target = if percent < 100 {
+                            gst::State::Paused
+                        } else {
+                            gst::State::Playing
+                        };
+                        let _ = pipeline_bus.set_state(target);
+                    }
+                }
+                MessageView::DurationChanged(..) => {
+                    if let Some(d) = pipeline_bus.query_duration::<gst::ClockTime>() {
+                        emit(PlayerEvent::duration(d.mseconds() as i64));
+                    }
+                }
+                MessageView::StateChanged(sc) => {
+                    if sc.src().map(|s| s == &pipeline_bus).unwrap_or(false) {
+                        emit(PlayerEvent::state(map_state(sc.current())));
+                        if sc.current() == gst::State::Paused
+                            || sc.current() == gst::State::Playing
+                        {
+                            if let Some(d) = pipeline_bus.query_duration::<gst::ClockTime>() {
+                                emit(PlayerEvent::duration(d.mseconds() as i64));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            gst::glib::ControlFlow::Continue
+        })
+        .map_err(|e| anyhow!("bus watch failed: {e}"))?;
+
+    let position_source = gst::glib::timeout_add_local(Duration::from_millis(200), move || {
+        if !running_pos.load(Ordering::SeqCst) {
+            return gst::glib::ControlFlow::Break;
+        }
+        if let Some(p) = pipeline_pos.query_position::<gst::ClockTime>() {
+            if let Some(cb) = emitter_pos.lock().as_ref() {
+                cb(PlayerEvent::position(p.mseconds() as i64));
+            }
+        }
+        gst::glib::ControlFlow::Continue
+    });
+
+    Ok((bus_watch, position_source))
 }
 
 fn map_state(state: gst::State) -> PlayerState {
@@ -798,7 +1188,8 @@ fn build_pipeline(
     sendable: &Arc<SendableTexture<BoxedPixelData>>,
     emitter: &Arc<Mutex<Option<Emitter>>>,
 ) -> Result<gst::Pipeline> {
-    let playbin = gst::ElementFactory::make("playbin3")
+        crate::diag::logcat_info("build_pipeline: creating playbin3");
+        let playbin = gst::ElementFactory::make("playbin3")
         .build()
         .map_err(|_| anyhow!("failed to create playbin3 (is gst-plugins-base installed?)"))?;
 

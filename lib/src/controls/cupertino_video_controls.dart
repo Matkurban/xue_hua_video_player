@@ -75,114 +75,117 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls>
           left: 8,
           right: 8,
           bottom: 8,
-          child: GlassCard(
-            width: size.width - 16,
-            padding: theme.barPadding,
-            child: Row(
-              children: [
-                SignalBuilder(
-                  builder: (context) => IconButton(
-                    onPressed: () {
-                      widget.onInteract();
-                      controller.toggleMuted();
-                    },
-                    style: IconButton.styleFrom(
-                      tapTargetSize: .shrinkWrap,
-                      visualDensity: .compact,
-                    ),
-                    icon: Icon(
-                      controller.muted.value || controller.volume.value == 0
-                          ? CupertinoIcons.volume_off
-                          : CupertinoIcons.volume_up,
-                      size: theme.secondaryIconSize,
-                      color: theme.iconColor,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SignalBuilder(
-                  builder: (context) => Text(
-                    formatDuration(controller.position.value),
-                    style: TextStyle(color: theme.textColor, fontSize: 12),
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: SignalBuilder(
-                      builder: (context) {
-                        final dur = controller.duration.value.inMilliseconds
-                            .toDouble();
-                        final pos = controller.position.value.inMilliseconds
-                            .toDouble();
-                        final value = sliderValue(dur, pos);
-                        Widget buildSlider(double v) {
-                          return GlassSlider(
-                            value: v,
-                            activeColor: theme.activeTrackColor,
-                            thumbColor: theme.thumbColor,
-                            onChanged: (v) => onSeekChanged(v, dur),
-                            onChangeEnd: dur > 0
-                                ? (v) => onSeekEnd(v, dur)
-                                : null,
-                          );
-                        }
-
-                        if (isScrubbing) {
-                          return buildSlider(value);
-                        }
-                        return TweenAnimationBuilder<double>(
-                          tween: Tween<double>(end: value),
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.linear,
-                          builder: (context, animatedValue, child) =>
-                              buildSlider(animatedValue),
-                        );
+          child: SafeArea(
+            top: false,
+            child: GlassCard(
+              width: size.width - 16,
+              padding: theme.barPadding,
+              child: Row(
+                children: [
+                  SignalBuilder(
+                    builder: (context) => IconButton(
+                      onPressed: () {
+                        widget.onInteract();
+                        controller.toggleMuted();
                       },
-                    ),
-                  ),
-                ),
-                SignalBuilder(
-                  builder: (context) => Text(
-                    formatDuration(controller.duration.value),
-                    style: TextStyle(color: theme.textColor, fontSize: 12),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SignalBuilder(
-                  builder: (context) => IconButton(
-                    onPressed: () async {
-                      widget.onInteract();
-                      await controller.setLooping(!controller.looping.value);
-                    },
-                    style: IconButton.styleFrom(
-                      tapTargetSize: .shrinkWrap,
-                      visualDensity: .compact,
-                    ),
-                    icon: Icon(
-                      CupertinoIcons.repeat,
-                      size: theme.secondaryIconSize,
-                      color: controller.looping.value
-                          ? theme.iconColor
-                          : theme.iconColor.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: _showSpeedSheet,
-                  child: SignalBuilder(
-                    builder: (context) => Text(
-                      '${controller.speed.value}x',
-                      style: TextStyle(
+                      style: IconButton.styleFrom(
+                        tapTargetSize: .shrinkWrap,
+                        visualDensity: .compact,
+                      ),
+                      icon: Icon(
+                        controller.muted.value || controller.volume.value == 0
+                            ? CupertinoIcons.volume_off
+                            : CupertinoIcons.volume_up,
+                        size: theme.secondaryIconSize,
                         color: theme.iconColor,
-                        fontSize: theme.secondaryIconSize * 0.7,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  SignalBuilder(
+                    builder: (context) => Text(
+                      formatDuration(controller.position.value),
+                      style: TextStyle(color: theme.textColor, fontSize: 12),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: SignalBuilder(
+                        builder: (context) {
+                          final dur = controller.duration.value.inMilliseconds
+                              .toDouble();
+                          final pos = controller.position.value.inMilliseconds
+                              .toDouble();
+                          final value = sliderValue(dur, pos);
+                          Widget buildSlider(double v) {
+                            return GlassSlider(
+                              value: v,
+                              activeColor: theme.activeTrackColor,
+                              thumbColor: theme.thumbColor,
+                              onChanged: (v) => onSeekChanged(v, dur),
+                              onChangeEnd: dur > 0
+                                  ? (v) => onSeekEnd(v, dur)
+                                  : null,
+                            );
+                          }
+
+                          if (isScrubbing) {
+                            return buildSlider(value);
+                          }
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween<double>(end: value),
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.linear,
+                            builder: (context, animatedValue, child) =>
+                                buildSlider(animatedValue),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  SignalBuilder(
+                    builder: (context) => Text(
+                      formatDuration(controller.duration.value),
+                      style: TextStyle(color: theme.textColor, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SignalBuilder(
+                    builder: (context) => IconButton(
+                      onPressed: () async {
+                        widget.onInteract();
+                        await controller.setLooping(!controller.looping.value);
+                      },
+                      style: IconButton.styleFrom(
+                        tapTargetSize: .shrinkWrap,
+                        visualDensity: .compact,
+                      ),
+                      icon: Icon(
+                        CupertinoIcons.repeat,
+                        size: theme.secondaryIconSize,
+                        color: controller.looping.value
+                            ? theme.iconColor
+                            : theme.iconColor.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: _showSpeedSheet,
+                    child: SignalBuilder(
+                      builder: (context) => Text(
+                        '${controller.speed.value}x',
+                        style: TextStyle(
+                          color: theme.iconColor,
+                          fontSize: theme.secondaryIconSize * 0.7,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

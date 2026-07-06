@@ -16,6 +16,6 @@
             android:name="com.flutter_rust_bridge.xue_hua_video_player.GStreamerInitProvider"
             android:authorities="${applicationId}.xhvp.gstreamer-init"
             android:exported="false"
-            android:initOrder="100" />
+            android:initOrder="199" />
     </application>
 </manifest>

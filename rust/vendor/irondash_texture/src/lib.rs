@@ -41,9 +41,25 @@ impl<Type> Texture<Type> {
     /// Converts Texture to a SendableTexture. SendableTexture can be
     /// sent between threads and update the content on any thread.
     pub fn into_sendable_texture(self) -> Arc<SendableTexture<Type>> {
+        let sender = if RunLoop::is_main_thread().unwrap_or(false) {
+            RunLoop::sender_for_main_thread().unwrap_or_else(|_| RunLoop::current().new_sender())
+        } else {
+            RunLoop::current().new_sender()
+        };
+        self.into_sendable_texture_with_sender(sender)
+    }
+
+    /// Like [`into_sendable_texture`](Self::into_sendable_texture), but uses a caller-
+    /// supplied sender. On Android, pass a `MainThreadSender` obtained from a background
+    /// thread so texture creation on the platform main thread never calls
+    /// `RunLoop::current()`.
+    pub fn into_sendable_texture_with_sender(
+        self,
+        sender: RunLoopSender,
+    ) -> Arc<SendableTexture<Type>> {
         Arc::new(SendableTexture {
-            sender: RunLoop::current().new_sender(),
-            texture: Mutex::new(Capsule::new(self)),
+            sender: sender.clone(),
+            texture: Mutex::new(Capsule::new_with_sender(self, sender)),
         })
     }
 }
@@ -254,14 +270,20 @@ impl<T> SendableTexture<T> {
     pub fn mark_frame_available(self: &Arc<Self>) {
         if self.sender.is_same_thread() {
             let texture = self.texture.lock().unwrap();
-            let texture = texture.get_ref().unwrap();
-            texture.mark_frame_available().ok_log();
+            if let Ok(tex) = texture.get_ref() {
+                tex.mark_frame_available().ok_log();
+            } else {
+                ::log::error!("mark_frame_available on wrong thread or empty capsule");
+            }
         } else {
             let texture_clone = self.clone();
             self.sender.send(move || {
                 let texture = texture_clone.texture.lock().unwrap();
-                let texture = texture.get_ref().unwrap();
-                texture.mark_frame_available().ok_log();
+                if let Ok(tex) = texture.get_ref() {
+                    tex.mark_frame_available().ok_log();
+                } else {
+                    ::log::error!("mark_frame_available on wrong thread or empty capsule");
+                }
             });
         }
     }

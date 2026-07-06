@@ -1558,6 +1558,7 @@ dependencies = [
  "irondash_engine_context",
  "irondash_run_loop",
  "irondash_texture",
+ "jni",
  "log",
  "once_cell",
  "parking_lot",

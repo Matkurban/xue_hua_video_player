@@ -47,142 +47,145 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
           left: 0,
           right: 0,
           bottom: 0,
-          child: Container(
-            padding: theme.barPadding,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [
-                  theme.backgroundColor,
-                  theme.backgroundColor.withValues(alpha: 0),
-                ],
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: theme.activeTrackColor,
-                    inactiveTrackColor: theme.inactiveTrackColor,
-                    thumbColor: theme.thumbColor,
-                    secondaryActiveTrackColor: theme.bufferedTrackColor,
-                    trackHeight: 3,
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 12,
-                    ),
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
-                    ),
-                  ),
-                  child: SignalBuilder(
-                    builder: (context) {
-                      final dur = controller.duration.value.inMilliseconds
-                          .toDouble();
-                      final pos = controller.position.value.inMilliseconds
-                          .toDouble();
-                      final value = sliderValue(dur, pos);
-                      Widget buildSlider(double v) {
-                        return Slider(
-                          value: v,
-                          onChanged: (v) => onSeekChanged(v, dur),
-                          onChangeEnd: dur > 0
-                              ? (v) => onSeekEnd(v, dur)
-                              : null,
-                        );
-                      }
-
-                      if (isScrubbing) {
-                        return buildSlider(value);
-                      }
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween<double>(end: value),
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.linear,
-                        builder: (context, animatedValue, child) =>
-                            buildSlider(animatedValue),
-                      );
-                    },
-                  ),
+          child: SafeArea(
+            top: false,
+            child: Container(
+              padding: theme.barPadding,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    theme.backgroundColor,
+                    theme.backgroundColor.withValues(alpha: 0),
+                  ],
                 ),
-                Row(
-                  children: [
-                    SignalBuilder(
-                      builder: (context) => Text(
-                        '${formatDuration(controller.position.value)} / ${formatDuration(controller.duration.value)}',
-                        style: TextStyle(color: theme.textColor, fontSize: 12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: theme.activeTrackColor,
+                      inactiveTrackColor: theme.inactiveTrackColor,
+                      thumbColor: theme.thumbColor,
+                      secondaryActiveTrackColor: theme.bufferedTrackColor,
+                      trackHeight: 3,
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 12,
+                      ),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
                       ),
                     ),
-                    const Spacer(),
-                    SignalBuilder(
-                      builder: (context) => IconButton(
-                        style: IconButton.styleFrom(
-                          tapTargetSize: .shrinkWrap,
-                          visualDensity: .compact,
-                        ),
-                        color: theme.iconColor,
-                        icon: Icon(
-                          controller.muted.value || controller.volume.value == 0
-                              ? Icons.volume_off
-                              : Icons.volume_up,
-                          size: theme.secondaryIconSize,
-                        ),
-                        onPressed: () {
-                          widget.onInteract();
-                          controller.toggleMuted();
-                        },
-                      ),
-                    ),
-                    SignalBuilder(
-                      builder: (context) => IconButton(
-                        style: IconButton.styleFrom(
-                          tapTargetSize: .shrinkWrap,
-                          visualDensity: .compact,
-                        ),
-                        color: controller.looping.value
-                            ? theme.iconColor
-                            : theme.iconColor.withValues(alpha: 0.5),
-                        icon: Icon(Icons.loop, size: theme.secondaryIconSize),
-                        onPressed: () async {
-                          widget.onInteract();
-                          await controller.setLooping(
-                            !controller.looping.value,
+                    child: SignalBuilder(
+                      builder: (context) {
+                        final dur = controller.duration.value.inMilliseconds
+                            .toDouble();
+                        final pos = controller.position.value.inMilliseconds
+                            .toDouble();
+                        final value = sliderValue(dur, pos);
+                        Widget buildSlider(double v) {
+                          return Slider(
+                            value: v,
+                            onChanged: (v) => onSeekChanged(v, dur),
+                            onChangeEnd: dur > 0
+                                ? (v) => onSeekEnd(v, dur)
+                                : null,
                           );
-                        },
-                      ),
+                        }
+            
+                        if (isScrubbing) {
+                          return buildSlider(value);
+                        }
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween<double>(end: value),
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.linear,
+                          builder: (context, animatedValue, child) =>
+                              buildSlider(animatedValue),
+                        );
+                      },
                     ),
-                    SignalBuilder(
-                      builder: (context) => PopupMenuButton<double>(
-                        tooltip: 'Playback speed',
-                        initialValue: controller.speed.value,
-                        onSelected: (v) {
-                          widget.onInteract();
-                          controller.setSpeed(v);
-                        },
-                        itemBuilder: (context) => [
-                          for (final s in speeds)
-                            PopupMenuItem<double>(
-                              value: s,
-                              child: Text('${s}x'),
-                            ),
-                        ],
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            '${controller.speed.value}x',
-                            style: TextStyle(
-                              color: theme.iconColor,
-                              fontSize: theme.secondaryIconSize * 0.7,
-                              fontWeight: FontWeight.w600,
+                  ),
+                  Row(
+                    children: [
+                      SignalBuilder(
+                        builder: (context) => Text(
+                          '${formatDuration(controller.position.value)} / ${formatDuration(controller.duration.value)}',
+                          style: TextStyle(color: theme.textColor, fontSize: 12),
+                        ),
+                      ),
+                      const Spacer(),
+                      SignalBuilder(
+                        builder: (context) => IconButton(
+                          style: IconButton.styleFrom(
+                            tapTargetSize: .shrinkWrap,
+                            visualDensity: .compact,
+                          ),
+                          color: theme.iconColor,
+                          icon: Icon(
+                            controller.muted.value || controller.volume.value == 0
+                                ? Icons.volume_off
+                                : Icons.volume_up,
+                            size: theme.secondaryIconSize,
+                          ),
+                          onPressed: () {
+                            widget.onInteract();
+                            controller.toggleMuted();
+                          },
+                        ),
+                      ),
+                      SignalBuilder(
+                        builder: (context) => IconButton(
+                          style: IconButton.styleFrom(
+                            tapTargetSize: .shrinkWrap,
+                            visualDensity: .compact,
+                          ),
+                          color: controller.looping.value
+                              ? theme.iconColor
+                              : theme.iconColor.withValues(alpha: 0.5),
+                          icon: Icon(Icons.loop, size: theme.secondaryIconSize),
+                          onPressed: () async {
+                            widget.onInteract();
+                            await controller.setLooping(
+                              !controller.looping.value,
+                            );
+                          },
+                        ),
+                      ),
+                      SignalBuilder(
+                        builder: (context) => PopupMenuButton<double>(
+                          tooltip: 'Playback speed',
+                          initialValue: controller.speed.value,
+                          onSelected: (v) {
+                            widget.onInteract();
+                            controller.setSpeed(v);
+                          },
+                          itemBuilder: (context) => [
+                            for (final s in speeds)
+                              PopupMenuItem<double>(
+                                value: s,
+                                child: Text('${s}x'),
+                              ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              '${controller.speed.value}x',
+                              style: TextStyle(
+                                color: theme.iconColor,
+                                fontSize: theme.secondaryIconSize * 0.7,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

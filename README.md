@@ -270,9 +270,60 @@ if the crash disappears, the keep rules above are the fix.
 **v1.0.9+** hardens the SurfaceProducer path: no silent fallback to legacy
 `createSurfaceTexture()` when `createSurfaceProducer()` is available, deferred
 `ANativeWindow` acquisition until the first frame, and a lifecycle callback for
-surface teardown. Upgrade to **1.0.9**, run `flutter clean`, and ensure the APK
+surface teardown. Upgrade to **1.0.10+**, run `flutter clean`, and ensure the APK
 contains a fresh `libxue_hua_video_player.so` (precompiled binaries must match
 the new `crate-hash`). Logcat should show `irondash_texture: using surface_producer path`.
+
+**v1.0.19+** fixes Android SIGABRT by adopting the GStreamer Android tutorial
+thread model: a dedicated `xhvp-gst` thread with an **owned** `GMainContext`
+(`MainContext::new()`, not `default()`), `MainLoop::run()`, and all pipeline
+operations (`create_player`, `set_uri`, play/pause/seek, bus watch) marshalled
+onto that thread. Reverts v1.0.18's harmful `g_main_context_default()` loop and
+OpenSSL TLS re-registration (which caused `GTlsBackendOpenssl` duplicate errors
+and `xhvp-glib` SIGABRT). Flutter texture creation stays on the Android main
+thread. Network `https://` still plays via `playbin3` / `souphttpsrc` (no disk
+download).
+
+**v1.0.18** (superseded by 1.0.19) attempted a default-context `GMainLoop`; do
+not use.
+
+**v1.0.17+** streams network `http(s)://` URIs directly through GStreamer
+(`playbin3` / `souphttpsrc`); the plugin does **not** download to disk first.
+
+**v1.0.16+** when `gst_is_initialized()` is already true: syncs gstreamer-rs state
+and does **not** call GLib thread-default APIs on the Flutter main thread.
+Prefer a ready `localPath` from your media layer when available.
+
+**v1.0.11+** runs the entire `create_player` path on the Android main thread (fixes
+crashes when FRB calls from a worker thread) and no longer calls
+`android_logger::init_once` (safe alongside host SDKs such as `xue_hua_sdk` that
+already own the global `log` logger). Panics are written via `__android_log_write`
+(`xue_hua_video_player` tag).
+
+**v1.0.10+** additionally hardens frame upload (no `assert!` on buffer size
+mismatch), refreshes `ANativeWindow` in `onSurfaceAvailable`, and logs Rust panic
+backtraces to logcat (`xue_hua_video_player` tag). If the app still crashes,
+build locally with `use_precompiled_binaries: false` (see
+[`example/android/cargokit_options.yaml`](example/android/cargokit_options.yaml))
+and symbolicate with [`scripts/symbolicate_android_tombstone.sh`](scripts/symbolicate_android_tombstone.sh).
+
+### Consumer integration checklist (e.g. chat / IM apps)
+
+If `create_player` crashes right after `irondash_texture: using surface_producer path`:
+
+1. **Plugin version** — use **1.0.19+** (or **1.0.10+** minimum) and run `flutter clean` / full reinstall so
+   the APK contains a matching `libxue_hua_video_player.so` (not an older
+   precompiled artifact).
+2. **Initialization order** — `XueHuaVideoPlayer.initialize()` →
+   `controller.initialize()` → wait until media is on disk → `open(...)`.
+   Do not call `open` with an empty or missing `file://` path while
+   `localPath` is still empty.
+3. **`engine_handle`** — must come from `EngineContext.instance.getEngineHandle()`
+   on the same Flutter engine that hosts the `Texture` widget.
+4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR
+   (`consumerProguardFiles`); see [`android/proguard-rules.pro`](android/proguard-rules.pro).
+5. **Diagnosis** — filter logcat for `xue_hua_video_player` and `PANIC:` after
+   upgrading to 1.0.10; use the symbolication script above if needed.
 
 ### iOS
 
