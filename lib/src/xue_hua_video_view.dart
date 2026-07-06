@@ -63,6 +63,15 @@ class XueHuaVideoView extends StatelessWidget {
                             buildXueHuaVideoPlatformView(playerId: playerId),
                             SignalBuilder(
                               builder: (context) {
+                                final videoSize = controller.videoSize.value;
+                                if (videoSize.width <= 0 || videoSize.height <= 0) {
+                                  return const ColoredBox(color: Colors.black);
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                            SignalBuilder(
+                              builder: (context) {
                                 final buffering =
                                     controller.bufferingPercent.value;
                                 final state = controller.state.value;

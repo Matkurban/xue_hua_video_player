@@ -1,5 +1,5 @@
-//! Dedicated GStreamer thread with an owned `GMainContext` (GStreamer Android
-//! tutorial model). All pipeline operations must run on this thread.
+//! Dedicated GStreamer thread with an owned `GMainContext` (GStreamer application
+//! model). All pipeline operations must run on this thread.
 
 use std::sync::mpsc;
 use std::sync::Once;
@@ -33,15 +33,9 @@ pub fn ensure_gst_runtime() {
 }
 
 fn gst_runtime_thread_main(ready_tx: mpsc::SyncSender<()>) {
+    #[cfg(target_os = "android")]
     let _ = crate::platform_view_android::attach_java_vm();
 
-    // GLib's `g_main_context_push_thread_default` uses a static `GPrivate`
-    // that lazily calls `pthread_key_create` on first access.  If `gst_init`
-    // (which bootstraps GLib threading) hasn't run yet — or if the Java-side
-    // `GStreamerInitProvider` failed silently — the call can abort with
-    // "Unexpected error from C library during 'pthread_key_create'".
-    // Calling `gst::init()` here (idempotent) guarantees the GLib thread
-    // system is ready before we touch any GLib / GMainContext API.
     if let Err(e) = gstreamer::init() {
         crate::diag::logcat_error(&format!(
             "gst: gst::init() on gst thread failed: {e} — continuing anyway"
@@ -62,11 +56,16 @@ fn gst_runtime_thread_main(ready_tx: mpsc::SyncSender<()>) {
     main_loop.run();
 }
 
-fn gst_context() -> Result<&'static MainContext> {
+/// Returns the owned `MainContext` driven by the `xhvp-gst` thread's `MainLoop`.
+pub fn gst_main_context() -> Result<&'static MainContext> {
     ensure_gst_runtime();
     GST_CONTEXT
         .get()
         .ok_or_else(|| anyhow!("Gst runtime context not ready"))
+}
+
+fn gst_context() -> Result<&'static MainContext> {
+    gst_main_context()
 }
 
 /// Schedules `f` on the Gst thread (fire-and-forget).

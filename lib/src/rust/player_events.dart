@@ -7,32 +7,14 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// A flat event struct pushed to Dart over a broadcast stream.
-///
-/// Modeled as a struct (rather than a data-carrying enum) so the generated Dart
-/// bindings stay dependency-free (no `freezed`). Only the fields relevant to
-/// `kind` are populated; others hold defaults.
 class PlayerEvent {
   final PlayerEventKind kind;
-
-  /// Milliseconds (for `PositionChanged`).
   final PlatformInt64 positionMs;
-
-  /// Milliseconds (for `DurationChanged`).
   final PlatformInt64 durationMs;
-
-  /// Pixels (for `VideoSize`).
   final int width;
-
-  /// Pixels (for `VideoSize`).
   final int height;
-
-  /// 0-100 (for `Buffering`).
   final int bufferingPercent;
-
-  /// New state (for `StateChanged`).
   final PlayerState state;
-
-  /// Human-readable message (for `Error`).
   final String message;
 
   const PlayerEvent({

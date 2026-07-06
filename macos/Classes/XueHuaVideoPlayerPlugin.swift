@@ -52,7 +52,8 @@ final class XueHuaVideoPlatformView: NSView {
     super.init(frame: frame)
     wantsLayer = true
 
-    videoHostView.wantsLayer = false
+    videoHostView.wantsLayer = true
+    videoHostView.layer?.backgroundColor = NSColor.black.cgColor
     videoHostView.autoresizingMask = [.width, .height]
     addSubview(videoHostView)
   }

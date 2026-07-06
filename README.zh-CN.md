@@ -135,8 +135,7 @@ await controller.open(const VideoSource.file('/path/to/video.mp4'));
 await controller.open(const VideoSource.asset('assets/sample.mp4'));
 ```
 
-首次使用资源（asset）时会把它复制到临时文件，因为 GStreamer 只能读取文件系统路径和
-URL，无法直接读取 Flutter 资源包。
+打包资源由 Rust 通过 `AppSrc` 从 `flutter_assets` 推流，无需复制到临时文件。
 
 ## 在应用中集成（请先阅读）
 

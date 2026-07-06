@@ -4,7 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
-import '../player.dart';
+import '../player_events.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `get_player`
@@ -12,6 +12,39 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// Creates a new GStreamer-backed player.
 Future<PlayerHandle> createPlayer() =>
     RustLib.instance.api.crateApiPlayerCreatePlayer();
+
+/// macOS: synchronously records the NSView handle for bus sync / rebind.
+Future<void> cacheMacosOverlayHandle({
+  required PlatformInt64 playerId,
+  required PlatformInt64 viewPtr,
+}) => RustLib.instance.api.crateApiPlayerCacheMacosOverlayHandle(
+  playerId: playerId,
+  viewPtr: viewPtr,
+);
+
+/// macOS: applies the cached NSView handle to the GStreamer sink (main thread).
+Future<void> applyMacosOverlayGstreamer({
+  required PlatformInt64 playerId,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerApplyMacosOverlayGstreamer(
+  playerId: playerId,
+  width: width,
+  height: height,
+);
+
+/// macOS: records the target `NSView` handle (apply via Swift main-thread dispatch).
+Future<void> syncMacosVideoLayer({
+  required PlatformInt64 playerId,
+  required PlatformInt64 viewPtr,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerSyncMacosVideoLayer(
+  playerId: playerId,
+  viewPtr: viewPtr,
+  width: width,
+  height: height,
+);
 
 /// Binds a native window/surface handle to the player's VideoOverlay sink.
 Future<void> setVideoOverlayWindow({
@@ -34,6 +67,15 @@ Future<void> playerSetSource({
 }) => RustLib.instance.api.crateApiPlayerPlayerSetSource(
   playerId: playerId,
   uri: uri,
+);
+
+/// Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
+Future<void> playerSetAssetSource({
+  required PlatformInt64 playerId,
+  required String assetKey,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetAssetSource(
+  playerId: playerId,
+  assetKey: assetKey,
 );
 
 Future<void> playerPlay({required PlatformInt64 playerId}) =>

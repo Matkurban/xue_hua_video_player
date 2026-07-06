@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 
 use crate::frb_generated::StreamSink;
 use crate::player::GstPlayer;
-pub use crate::player::{PlayerEvent, PlayerEventKind, PlayerState};
+pub use crate::player_events::{PlayerEvent, PlayerEventKind, PlayerState};
 
 static PLAYERS: Lazy<Mutex<HashMap<i64, Arc<GstPlayer>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -41,7 +41,9 @@ pub fn create_player() -> Result<PlayerHandle> {
     if let Some(handle) = PENDING_OVERLAYS.lock().remove(&player_id) {
         #[cfg(target_os = "macos")]
         get_player(player_id)?.cache_macos_overlay_handle(handle);
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "android")]
+        get_player(player_id)?.notify_android_surface(handle, 0, 0)?;
+        #[cfg(not(any(target_os = "macos", target_os = "android")))]
         get_player(player_id)?.set_video_overlay_window(handle)?;
     }
     Ok(PlayerHandle { player_id })
@@ -67,10 +69,24 @@ pub fn cache_macos_overlay_handle(player_id: i64, view_ptr: i64) -> Result<()> {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
+pub fn cache_macos_overlay_handle(_player_id: i64, _view_ptr: i64) -> Result<()> {
+    Ok(())
+}
+
 /// macOS: applies the cached NSView handle to the GStreamer sink (main thread).
 #[cfg(target_os = "macos")]
 pub fn apply_macos_overlay_gstreamer(player_id: i64, width: i32, height: i32) -> Result<()> {
     get_player(player_id)?.apply_macos_overlay_gstreamer(width, height)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn apply_macos_overlay_gstreamer(
+    _player_id: i64,
+    _width: i32,
+    _height: i32,
+) -> Result<()> {
+    Ok(())
 }
 
 /// macOS: records the target `NSView` handle (apply via Swift main-thread dispatch).
@@ -82,6 +98,16 @@ pub fn sync_macos_video_layer(
     _height: i32,
 ) -> Result<()> {
     cache_macos_overlay_handle(player_id, view_ptr)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn sync_macos_video_layer(
+    _player_id: i64,
+    _view_ptr: i64,
+    _width: i32,
+    _height: i32,
+) -> Result<()> {
+    Ok(())
 }
 
 /// Binds a native window/surface handle to the player's VideoOverlay sink.
@@ -99,6 +125,38 @@ pub fn set_video_overlay_window(player_id: i64, window_handle: i64) -> Result<()
     }
 }
 
+/// Android: caches `ANativeWindow` on the JNI thread and applies VideoOverlay on
+/// `xhvp-gst` without blocking the Android main thread.
+#[cfg(target_os = "android")]
+pub fn notify_android_surface(
+    player_id: i64,
+    handle: i64,
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    match get_player(player_id) {
+        Ok(player) => {
+            PENDING_OVERLAYS.lock().remove(&player_id);
+            player.notify_android_surface(handle, width, height)
+        }
+        Err(_) if handle != 0 => {
+            PENDING_OVERLAYS.lock().insert(player_id, handle);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn notify_android_surface(
+    _player_id: i64,
+    _handle: i64,
+    _width: i32,
+    _height: i32,
+) -> Result<()> {
+    Ok(())
+}
+
 /// Subscribes to the player's event stream (state, position, duration, size,
 /// buffering, EOS, errors). Should be called once right after `create_player`.
 pub fn player_event_stream(player_id: i64, sink: StreamSink<PlayerEvent>) -> Result<()> {
@@ -112,6 +170,11 @@ pub fn player_event_stream(player_id: i64, sink: StreamSink<PlayerEvent>) -> Res
 /// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.
 pub fn player_set_source(player_id: i64, uri: String) -> Result<()> {
     get_player(player_id)?.set_uri(&uri)
+}
+
+/// Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
+pub fn player_set_asset_source(player_id: i64, asset_key: String) -> Result<()> {
+    get_player(player_id)?.set_asset_source(&asset_key)
 }
 
 pub fn player_play(player_id: i64) -> Result<()> {

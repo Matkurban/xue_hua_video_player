@@ -22,15 +22,26 @@ pub fn video_sink_factory_name() -> &'static str {
     }
 }
 
+fn configure_video_sink(element: &gst::Element) {
+    if element.find_property("force-aspect-ratio").is_some() {
+        element.set_property("force-aspect-ratio", true);
+    }
+}
+
 /// Creates the platform-recommended video sink (`glimagesink` or `d3d11videosink`).
 pub fn create_platform_video_sink() -> Result<gst::Element> {
     let name = video_sink_factory_name();
-    gst::ElementFactory::make(name)
+    let sink = gst::ElementFactory::make(name)
         .build()
-        .map_err(|e| anyhow!("failed to create {name}: {e}"))
+        .map_err(|e| anyhow!("failed to create {name}: {e}"))?;
+    configure_video_sink(&sink);
+    Ok(sink)
 }
 
 /// Binds a native window/surface handle to a VideoOverlay-capable sink.
+///
+/// Does not call `expose` — callers should expose only after the first video frame
+/// or when the render rectangle is known (avoids green/clear framebuffer flash).
 pub fn set_overlay_window_handle(video_sink: &gst::Element, handle: usize) -> Result<()> {
     let overlay = video_sink
         .clone()
@@ -39,10 +50,6 @@ pub fn set_overlay_window_handle(video_sink: &gst::Element, handle: usize) -> Re
     unsafe {
         overlay.set_window_handle(handle);
     }
-    if handle != 0 {
-        overlay.expose();
-        overlay.expose();
-    }
     Ok(())
 }
 
@@ -50,8 +57,6 @@ fn bind_overlay_element(overlay: &gst_video::VideoOverlay, handle: usize) {
     unsafe {
         overlay.set_window_handle(handle);
     }
-    overlay.expose();
-    overlay.expose();
 }
 
 /// Clears the overlay window handle (surface destroyed).
@@ -93,12 +98,12 @@ pub fn bus_sync_reply_for_overlay_message(
         return gst::BusSyncReply::Pass;
     }
     let Some(handle) = cached_handle else {
-        log::error!("prepare-window-handle received but no overlay handle is cached yet");
-        return gst::BusSyncReply::Drop;
+        log::warn!("prepare-window-handle received but no overlay handle is cached yet");
+        return gst::BusSyncReply::Pass;
     };
     if let Some(src) = msg.src() {
         if let Ok(overlay) = src.clone().dynamic_cast::<gst_video::VideoOverlay>() {
-            log::debug!("prepare-window-handle: binding overlay handle {handle:#x}");
+            log::info!("prepare-window-handle: binding overlay handle {handle:#x}");
             bind_overlay_element(&overlay, handle);
         }
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 /// Platform view type registered by native plugin code.
@@ -15,11 +16,35 @@ Widget buildXueHuaVideoPlatformView({required int playerId}) {
   const paramsCodec = StandardMessageCodec();
 
   if (defaultTargetPlatform == TargetPlatform.android) {
-    return AndroidView(
-      viewType: kXueHuaVideoViewType,
-      creationParams: creationParams,
-      creationParamsCodec: paramsCodec,
-      gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+    return Builder(
+      builder: (context) {
+        final layoutDirection =
+            Directionality.maybeOf(context) ?? TextDirection.ltr;
+        return PlatformViewLink(
+          viewType: kXueHuaVideoViewType,
+          surfaceFactory:
+              (BuildContext context, PlatformViewController controller) {
+            return AndroidViewSurface(
+              controller: controller as AndroidViewController,
+              gestureRecognizers:
+                  const <Factory<OneSequenceGestureRecognizer>>{},
+              hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+            );
+          },
+          onCreatePlatformView: (PlatformViewCreationParams params) {
+            return PlatformViewsService.initSurfaceAndroidView(
+                id: params.id,
+                viewType: kXueHuaVideoViewType,
+                layoutDirection: layoutDirection,
+                creationParams: creationParams,
+                creationParamsCodec: paramsCodec,
+                onFocus: () => params.onFocusChanged(true),
+              )
+              ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+              ..create();
+          },
+        );
+      },
     );
   }
   if (defaultTargetPlatform == TargetPlatform.iOS) {

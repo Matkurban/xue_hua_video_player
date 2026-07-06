@@ -18,10 +18,6 @@ public class XueHuaVideoPlatformView implements PlatformView, SurfaceHolder.Call
     private final SurfaceView surfaceView;
     private final long playerId;
 
-    static {
-        System.loadLibrary("xue_hua_video_player");
-    }
-
     public XueHuaVideoPlatformView(Context context, long playerId) {
         this.playerId = playerId;
         this.surfaceView = new SurfaceView(context);
@@ -57,7 +53,7 @@ public class XueHuaVideoPlatformView implements PlatformView, SurfaceHolder.Call
     ) {
         Surface surface = holder.getSurface();
         if (surface != null) {
-            nativeOnSurfaceChanged(playerId, surface);
+            nativeOnSurfaceChanged(playerId, surface, width, height);
         }
     }
 
@@ -68,7 +64,12 @@ public class XueHuaVideoPlatformView implements PlatformView, SurfaceHolder.Call
 
     private static native void nativeOnSurfaceCreated(long playerId, Surface surface);
 
-    private static native void nativeOnSurfaceChanged(long playerId, Surface surface);
+    private static native void nativeOnSurfaceChanged(
+        long playerId,
+        Surface surface,
+        int width,
+        int height
+    );
 
     private static native void nativeOnSurfaceDestroyed(long playerId);
 }

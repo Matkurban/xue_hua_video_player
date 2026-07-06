@@ -140,8 +140,7 @@ await controller.open(const VideoSource.file('/path/to/video.mp4'));
 await controller.open(const VideoSource.asset('assets/sample.mp4'));
 ```
 
-Assets are copied to a temporary file on first use because GStreamer can only
-read filesystem paths and URLs, not the Flutter asset bundle.
+Bundled assets are streamed from Rust via `AppSrc` (no Dart-side temp-file copy).
 
 ## Integrating into your app (read this first)
 

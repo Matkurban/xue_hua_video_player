@@ -1,16 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
 import 'enum/video_source_type.dart';
 import 'rust/api/player.dart' as rust;
-import 'rust/player.dart';
+import 'rust/player_events.dart';
 import 'model/video_source.dart';
 
-export 'rust/player.dart' show PlayerState, PlayerEvent, PlayerEventKind;
+export 'rust/player_events.dart' show PlayerState, PlayerEvent, PlayerEventKind;
 export 'model/video_source.dart';
 
 /// Drives a single GStreamer-backed video player living in Rust and exposes its
@@ -169,8 +167,7 @@ class XueHuaPlayerController {
   }
 
   /// Loads [source]. Pass a [VideoSource] describing a network URL, a local
-  /// file, or a bundled asset; assets are copied to a temporary file first
-  /// since GStreamer can only read files and URLs.
+  /// file, or a bundled Flutter asset (streamed via AppSrc in Rust).
   Future<void> open(VideoSource source, {bool autoPlay = false}) async {
     batch(() {
       _error.value = null;
@@ -179,8 +176,17 @@ class XueHuaPlayerController {
       _state.value = PlayerState.buffering;
     });
     await _guard(() async {
-      final uri = await _resolveGstUri(source);
-      await rust.playerSetSource(playerId: _id, uri: uri);
+      switch (source.type) {
+        case VideoSourceType.asset:
+          await rust.playerSetAssetSource(
+            playerId: _id,
+            assetKey: source.uri.trim(),
+          );
+        case VideoSourceType.network:
+        case VideoSourceType.file:
+          final uri = _resolveGstUri(source);
+          await rust.playerSetSource(playerId: _id, uri: uri);
+      }
       if (autoPlay) await rust.playerPlay(playerId: _id);
     });
   }
@@ -259,8 +265,8 @@ class XueHuaPlayerController {
     _initialized.dispose();
   }
 
-  /// Turns a [VideoSource] into a URI GStreamer can open.
-  static Future<String> _resolveGstUri(VideoSource source) async {
+  /// Turns a network or file [VideoSource] into a URI GStreamer can open.
+  static String _resolveGstUri(VideoSource source) {
     switch (source.type) {
       case VideoSourceType.network:
         return source.uri.trim();
@@ -272,26 +278,7 @@ class XueHuaPlayerController {
         }
         return Uri.file(trimmed).toString();
       case VideoSourceType.asset:
-        final file = await _materializeAsset(source.uri);
-        return Uri.file(file.path).toString();
+        throw StateError('asset sources use playerSetAssetSource, not URI');
     }
-  }
-
-  /// Copies a Flutter asset to a cached temp file so GStreamer can read it,
-  /// reusing the existing file when its byte length already matches.
-  static Future<File> _materializeAsset(String assetKey) async {
-    final data = await rootBundle.load(assetKey);
-    final bytes = data.buffer.asUint8List(
-      data.offsetInBytes,
-      data.lengthInBytes,
-    );
-    final dir = Directory('${Directory.systemTemp.path}/xhvp_assets');
-    await dir.create(recursive: true);
-    final name = assetKey.replaceAll(RegExp(r'[^\w.]+'), '_');
-    final file = File('${dir.path}/$name');
-    if (!file.existsSync() || file.lengthSync() != bytes.length) {
-      await file.writeAsBytes(bytes, flush: true);
-    }
-    return file;
   }
 }

@@ -25,9 +25,9 @@ class CenterButton extends StatelessWidget {
         builder: (context) {
           final PlayerState state = controller.state.value;
           if (state == PlayerState.buffering) {
-            return CupertinoActivityIndicator(
-              color: theme.iconColor,
-              radius: theme.primaryIconSize / 2.4,
+            return SizedBox(
+              width: theme.primaryIconSize,
+              height: theme.primaryIconSize,
             );
           }
           final playing = state == PlayerState.playing;

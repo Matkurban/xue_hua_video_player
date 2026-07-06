@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -943445919;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -2097021269;
 
 // Section: executor
 
@@ -46,6 +46,86 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__player__apply_macos_overlay_gstreamer_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "apply_macos_overlay_gstreamer",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            let api_width = <i32>::sse_decode(&mut deserializer);
+            let api_height = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::player::apply_macos_overlay_gstreamer(
+                            api_player_id,
+                            api_width,
+                            api_height,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__player__cache_macos_overlay_handle_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "cache_macos_overlay_handle",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            let api_view_ptr = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::player::cache_macos_overlay_handle(
+                            api_player_id,
+                            api_view_ptr,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__player__create_player_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -208,7 +288,7 @@ fn wire__crate__api__player__player_event_stream_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_player_id = <i64>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
-                crate::player::PlayerEvent,
+                crate::player_events::PlayerEvent,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -359,6 +439,45 @@ fn wire__crate__api__player__player_seek_impl(
                     (move || {
                         let output_ok =
                             crate::api::player::player_seek(api_player_id, api_position_ms)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__player__player_set_asset_source_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "player_set_asset_source",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            let api_asset_key = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::player::player_set_asset_source(
+                            api_player_id,
+                            api_asset_key,
+                        )?;
                         Ok(output_ok)
                     })(),
                 )
@@ -625,6 +744,49 @@ fn wire__crate__api__player__set_video_overlay_window_impl(
         },
     )
 }
+fn wire__crate__api__player__sync_macos_video_layer_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_macos_video_layer",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_player_id = <i64>::sse_decode(&mut deserializer);
+            let api_view_ptr = <i64>::sse_decode(&mut deserializer);
+            let api__width = <i32>::sse_decode(&mut deserializer);
+            let api__height = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::player::sync_macos_video_layer(
+                            api_player_id,
+                            api_view_ptr,
+                            api__width,
+                            api__height,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -637,7 +799,7 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
 }
 
 impl SseDecode
-    for StreamSink<crate::player::PlayerEvent, flutter_rust_bridge::for_generated::SseCodec>
+    for StreamSink<crate::player_events::PlayerEvent, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -694,18 +856,18 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for crate::player::PlayerEvent {
+impl SseDecode for crate::player_events::PlayerEvent {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_kind = <crate::player::PlayerEventKind>::sse_decode(deserializer);
+        let mut var_kind = <crate::player_events::PlayerEventKind>::sse_decode(deserializer);
         let mut var_positionMs = <i64>::sse_decode(deserializer);
         let mut var_durationMs = <i64>::sse_decode(deserializer);
         let mut var_width = <i32>::sse_decode(deserializer);
         let mut var_height = <i32>::sse_decode(deserializer);
         let mut var_bufferingPercent = <i32>::sse_decode(deserializer);
-        let mut var_state = <crate::player::PlayerState>::sse_decode(deserializer);
+        let mut var_state = <crate::player_events::PlayerState>::sse_decode(deserializer);
         let mut var_message = <String>::sse_decode(deserializer);
-        return crate::player::PlayerEvent {
+        return crate::player_events::PlayerEvent {
             kind: var_kind,
             position_ms: var_positionMs,
             duration_ms: var_durationMs,
@@ -718,18 +880,18 @@ impl SseDecode for crate::player::PlayerEvent {
     }
 }
 
-impl SseDecode for crate::player::PlayerEventKind {
+impl SseDecode for crate::player_events::PlayerEventKind {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
-            0 => crate::player::PlayerEventKind::DurationChanged,
-            1 => crate::player::PlayerEventKind::PositionChanged,
-            2 => crate::player::PlayerEventKind::VideoSize,
-            3 => crate::player::PlayerEventKind::StateChanged,
-            4 => crate::player::PlayerEventKind::Buffering,
-            5 => crate::player::PlayerEventKind::Eos,
-            6 => crate::player::PlayerEventKind::Error,
+            0 => crate::player_events::PlayerEventKind::DurationChanged,
+            1 => crate::player_events::PlayerEventKind::PositionChanged,
+            2 => crate::player_events::PlayerEventKind::VideoSize,
+            3 => crate::player_events::PlayerEventKind::StateChanged,
+            4 => crate::player_events::PlayerEventKind::Buffering,
+            5 => crate::player_events::PlayerEventKind::Eos,
+            6 => crate::player_events::PlayerEventKind::Error,
             _ => unreachable!("Invalid variant for PlayerEventKind: {}", inner),
         };
     }
@@ -745,19 +907,19 @@ impl SseDecode for crate::api::player::PlayerHandle {
     }
 }
 
-impl SseDecode for crate::player::PlayerState {
+impl SseDecode for crate::player_events::PlayerState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
-            0 => crate::player::PlayerState::Idle,
-            1 => crate::player::PlayerState::Ready,
-            2 => crate::player::PlayerState::Buffering,
-            3 => crate::player::PlayerState::Playing,
-            4 => crate::player::PlayerState::Paused,
-            5 => crate::player::PlayerState::Stopped,
-            6 => crate::player::PlayerState::Completed,
-            7 => crate::player::PlayerState::Error,
+            0 => crate::player_events::PlayerState::Idle,
+            1 => crate::player_events::PlayerState::Ready,
+            2 => crate::player_events::PlayerState::Buffering,
+            3 => crate::player_events::PlayerState::Playing,
+            4 => crate::player_events::PlayerState::Paused,
+            5 => crate::player_events::PlayerState::Stopped,
+            6 => crate::player_events::PlayerState::Completed,
+            7 => crate::player_events::PlayerState::Error,
             _ => unreachable!("Invalid variant for PlayerState: {}", inner),
         };
     }
@@ -784,27 +946,48 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__player__create_player_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__player__dispose_player_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__player__player_duration_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__player__player_event_stream_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__player__player_pause_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__player__player_play_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__player__player_position_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__player__player_seek_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__player__player_set_looping_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__player__player_set_mute_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__player__player_set_source_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__player__set_video_overlay_window_impl(
+        1 => wire__crate__api__player__apply_macos_overlay_gstreamer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
+        2 => wire__crate__api__player__cache_macos_overlay_handle_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        3 => wire__crate__api__player__create_player_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__player__dispose_player_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__player__player_duration_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__player__player_event_stream_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__player__player_pause_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__player__player_play_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__player__player_position_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__player__player_seek_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__player__player_set_asset_source_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        13 => wire__crate__api__player__player_set_looping_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__player__player_set_mute_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__player__player_set_source_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__player__set_video_overlay_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        20 => {
+            wire__crate__api__player__sync_macos_video_layer_impl(port, ptr, rust_vec_len, data_len)
+        }
         _ => unreachable!(),
     }
 }
@@ -824,7 +1007,7 @@ fn pde_ffi_dispatcher_sync_impl(
 // Section: rust2dart
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::player::PlayerEvent {
+impl flutter_rust_bridge::IntoDart for crate::player_events::PlayerEvent {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.kind.into_into_dart().into_dart(),
@@ -839,14 +1022,19 @@ impl flutter_rust_bridge::IntoDart for crate::player::PlayerEvent {
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::player::PlayerEvent {}
-impl flutter_rust_bridge::IntoIntoDart<crate::player::PlayerEvent> for crate::player::PlayerEvent {
-    fn into_into_dart(self) -> crate::player::PlayerEvent {
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::player_events::PlayerEvent
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::player_events::PlayerEvent>
+    for crate::player_events::PlayerEvent
+{
+    fn into_into_dart(self) -> crate::player_events::PlayerEvent {
         self
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::player::PlayerEventKind {
+impl flutter_rust_bridge::IntoDart for crate::player_events::PlayerEventKind {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::DurationChanged => 0.into_dart(),
@@ -861,13 +1049,13 @@ impl flutter_rust_bridge::IntoDart for crate::player::PlayerEventKind {
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::player::PlayerEventKind
+    for crate::player_events::PlayerEventKind
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::player::PlayerEventKind>
-    for crate::player::PlayerEventKind
+impl flutter_rust_bridge::IntoIntoDart<crate::player_events::PlayerEventKind>
+    for crate::player_events::PlayerEventKind
 {
-    fn into_into_dart(self) -> crate::player::PlayerEventKind {
+    fn into_into_dart(self) -> crate::player_events::PlayerEventKind {
         self
     }
 }
@@ -889,7 +1077,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::player::PlayerHandle>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::player::PlayerState {
+impl flutter_rust_bridge::IntoDart for crate::player_events::PlayerState {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Idle => 0.into_dart(),
@@ -904,9 +1092,14 @@ impl flutter_rust_bridge::IntoDart for crate::player::PlayerState {
         }
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::player::PlayerState {}
-impl flutter_rust_bridge::IntoIntoDart<crate::player::PlayerState> for crate::player::PlayerState {
-    fn into_into_dart(self) -> crate::player::PlayerState {
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::player_events::PlayerState
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::player_events::PlayerState>
+    for crate::player_events::PlayerState
+{
+    fn into_into_dart(self) -> crate::player_events::PlayerState {
         self
     }
 }
@@ -919,7 +1112,7 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
 }
 
 impl SseEncode
-    for StreamSink<crate::player::PlayerEvent, flutter_rust_bridge::for_generated::SseCodec>
+    for StreamSink<crate::player_events::PlayerEvent, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -972,32 +1165,32 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for crate::player::PlayerEvent {
+impl SseEncode for crate::player_events::PlayerEvent {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <crate::player::PlayerEventKind>::sse_encode(self.kind, serializer);
+        <crate::player_events::PlayerEventKind>::sse_encode(self.kind, serializer);
         <i64>::sse_encode(self.position_ms, serializer);
         <i64>::sse_encode(self.duration_ms, serializer);
         <i32>::sse_encode(self.width, serializer);
         <i32>::sse_encode(self.height, serializer);
         <i32>::sse_encode(self.buffering_percent, serializer);
-        <crate::player::PlayerState>::sse_encode(self.state, serializer);
+        <crate::player_events::PlayerState>::sse_encode(self.state, serializer);
         <String>::sse_encode(self.message, serializer);
     }
 }
 
-impl SseEncode for crate::player::PlayerEventKind {
+impl SseEncode for crate::player_events::PlayerEventKind {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(
             match self {
-                crate::player::PlayerEventKind::DurationChanged => 0,
-                crate::player::PlayerEventKind::PositionChanged => 1,
-                crate::player::PlayerEventKind::VideoSize => 2,
-                crate::player::PlayerEventKind::StateChanged => 3,
-                crate::player::PlayerEventKind::Buffering => 4,
-                crate::player::PlayerEventKind::Eos => 5,
-                crate::player::PlayerEventKind::Error => 6,
+                crate::player_events::PlayerEventKind::DurationChanged => 0,
+                crate::player_events::PlayerEventKind::PositionChanged => 1,
+                crate::player_events::PlayerEventKind::VideoSize => 2,
+                crate::player_events::PlayerEventKind::StateChanged => 3,
+                crate::player_events::PlayerEventKind::Buffering => 4,
+                crate::player_events::PlayerEventKind::Eos => 5,
+                crate::player_events::PlayerEventKind::Error => 6,
                 _ => {
                     unimplemented!("");
                 }
@@ -1014,19 +1207,19 @@ impl SseEncode for crate::api::player::PlayerHandle {
     }
 }
 
-impl SseEncode for crate::player::PlayerState {
+impl SseEncode for crate::player_events::PlayerState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(
             match self {
-                crate::player::PlayerState::Idle => 0,
-                crate::player::PlayerState::Ready => 1,
-                crate::player::PlayerState::Buffering => 2,
-                crate::player::PlayerState::Playing => 3,
-                crate::player::PlayerState::Paused => 4,
-                crate::player::PlayerState::Stopped => 5,
-                crate::player::PlayerState::Completed => 6,
-                crate::player::PlayerState::Error => 7,
+                crate::player_events::PlayerState::Idle => 0,
+                crate::player_events::PlayerState::Ready => 1,
+                crate::player_events::PlayerState::Buffering => 2,
+                crate::player_events::PlayerState::Playing => 3,
+                crate::player_events::PlayerState::Paused => 4,
+                crate::player_events::PlayerState::Stopped => 5,
+                crate::player_events::PlayerState::Completed => 6,
+                crate::player_events::PlayerState::Error => 7,
                 _ => {
                     unimplemented!("");
                 }

@@ -1,12 +1,16 @@
 #[cfg(target_os = "macos")]
 use crate::api::player::{apply_macos_overlay_gstreamer, cache_macos_overlay_handle};
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "android")]
+use crate::api::player::notify_android_surface;
+#[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
 use crate::api::player::set_video_overlay_window;
 
 #[cfg(target_os = "android")]
-use jni::objects::JObject;
+use jni::objects::{JClass, JObject};
 #[cfg(target_os = "android")]
-use jni::JNIEnv;
+use jni::errors::LogErrorAndDefault;
+#[cfg(target_os = "android")]
+use jni::{jni_mangle, Env, EnvUnowned};
 
 #[cfg(target_os = "android")]
 use crate::platform_view_android::{native_window_handle_from_surface, store_java_vm};
@@ -24,7 +28,17 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
         }
         return;
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "android")]
+    {
+        if let Err(e) = notify_android_surface(player_id, window_handle, 0, 0) {
+            log::warn!(
+                "player_set_video_overlay_window(player_id={player_id}, \
+                 handle={window_handle}): {e:#}"
+            );
+        }
+        return;
+    }
+    #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
     if let Err(e) = set_video_overlay_window(player_id, window_handle) {
         log::warn!(
             "player_set_video_overlay_window(player_id={player_id}, handle={window_handle}): {e:#}"
@@ -65,46 +79,76 @@ pub extern "C" fn player_apply_macos_overlay_gstreamer(
 }
 
 #[cfg(target_os = "android")]
-#[no_mangle]
-pub extern "system" fn Java_com_flutter_rust_bridge_xue_hua_video_player_XueHuaVideoPlatformView_nativeOnSurfaceCreated(
-    mut env: JNIEnv,
-    _class: jni::objects::JClass,
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlatformView",
+    "nativeOnSurfaceCreated",
+    "(JLandroid/view/Surface;)V"
+)]
+pub extern "system" fn native_on_surface_created<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
     player_id: i64,
-    surface: JObject,
+    surface: JObject<'caller>,
 ) {
-    let _ = on_android_surface(player_id, &mut env, surface);
+    env.with_env(|env| {
+        if let Err(e) = on_android_surface(player_id, env, surface, 0, 0) {
+            log::warn!("nativeOnSurfaceCreated(player_id={player_id}): {e:#}");
+        }
+        Ok::<(), jni::errors::Error>(())
+    })
+    .resolve::<LogErrorAndDefault>();
 }
 
 #[cfg(target_os = "android")]
-#[no_mangle]
-pub extern "system" fn Java_com_flutter_rust_bridge_xue_hua_video_player_XueHuaVideoPlatformView_nativeOnSurfaceChanged(
-    mut env: JNIEnv,
-    _class: jni::objects::JClass,
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlatformView",
+    "nativeOnSurfaceChanged",
+    "(JLandroid/view/Surface;II)V"
+)]
+pub extern "system" fn native_on_surface_changed<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
     player_id: i64,
-    surface: JObject,
+    surface: JObject<'caller>,
+    width: i32,
+    height: i32,
 ) {
-    let _ = on_android_surface(player_id, &mut env, surface);
+    env.with_env(|env| {
+        if let Err(e) = on_android_surface(player_id, env, surface, width, height) {
+            log::warn!("nativeOnSurfaceChanged(player_id={player_id}): {e:#}");
+        }
+        Ok::<(), jni::errors::Error>(())
+    })
+    .resolve::<LogErrorAndDefault>();
 }
 
 #[cfg(target_os = "android")]
-#[no_mangle]
-pub extern "system" fn Java_com_flutter_rust_bridge_xue_hua_video_player_XueHuaVideoPlatformView_nativeOnSurfaceDestroyed(
-    _env: JNIEnv,
-    _class: jni::objects::JClass,
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlatformView",
+    "nativeOnSurfaceDestroyed",
+    "(J)V"
+)]
+pub extern "system" fn native_on_surface_destroyed<'caller>(
+    _env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
     player_id: i64,
 ) {
-    let _ = set_video_overlay_window(player_id, 0);
+    if let Err(e) = notify_android_surface(player_id, 0, 0, 0) {
+        log::warn!("nativeOnSurfaceDestroyed(player_id={player_id}): {e:#}");
+    }
 }
 
 #[cfg(target_os = "android")]
 fn on_android_surface(
     player_id: i64,
-    env: &mut JNIEnv,
+    env: &mut Env,
     surface: JObject,
+    width: i32,
+    height: i32,
 ) -> anyhow::Result<()> {
     if let Ok(vm) = env.get_java_vm() {
-        store_java_vm(vm.as_raw() as *mut jni::sys::JavaVM);
+        store_java_vm(vm.get_raw());
     }
     let handle = native_window_handle_from_surface(env, surface)? as i64;
-    set_video_overlay_window(player_id, handle)
+    notify_android_surface(player_id, handle, width, height)
 }

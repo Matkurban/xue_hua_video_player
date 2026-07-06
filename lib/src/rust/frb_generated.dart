@@ -10,7 +10,7 @@ import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'player.dart';
+import 'player_events.dart';
 
 /// Main entrypoint of the Rust API
 class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -943445919;
+  int get rustContentHash => -2097021269;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,6 +79,17 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<void> crateApiPlayerApplyMacosOverlayGstreamer({
+    required PlatformInt64 playerId,
+    required int width,
+    required int height,
+  });
+
+  Future<void> crateApiPlayerCacheMacosOverlayHandle({
+    required PlatformInt64 playerId,
+    required PlatformInt64 viewPtr,
+  });
+
   Future<PlayerHandle> crateApiPlayerCreatePlayer();
 
   Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId});
@@ -104,6 +115,11 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiPlayerPlayerSeek({
     required PlatformInt64 playerId,
     required PlatformInt64 positionMs,
+  });
+
+  Future<void> crateApiPlayerPlayerSetAssetSource({
+    required PlatformInt64 playerId,
+    required String assetKey,
   });
 
   Future<void> crateApiPlayerPlayerSetLooping({
@@ -137,6 +153,13 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 playerId,
     required PlatformInt64 windowHandle,
   });
+
+  Future<void> crateApiPlayerSyncMacosVideoLayer({
+    required PlatformInt64 playerId,
+    required PlatformInt64 viewPtr,
+    required int width,
+    required int height,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -148,6 +171,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<void> crateApiPlayerApplyMacosOverlayGstreamer({
+    required PlatformInt64 playerId,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_i_32(width, serializer);
+          sse_encode_i_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerApplyMacosOverlayGstreamerConstMeta,
+        argValues: [playerId, width, height],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerApplyMacosOverlayGstreamerConstMeta =>
+      const TaskConstMeta(
+        debugName: "apply_macos_overlay_gstreamer",
+        argNames: ["playerId", "width", "height"],
+      );
+
+  @override
+  Future<void> crateApiPlayerCacheMacosOverlayHandle({
+    required PlatformInt64 playerId,
+    required PlatformInt64 viewPtr,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_i_64(viewPtr, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerCacheMacosOverlayHandleConstMeta,
+        argValues: [playerId, viewPtr],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerCacheMacosOverlayHandleConstMeta =>
+      const TaskConstMeta(
+        debugName: "cache_macos_overlay_handle",
+        argNames: ["playerId", "viewPtr"],
+      );
+
+  @override
   Future<PlayerHandle> crateApiPlayerCreatePlayer() {
     return handler.executeNormal(
       NormalTask(
@@ -156,7 +251,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 3,
             port: port_,
           );
         },
@@ -184,7 +279,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 4,
             port: port_,
           );
         },
@@ -211,7 +306,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 5,
             port: port_,
           );
         },
@@ -241,7 +336,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 6,
             port: port_,
           );
         },
@@ -274,7 +369,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 5,
+              funcId: 7,
               port: port_,
             );
           },
@@ -307,7 +402,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 8,
             port: port_,
           );
         },
@@ -335,7 +430,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 9,
             port: port_,
           );
         },
@@ -365,7 +460,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 10,
             port: port_,
           );
         },
@@ -397,7 +492,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 11,
             port: port_,
           );
         },
@@ -418,6 +513,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<void> crateApiPlayerPlayerSetAssetSource({
+    required PlatformInt64 playerId,
+    required String assetKey,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_String(assetKey, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerPlayerSetAssetSourceConstMeta,
+        argValues: [playerId, assetKey],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerPlayerSetAssetSourceConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_set_asset_source",
+        argNames: ["playerId", "assetKey"],
+      );
+
+  @override
   Future<void> crateApiPlayerPlayerSetLooping({
     required PlatformInt64 playerId,
     required bool looping,
@@ -431,7 +561,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 13,
             port: port_,
           );
         },
@@ -466,7 +596,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 14,
             port: port_,
           );
         },
@@ -501,7 +631,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 15,
             port: port_,
           );
         },
@@ -536,7 +666,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 16,
             port: port_,
           );
         },
@@ -571,7 +701,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 17,
             port: port_,
           );
         },
@@ -602,7 +732,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 18,
             port: port_,
           );
         },
@@ -634,7 +764,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 19,
             port: port_,
           );
         },
@@ -653,6 +783,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "set_video_overlay_window",
         argNames: ["playerId", "windowHandle"],
+      );
+
+  @override
+  Future<void> crateApiPlayerSyncMacosVideoLayer({
+    required PlatformInt64 playerId,
+    required PlatformInt64 viewPtr,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(playerId, serializer);
+          sse_encode_i_64(viewPtr, serializer);
+          sse_encode_i_32(width, serializer);
+          sse_encode_i_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiPlayerSyncMacosVideoLayerConstMeta,
+        argValues: [playerId, viewPtr, width, height],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPlayerSyncMacosVideoLayerConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_macos_video_layer",
+        argNames: ["playerId", "viewPtr", "width", "height"],
       );
 
   @protected

@@ -32,7 +32,10 @@ public class GStreamerInitProvider extends ContentProvider {
     public boolean onCreate() {
         try {
             System.loadLibrary("gstreamer_android");
+            // Load before Dart FRB dlopen so Platform View JNI symbols resolve.
+            System.loadLibrary("xue_hua_video_player");
             GStreamer.init(getContext());
+            FlutterAssetHelper.init(getContext());
             Log.i(TAG, "GStreamer Android runtime initialized");
         } catch (Throwable t) {
             Log.e(TAG, "Failed to initialize GStreamer Android runtime", t);
