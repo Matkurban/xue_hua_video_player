@@ -1,21 +1,21 @@
-#[cfg(target_os = "android")]
-use crate::api::player::notify_android_surface;
-#[cfg(target_os = "macos")]
-use crate::api::player::cache_macos_overlay_handle;
-#[cfg(target_os = "ios")]
-use crate::api::player::notify_ios_overlay;
-#[cfg(target_os = "macos")]
-use crate::api::player::apply_macos_overlay_gstreamer;
 #[cfg(target_os = "ios")]
 use crate::api::player::apply_ios_overlay_gstreamer;
-#[cfg(not(any(target_os = "macos", target_os = "android")))]
-use crate::api::player::sync_video_overlay_rectangle;
+#[cfg(target_os = "macos")]
+use crate::api::player::apply_macos_overlay_gstreamer;
+#[cfg(target_os = "macos")]
+use crate::api::player::cache_macos_overlay_handle;
+#[cfg(target_os = "android")]
+use crate::api::player::notify_android_surface;
+#[cfg(target_os = "ios")]
+use crate::api::player::notify_ios_overlay;
 #[cfg(all(
     not(target_os = "macos"),
     not(target_os = "android"),
     not(target_os = "ios")
 ))]
 use crate::api::player::set_video_overlay_window;
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
+use crate::api::player::sync_video_overlay_rectangle;
 
 #[cfg(target_os = "android")]
 use jni::errors::LogErrorAndDefault;

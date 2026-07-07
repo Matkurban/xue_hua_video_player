@@ -9,16 +9,16 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::gst_init::ensure_gst_init;
-use crate::gst_runtime::{spawn_on_gst_thread, spawn_on_gst_thread_and_wait};
+use crate::gst_runtime::spawn_on_gst_thread_and_wait;
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
 use crate::playback::state::set_state_sync;
-use crate::playback::surface::VideoSurface;
 #[cfg(target_os = "ios")]
 use crate::playback::surface::IosLayerBusHook;
+use crate::playback::surface::VideoSurface;
 use crate::playback::switch::{switch_shell, SwitchContext};
 use crate::playback::tracks::{
     disable_subtitles_on_pipeline, read_cached_tracks, select_track_on_pipeline, TrackCache,
@@ -78,8 +78,7 @@ impl PlaybackEngine {
         let metadata_init = video_metadata.clone();
         let track_cache_init = track_cache.clone();
         #[cfg(target_os = "ios")]
-        let ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>> =
-            Arc::new(Mutex::new(None));
+        let ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>> = Arc::new(Mutex::new(None));
         #[cfg(target_os = "ios")]
         let ios_layer_bus_init = ios_layer_bus_slot.clone();
         #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -634,7 +633,7 @@ fn pipeline_seek(
 fn pipeline_play(
     shell: &mut PipelineShell,
     at_eos: &AtomicBool,
-    surface: &VideoSurface,
+    _surface: &VideoSurface,
     ctx: &SwitchContext,
 ) -> Result<()> {
     crate::playback::state::resume_or_replay_from_eos(shell, at_eos, Some(ctx))?;
