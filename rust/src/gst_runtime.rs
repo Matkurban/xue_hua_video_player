@@ -22,12 +22,12 @@ pub fn ensure_gst_runtime() {
             .expect("xhvp-gst thread spawn");
 
         match ready_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(()) => crate::diag::logcat_info(
-                "gst: Gst runtime thread started (owned MainContext)",
-            ),
-            Err(e) => crate::diag::logcat_error(&format!(
-                "gst: Gst runtime thread failed to start: {e}"
-            )),
+            Ok(()) => {
+                crate::diag::logcat_info("gst: Gst runtime thread started (owned MainContext)")
+            }
+            Err(e) => {
+                crate::diag::logcat_error(&format!("gst: Gst runtime thread failed to start: {e}"))
+            }
         }
     });
 }

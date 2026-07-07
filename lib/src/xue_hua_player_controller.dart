@@ -269,9 +269,8 @@ class XueHuaPlayerController {
     () => rust.playerSetVideoOrientation(playerId: _id, config: config),
   );
 
-  Future<void> setAspectRatioMode(AspectRatioMode mode) => _guard(
-    () => rust.playerSetAspectRatioMode(playerId: _id, mode: mode),
-  );
+  Future<void> setAspectRatioMode(AspectRatioMode mode) =>
+      _guard(() => rust.playerSetAspectRatioMode(playerId: _id, mode: mode));
 
   Future<Duration> queryPosition() async =>
       Duration(milliseconds: await rust.playerPosition(playerId: _id));

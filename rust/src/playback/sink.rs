@@ -104,11 +104,10 @@ pub fn attach_video_probe(
                         if let Some(cb) = emitter.lock().as_ref() {
                             use crate::player_events::PlayerEvent;
                             cb(PlayerEvent::video_size(width, height));
-                            let meta =
-                                InternalVideoMetadata::from_video_info_and_caps(
-                                    &video_info,
-                                    Some(caps.caps()),
-                                );
+                            let meta = InternalVideoMetadata::from_video_info_and_caps(
+                                &video_info,
+                                Some(caps.caps()),
+                            );
                             if let Some(cache) = metadata_cache.as_ref() {
                                 *cache.lock() = meta.clone();
                             }

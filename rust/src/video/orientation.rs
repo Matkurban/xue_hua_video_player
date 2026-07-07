@@ -13,7 +13,11 @@ pub(crate) struct InternalVideoOrientationConfig {
 
 impl InternalVideoOrientationConfig {
     pub fn method_name(&self) -> &'static str {
-        match (self.flip_horizontal, self.flip_vertical, self.rotate_degrees) {
+        match (
+            self.flip_horizontal,
+            self.flip_vertical,
+            self.rotate_degrees,
+        ) {
             (false, false, 0) => "none",
             (true, false, 0) => "horizontal-flip",
             (false, true, 0) => "vertical-flip",

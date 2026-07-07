@@ -14,9 +14,7 @@ pub fn ensure_gst_init_android() -> Result<()> {
     #[cfg(target_os = "android")]
     crate::gst_runtime::ensure_gst_runtime();
 
-    let c_initialized = unsafe {
-        gst::ffi::gst_is_initialized() != gst::glib::ffi::GFALSE
-    };
+    let c_initialized = unsafe { gst::ffi::gst_is_initialized() != gst::glib::ffi::GFALSE };
     crate::diag::logcat_info(&format!(
         "gst: gst_is_initialized()={c_initialized} INITIALIZED={}",
         gst::INITIALIZED.load(std::sync::atomic::Ordering::SeqCst)

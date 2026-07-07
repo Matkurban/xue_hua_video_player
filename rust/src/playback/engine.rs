@@ -10,9 +10,9 @@ use parking_lot::Mutex;
 
 use crate::gst_init::ensure_gst_init;
 use crate::gst_runtime::spawn_on_gst_thread_and_wait;
-use crate::media::{is_seekable, MediaSource};
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
+use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
 use crate::playback::state::set_state_sync;
@@ -22,11 +22,11 @@ use crate::playback::tracks::{
     disable_subtitles_on_pipeline, read_cached_tracks, select_track_on_pipeline, TrackCache,
 };
 use crate::player_events::{MediaTrack, PlayerEvent, PlayerState, TrackType};
+use crate::video::orientation::apply_orientation_to_playbin;
 use crate::video::{
     info::InternalVideoMetadata, orientation::InternalAspectRatioMode,
     orientation::InternalVideoOrientationConfig,
 };
-use crate::video::orientation::apply_orientation_to_playbin;
 
 /// GStreamer-backed player rendering into a Platform View via VideoOverlay.
 pub struct PlaybackEngine {
@@ -321,10 +321,7 @@ impl PlaybackEngine {
         crate::player_events::VideoMetadata::from(self.video_metadata.lock().clone())
     }
 
-    pub fn set_video_orientation(
-        &self,
-        config: InternalVideoOrientationConfig,
-    ) -> Result<()> {
+    pub fn set_video_orientation(&self, config: InternalVideoOrientationConfig) -> Result<()> {
         *self.orientation.lock() = config;
         let config = *self.orientation.lock();
         self.run_on_gst(move |shell| {
@@ -389,24 +386,14 @@ impl PlaybackEngine {
     }
 
     #[cfg(target_os = "android")]
-    pub fn notify_android_surface(
-        &self,
-        handle: i64,
-        width: i32,
-        height: i32,
-    ) -> Result<()> {
+    pub fn notify_android_surface(&self, handle: i64, width: i32, height: i32) -> Result<()> {
         let play_intent = crate::playback::surface::AndroidOverlayPlayIntent {
             desired_playing: self.desired_playing.clone(),
             at_eos: self.at_eos.clone(),
             switch_ctx: self.switch_context(),
         };
-        self.surface.notify_android_surface(
-            self.shell.clone(),
-            handle,
-            width,
-            height,
-            play_intent,
-        )
+        self.surface
+            .notify_android_surface(self.shell.clone(), handle, width, height, play_intent)
     }
 
     #[cfg(target_os = "macos")]

@@ -6,7 +6,9 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::playback::bus::Emitter;
-use crate::playback::sink::{attach_video_probe, build_audio_sink_bin, build_text_sink_bin, configure_http_source};
+use crate::playback::sink::{
+    attach_video_probe, build_audio_sink_bin, build_text_sink_bin, configure_http_source,
+};
 use crate::video::{create_platform_video_sink, info::InternalVideoMetadata};
 
 /// Builds a `playbin3` pipeline for URI/network/file sources.

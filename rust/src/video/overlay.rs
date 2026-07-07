@@ -3,7 +3,10 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use gstreamer as gst;
 use gstreamer::prelude::*;
-use gstreamer_video::{self as gst_video, prelude::{VideoOverlayExt, VideoOverlayExtManual}};
+use gstreamer_video::{
+    self as gst_video,
+    prelude::{VideoOverlayExt, VideoOverlayExtManual},
+};
 use parking_lot::Mutex;
 
 /// GStreamer-recommended video sink element name per platform.

@@ -9,7 +9,6 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::media::ResolvedSource;
-use crate::playback::tracks::TrackCache;
 use crate::playback::bus::Emitter;
 use crate::playback::shell::{
     install_asset_shell, install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell,
@@ -21,11 +20,12 @@ use crate::playback::surface::assign_overlay_sink;
 #[cfg(target_os = "android")]
 use crate::playback::surface::refresh_android_overlay_on_gst;
 use crate::playback::surface::VideoSurface;
+use crate::playback::tracks::TrackCache;
+use crate::video::orientation::apply_orientation_to_playbin;
 use crate::video::{
     info::InternalVideoMetadata,
     orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig},
 };
-use crate::video::orientation::apply_orientation_to_playbin;
 
 /// Shared state required when swapping the active [`PipelineShell`].
 pub struct SwitchContext {
@@ -79,7 +79,11 @@ fn switch_uri_shell(shell: &mut PipelineShell, uri: &str, ctx: &SwitchContext) -
     pipeline_set_uri(shell, uri, &ctx.at_eos, has_overlay, &ctx.surface)
 }
 
-fn switch_asset_shell(shell: &mut PipelineShell, asset_key: &str, ctx: &SwitchContext) -> Result<()> {
+fn switch_asset_shell(
+    shell: &mut PipelineShell,
+    asset_key: &str,
+    ctx: &SwitchContext,
+) -> Result<()> {
     teardown_shell(shell);
     ctx.surface.mark_shell_rebuilt();
     *shell = install_asset_shell(
@@ -115,7 +119,11 @@ pub fn replay_asset_shell(shell: &mut PipelineShell, ctx: &SwitchContext) -> Res
     Ok(())
 }
 
-fn preroll_asset_shell(shell: &PipelineShell, has_overlay: bool, surface: &VideoSurface) -> Result<()> {
+fn preroll_asset_shell(
+    shell: &PipelineShell,
+    has_overlay: bool,
+    surface: &VideoSurface,
+) -> Result<()> {
     #[cfg(target_os = "android")]
     {
         if has_overlay {
@@ -157,13 +165,7 @@ fn pipeline_set_uri(
         #[cfg(target_os = "android")]
         if let Some(handle) = *surface.stored_handle().lock() {
             let (width, height) = surface.cached_dimensions();
-            refresh_android_overlay_on_gst(
-                shell,
-                handle,
-                width,
-                height,
-                "after Paused preroll",
-            )?;
+            refresh_android_overlay_on_gst(shell, handle, width, height, "after Paused preroll")?;
         }
         Ok(())
     } else {

@@ -10,11 +10,11 @@ use parking_lot::Mutex;
 
 use crate::gst_runtime::spawn_on_gst_thread;
 use crate::playback::shell::{PipelineShell, SourceKind};
-use crate::playback::switch::SwitchContext;
-#[cfg(target_os = "android")]
-use crate::playback::state::{resume_or_replay_from_eos, set_state_sync};
 #[cfg(not(target_os = "android"))]
 use crate::playback::state::set_state_sync;
+#[cfg(target_os = "android")]
+use crate::playback::state::{resume_or_replay_from_eos, set_state_sync};
+use crate::playback::switch::SwitchContext;
 use crate::video::{
     clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
     set_overlay_window_handle,
@@ -300,13 +300,9 @@ impl VideoSurface {
             let Some(handle) = *stored.lock() else {
                 return;
             };
-            if let Err(e) = refresh_android_overlay_on_gst(
-                &guard,
-                handle,
-                width,
-                height,
-                "surface resize",
-            ) {
+            if let Err(e) =
+                refresh_android_overlay_on_gst(&guard, handle, width, height, "surface resize")
+            {
                 crate::diag::logcat_error(&format!("android overlay resize: {e:#}"));
             }
         });
@@ -397,9 +393,7 @@ pub fn refresh_android_overlay_on_gst(
         set_overlay_render_rectangle(&shell.video_sink, width, height);
     }
     expose_overlay(&shell.video_sink);
-    crate::diag::logcat_info(&format!(
-        "gst: overlay refresh {reason} ({width}x{height})"
-    ));
+    crate::diag::logcat_info(&format!("gst: overlay refresh {reason} ({width}x{height})"));
     Ok(())
 }
 

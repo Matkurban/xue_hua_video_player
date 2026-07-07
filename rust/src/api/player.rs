@@ -15,8 +15,7 @@ pub use crate::player_events::{
 
 static PLAYERS: Lazy<Mutex<HashMap<i64, Arc<PlaybackEngine>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
-static PENDING_OVERLAYS: Lazy<Mutex<HashMap<i64, i64>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static PENDING_OVERLAYS: Lazy<Mutex<HashMap<i64, i64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 
 /// Identifiers returned when a player is created. `player_id` addresses all
@@ -84,11 +83,7 @@ pub fn apply_macos_overlay_gstreamer(player_id: i64, width: i32, height: i32) ->
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn apply_macos_overlay_gstreamer(
-    _player_id: i64,
-    _width: i32,
-    _height: i32,
-) -> Result<()> {
+pub fn apply_macos_overlay_gstreamer(_player_id: i64, _width: i32, _height: i32) -> Result<()> {
     Ok(())
 }
 
@@ -131,12 +126,7 @@ pub fn set_video_overlay_window(player_id: i64, window_handle: i64) -> Result<()
 /// Android: caches `ANativeWindow` on the JNI thread and applies VideoOverlay on
 /// `xhvp-gst` without blocking the Android main thread.
 #[cfg(target_os = "android")]
-pub fn notify_android_surface(
-    player_id: i64,
-    handle: i64,
-    width: i32,
-    height: i32,
-) -> Result<()> {
+pub fn notify_android_surface(player_id: i64, handle: i64, width: i32, height: i32) -> Result<()> {
     match get_player(player_id) {
         Ok(player) => {
             PENDING_OVERLAYS.lock().remove(&player_id);
@@ -232,17 +222,11 @@ pub fn player_is_seekable(player_id: i64) -> Result<bool> {
     Ok(get_player(player_id)?.is_seekable())
 }
 
-pub fn player_get_pipeline_capabilities(
-    player_id: i64,
-) -> Result<PipelineCapabilitiesDto> {
+pub fn player_get_pipeline_capabilities(player_id: i64) -> Result<PipelineCapabilitiesDto> {
     Ok(get_player(player_id)?.pipeline_capabilities().into())
 }
 
-pub fn sync_video_overlay_rectangle(
-    player_id: i64,
-    width: i32,
-    height: i32,
-) -> Result<()> {
+pub fn sync_video_overlay_rectangle(player_id: i64, width: i32, height: i32) -> Result<()> {
     get_player(player_id)?.sync_video_overlay_rectangle(width, height)
 }
 
@@ -264,10 +248,7 @@ pub fn player_get_video_metadata(player_id: i64) -> Result<VideoMetadata> {
     Ok(meta)
 }
 
-pub fn player_set_video_orientation(
-    player_id: i64,
-    config: VideoOrientationConfig,
-) -> Result<()> {
+pub fn player_set_video_orientation(player_id: i64, config: VideoOrientationConfig) -> Result<()> {
     get_player(player_id)?.set_video_orientation(config.into())
 }
 

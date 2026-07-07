@@ -2,7 +2,7 @@
 mod asset_android;
 mod resolver;
 
-pub use resolver::{AppSrcFeedState, resolve_flutter_asset_path};
+pub use resolver::{resolve_flutter_asset_path, AppSrcFeedState};
 
 use anyhow::{anyhow, Result};
 
@@ -113,7 +113,9 @@ mod tests {
 
     #[test]
     fn media_source_uri_resolution() {
-        let src = MediaSource::Uri("rtsp://host/stream".into()).resolve().unwrap();
+        let src = MediaSource::Uri("rtsp://host/stream".into())
+            .resolve()
+            .unwrap();
         assert!(matches!(src, ResolvedSource::Uri(u) if u == "rtsp://host/stream"));
     }
 }

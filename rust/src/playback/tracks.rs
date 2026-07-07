@@ -212,10 +212,7 @@ fn selection_stream_ids(
             .map(|(_, sid)| sid.clone());
     }
 
-    [video, audio, subtitle]
-        .into_iter()
-        .flatten()
-        .collect()
+    [video, audio, subtitle].into_iter().flatten().collect()
 }
 
 /// Sends `GST_EVENT_SELECT_STREAMS` for one track (keeps other selected types).

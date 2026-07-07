@@ -75,7 +75,10 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
 
   void _armSeekSettleTimeout() {
     _seekTimeout?.cancel();
-    _seekTimeout = Timer(const Duration(milliseconds: _seekSettleMs), _clearSeek);
+    _seekTimeout = Timer(
+      const Duration(milliseconds: _seekSettleMs),
+      _clearSeek,
+    );
   }
 
   /// The fraction the slider should currently display.

@@ -7,8 +7,9 @@ import 'package:flutter/services.dart';
 /// Platform view type registered by native plugin code.
 const String kXueHuaVideoViewType = 'xue_hua_video_player/view';
 
-const MethodChannel _desktopOverlayChannel =
-    MethodChannel('xue_hua_video_player/desktop_overlay');
+const MethodChannel _desktopOverlayChannel = MethodChannel(
+  'xue_hua_video_player/desktop_overlay',
+);
 
 /// Builds the platform-appropriate video surface for [playerId].
 Widget buildXueHuaVideoPlatformView({required int playerId}) {
@@ -24,13 +25,13 @@ Widget buildXueHuaVideoPlatformView({required int playerId}) {
           viewType: kXueHuaVideoViewType,
           surfaceFactory:
               (BuildContext context, PlatformViewController controller) {
-            return AndroidViewSurface(
-              controller: controller as AndroidViewController,
-              gestureRecognizers:
-                  const <Factory<OneSequenceGestureRecognizer>>{},
-              hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-            );
-          },
+                return AndroidViewSurface(
+                  controller: controller as AndroidViewController,
+                  gestureRecognizers:
+                      const <Factory<OneSequenceGestureRecognizer>>{},
+                  hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+                );
+              },
           onCreatePlatformView: (PlatformViewCreationParams params) {
             return PlatformViewsService.initSurfaceAndroidView(
                 id: params.id,
@@ -69,9 +70,7 @@ Widget buildXueHuaVideoPlatformView({required int playerId}) {
   }
   return ColoredBox(
     color: Colors.black,
-    child: Center(
-      child: Text('Video not supported on $defaultTargetPlatform'),
-    ),
+    child: Center(child: Text('Video not supported on $defaultTargetPlatform')),
   );
 }
 
@@ -92,20 +91,18 @@ class _DesktopVideoOverlayState extends State<_DesktopVideoOverlay>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _desktopOverlayChannel.invokeMethod<void>(
-      'attach',
-      <String, dynamic>{'playerId': widget.playerId},
-    );
+    _desktopOverlayChannel.invokeMethod<void>('attach', <String, dynamic>{
+      'playerId': widget.playerId,
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncBounds());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _desktopOverlayChannel.invokeMethod<void>(
-      'detach',
-      <String, dynamic>{'playerId': widget.playerId},
-    );
+    _desktopOverlayChannel.invokeMethod<void>('detach', <String, dynamic>{
+      'playerId': widget.playerId,
+    });
     super.dispose();
   }
 
@@ -120,16 +117,13 @@ class _DesktopVideoOverlayState extends State<_DesktopVideoOverlay>
     if (box is! RenderBox || !box.hasSize) return;
     final offset = box.localToGlobal(Offset.zero);
     final size = box.size;
-    _desktopOverlayChannel.invokeMethod<void>(
-      'setBounds',
-      <String, dynamic>{
-        'playerId': widget.playerId,
-        'x': offset.dx,
-        'y': offset.dy,
-        'width': size.width,
-        'height': size.height,
-      },
-    );
+    _desktopOverlayChannel.invokeMethod<void>('setBounds', <String, dynamic>{
+      'playerId': widget.playerId,
+      'x': offset.dx,
+      'y': offset.dy,
+      'width': size.width,
+      'height': size.height,
+    });
   }
 
   @override

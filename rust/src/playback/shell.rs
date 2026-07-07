@@ -9,10 +9,10 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::media::AppSrcFeedState;
-use crate::playback::tracks::TrackCache;
-use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::asset_pipeline::build_asset_pipeline;
+use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
+use crate::playback::tracks::TrackCache;
 use crate::playback::uri_pipeline::build_uri_playbin;
 use crate::video::attach_overlay_bus_sync_handler;
 

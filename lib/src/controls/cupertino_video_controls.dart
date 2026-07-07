@@ -142,8 +142,7 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls>
                                 ? Duration.zero
                                 : const Duration(milliseconds: 200),
                             curve: Curves.linear,
-                            builder: (context, animatedValue, _) =>
-                                buildSlider(
+                            builder: (context, animatedValue, _) => buildSlider(
                               isScrubbing ? value : animatedValue,
                             ),
                           );

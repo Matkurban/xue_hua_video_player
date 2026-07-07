@@ -107,9 +107,8 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
                               ? Duration.zero
                               : const Duration(milliseconds: 200),
                           curve: Curves.linear,
-                          builder: (context, animatedValue, _) => buildSlider(
-                            isScrubbing ? value : animatedValue,
-                          ),
+                          builder: (context, animatedValue, _) =>
+                              buildSlider(isScrubbing ? value : animatedValue),
                         );
                       },
                     ),
@@ -119,7 +118,10 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
                       SignalBuilder(
                         builder: (context) => Text(
                           '${formatDuration(controller.position.value)} / ${formatDuration(controller.duration.value)}',
-                          style: TextStyle(color: theme.textColor, fontSize: 12),
+                          style: TextStyle(
+                            color: theme.textColor,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                       const Spacer(),
@@ -131,7 +133,8 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls>
                           ),
                           color: theme.iconColor,
                           icon: Icon(
-                            controller.muted.value || controller.volume.value == 0
+                            controller.muted.value ||
+                                    controller.volume.value == 0
                                 ? Icons.volume_off
                                 : Icons.volume_up,
                             size: theme.secondaryIconSize,

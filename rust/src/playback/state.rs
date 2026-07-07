@@ -11,10 +11,7 @@ use crate::playback::switch::{replay_asset_shell, SwitchContext};
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
 
 /// Sets pipeline/element state and waits until the transition completes.
-pub fn set_state_sync(
-    element: &impl IsA<gst::Element>,
-    target: gst::State,
-) -> Result<()> {
+pub fn set_state_sync(element: &impl IsA<gst::Element>, target: gst::State) -> Result<()> {
     set_state_sync_timeout(element, target, DEFAULT_STATE_TIMEOUT)
 }
 
@@ -75,9 +72,7 @@ pub fn resume_or_replay_from_eos(
             set_state_sync(&shell.pipeline, gst::State::Playing)
         }
         SourceKind::Asset => {
-            let ctx = ctx.ok_or_else(|| {
-                anyhow!("asset EOS replay requires SwitchContext")
-            })?;
+            let ctx = ctx.ok_or_else(|| anyhow!("asset EOS replay requires SwitchContext"))?;
             replay_asset_shell(shell, ctx)
         }
     }

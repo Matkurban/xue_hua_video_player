@@ -54,7 +54,10 @@ pub fn build_asset_pipeline(
         if src_pad.is_linked() {
             return;
         }
-        let caps = match src_pad.current_caps().or_else(|| Some(src_pad.query_caps(None))) {
+        let caps = match src_pad
+            .current_caps()
+            .or_else(|| Some(src_pad.query_caps(None)))
+        {
             Some(c) => c,
             None => return,
         };
@@ -158,7 +161,12 @@ fn link_audio_branch(
         .static_pad("sink")
         .ok_or_else(|| anyhow!("queue has no sink pad"))?;
     src_pad.link(&queue_sink)?;
-    for el in [&queue, &convert, &resample, audio_bin.upcast_ref::<gst::Element>()] {
+    for el in [
+        &queue,
+        &convert,
+        &resample,
+        audio_bin.upcast_ref::<gst::Element>(),
+    ] {
         el.sync_state_with_parent()?;
     }
     Ok(())

@@ -1,14 +1,14 @@
-#[cfg(target_os = "macos")]
-use crate::api::player::{apply_macos_overlay_gstreamer, cache_macos_overlay_handle};
 #[cfg(target_os = "android")]
 use crate::api::player::notify_android_surface;
+#[cfg(target_os = "macos")]
+use crate::api::player::{apply_macos_overlay_gstreamer, cache_macos_overlay_handle};
 #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
 use crate::api::player::{set_video_overlay_window, sync_video_overlay_rectangle};
 
 #[cfg(target_os = "android")]
-use jni::objects::{JClass, JObject};
-#[cfg(target_os = "android")]
 use jni::errors::LogErrorAndDefault;
+#[cfg(target_os = "android")]
+use jni::objects::{JClass, JObject};
 #[cfg(target_os = "android")]
 use jni::{jni_mangle, Env, EnvUnowned};
 
@@ -62,14 +62,11 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
 
 /// C ABI: sync VideoOverlay render rectangle after native view resize (iOS / desktop).
 #[no_mangle]
-pub extern "C" fn player_sync_video_overlay_rectangle(
-    player_id: i64,
-    width: i32,
-    height: i32,
-) {
+pub extern "C" fn player_sync_video_overlay_rectangle(player_id: i64, width: i32, height: i32) {
     #[cfg(target_os = "macos")]
     {
-        if let Err(e) = crate::api::player::apply_macos_overlay_gstreamer(player_id, width, height) {
+        if let Err(e) = crate::api::player::apply_macos_overlay_gstreamer(player_id, width, height)
+        {
             log::warn!(
                 "player_sync_video_overlay_rectangle(player_id={player_id}, \
                  {width}x{height}): {e:#}"
@@ -110,11 +107,7 @@ pub extern "C" fn player_sync_macos_video_layer(
 /// macOS: binds the cached `NSView` to the GStreamer sink. Must run on the main thread.
 #[cfg(target_os = "macos")]
 #[no_mangle]
-pub extern "C" fn player_apply_macos_overlay_gstreamer(
-    player_id: i64,
-    width: i32,
-    height: i32,
-) {
+pub extern "C" fn player_apply_macos_overlay_gstreamer(player_id: i64, width: i32, height: i32) {
     if let Err(e) = apply_macos_overlay_gstreamer(player_id, width, height) {
         log::warn!(
             "player_apply_macos_overlay_gstreamer(player_id={player_id}, \

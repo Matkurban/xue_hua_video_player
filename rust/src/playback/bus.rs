@@ -10,8 +10,8 @@ use gstreamer::glib::source::{self, Priority};
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::player_events::{map_state, PlayerEvent, PlayerState};
 use crate::playback::tracks::{mark_selected_streams, update_cache_from_collection, TrackCache};
+use crate::player_events::{map_state, PlayerEvent, PlayerState};
 
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
@@ -114,14 +114,11 @@ pub fn attach_gst_bus_handlers(
                         {
                             emit(PlayerEvent::state(map_state(current)));
                         }
-                        if current == gst::State::Playing
-                            && desired_playing.load(Ordering::SeqCst)
+                        if current == gst::State::Playing && desired_playing.load(Ordering::SeqCst)
                         {
                             emit(PlayerEvent::buffering(100));
                         }
-                        if current == gst::State::Paused
-                            || current == gst::State::Playing
-                        {
+                        if current == gst::State::Paused || current == gst::State::Playing {
                             if let Some(d) = pipeline_bus.query_duration::<gst::ClockTime>() {
                                 emit(PlayerEvent::duration(d.mseconds() as i64));
                             }

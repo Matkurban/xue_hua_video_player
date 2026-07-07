@@ -1,5 +1,8 @@
 #[cfg(target_os = "android")]
-use std::sync::{Mutex, atomic::{AtomicPtr, Ordering}};
+use std::sync::{
+    atomic::{AtomicPtr, Ordering},
+    Mutex,
+};
 
 #[cfg(target_os = "android")]
 use anyhow::{anyhow, Result};
@@ -45,8 +48,8 @@ pub fn bind_flutter_asset_helper_class(env: &mut Env, class: JClass) {
 /// Invokes `FlutterAssetHelper.openAssetFd` using the cached application jclass.
 #[cfg(target_os = "android")]
 pub fn call_open_asset_fd(env: &mut Env, asset_key: &str) -> Result<(i32, u64, u64)> {
-    use jni::{jni_sig, jni_str};
     use jni::objects::{JLongArray, JObject, JValue};
+    use jni::{jni_sig, jni_str};
 
     let guard = FLUTTER_ASSET_HELPER_CLASS.lock().unwrap();
     let Some(class) = guard.as_ref() else {
@@ -65,9 +68,7 @@ pub fn call_open_asset_fd(env: &mut Env, asset_key: &str) -> Result<(i32, u64, u
     let arr_obj = result.l().map_err(|e| anyhow!("result: {e}"))?;
     // SAFETY: Java returns `long[]`.
     let long_arr = unsafe { JLongArray::from_raw(env, arr_obj.as_raw() as jni::sys::jarray) };
-    let len = long_arr
-        .len(env)
-        .map_err(|e| anyhow!("array len: {e}"))?;
+    let len = long_arr.len(env).map_err(|e| anyhow!("array len: {e}"))?;
     if len < 3 {
         return Err(anyhow!("openAssetFd returned short array"));
     }
