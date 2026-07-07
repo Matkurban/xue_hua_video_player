@@ -1,9 +1,14 @@
+use std::sync::{
+    atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
+    Arc,
+};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
+use crate::gst_runtime::spawn_on_gst_thread;
 #[cfg(target_os = "ios")]
 use crate::platform_view_ios::detach_sink_layers_from_host;
 #[cfg(target_os = "ios")]
@@ -12,10 +17,11 @@ use crate::playback::shell::PipelineShell;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use crate::playback::state::resume_or_replay_from_eos;
 use crate::playback::state::set_state_sync;
+use crate::playback::switch::SwitchContext;
 #[cfg(target_os = "ios")]
 use crate::video::ios_layer::IosLayerAttachOutcome;
 use crate::video::{
-    clear_overlay_window_handle, set_overlay_render_rectangle,
+    clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
     set_overlay_window_handle,
 };
 

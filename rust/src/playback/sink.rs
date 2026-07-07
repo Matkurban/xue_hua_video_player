@@ -7,7 +7,7 @@ use gstreamer_video as gst_video;
 use parking_lot::Mutex;
 
 use crate::playback::bus::Emitter;
-use crate::video::info::InternalVideoMetadata;
+use crate::video::{expose_overlay, info::InternalVideoMetadata};
 
 /// Configures an HTTP(S) source element for permissive TLS and a mobile user-agent.
 pub fn configure_http_source(element: &gst::Element) {
@@ -103,7 +103,7 @@ pub fn attach_video_probe(
                     let height = video_info.height() as i32;
                     let mut ls = last_size.lock();
                     if *ls != (width, height) {
-                        let _first = ls.0 == 0 && ls.1 == 0;
+                        let first = ls.0 == 0 && ls.1 == 0;
                         *ls = (width, height);
                         if let Some(cb) = emitter.lock().as_ref() {
                             use crate::player_events::PlayerEvent;
