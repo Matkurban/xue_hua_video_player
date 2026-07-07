@@ -14,12 +14,13 @@ use crate::gst_runtime::{spawn_on_gst_thread, spawn_on_gst_thread_and_wait};
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
+#[cfg(target_os = "ios")]
+use crate::playback::overlay::IosLayerBackend;
+use crate::playback::replay::{OverlayPlayBundle, OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
 use crate::playback::state::set_state_sync;
-#[cfg(target_os = "ios")]
-use crate::playback::surface::IosLayerBusHook;
 use crate::playback::surface::VideoSurface;
-use crate::playback::switch::{switch_shell, SwitchContext};
+use crate::playback::switch::{switch_shell, ShellTransition};
 use crate::playback::tracks::{
     disable_subtitles_on_pipeline, read_cached_tracks, select_track_on_pipeline, TrackCache,
 };
@@ -46,7 +47,9 @@ pub struct PlaybackEngine {
     orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
     #[cfg(target_os = "ios")]
-    ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>>,
+    ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
+    #[cfg(target_os = "ios")]
+    play_bundle: Arc<Mutex<OverlayPlayBundle>>,
 }
 
 pub type GstPlayer = PlaybackEngine;
@@ -78,7 +81,7 @@ impl PlaybackEngine {
         let metadata_init = video_metadata.clone();
         let track_cache_init = track_cache.clone();
         #[cfg(target_os = "ios")]
-        let ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>> = Arc::new(Mutex::new(None));
+        let ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>> = Arc::new(Mutex::new(None));
         #[cfg(target_os = "ios")]
         let ios_layer_bus_init = ios_layer_bus_slot.clone();
         #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -117,7 +120,7 @@ impl PlaybackEngine {
 
         log::info!("xue_hua_video_player: PlaybackEngine ready");
         #[cfg(any(target_os = "macos", target_os = "ios"))]
-        let surface = VideoSurface::with_overlay_sink_slot(
+        let mut surface = VideoSurface::with_overlay_sink_slot(
             native_window,
             overlay_sink_slot,
             #[cfg(target_os = "ios")]
@@ -127,8 +130,13 @@ impl PlaybackEngine {
         let surface = VideoSurface::new(native_window);
         let shell_arc = Arc::new(Mutex::new(shell));
         #[cfg(target_os = "ios")]
-        {
-            let switch_ctx = SwitchContext {
+        let play_bundle = Arc::new(Mutex::new(OverlayPlayBundle {
+            replay: PlayReplayContext {
+                desired_playing: desired_playing.clone(),
+                at_eos: at_eos.clone(),
+                running: running.clone(),
+            },
+            shell: ShellTransition {
                 emitter: emitter.clone(),
                 looping: looping.clone(),
                 desired_playing: desired_playing.clone(),
@@ -139,15 +147,19 @@ impl PlaybackEngine {
                 orientation: *orientation.lock(),
                 aspect: *aspect_mode.lock(),
                 surface: surface.clone_for_switch(),
-                ios_layer_bus_slot: Some(ios_layer_bus_slot.clone()),
-            };
-            *ios_layer_bus_slot.lock() = Some(IosLayerBusHook::from_engine(
+            },
+        }));
+        #[cfg(target_os = "ios")]
+        {
+            *ios_layer_bus_slot.lock() = Some(IosLayerBackend::from_engine(
                 &surface,
                 shell_arc.clone(),
                 desired_playing.clone(),
                 at_eos.clone(),
-                switch_ctx,
+                play_bundle.clone(),
+                ios_layer_bus_slot.clone(),
             ));
+            surface.set_ios_layer_bus_slot(ios_layer_bus_slot.clone());
         }
         Ok(Self {
             shell: shell_arc,
@@ -165,18 +177,13 @@ impl PlaybackEngine {
             aspect_mode,
             #[cfg(target_os = "ios")]
             ios_layer_bus_slot,
+            #[cfg(target_os = "ios")]
+            play_bundle,
         })
     }
 
-    #[cfg(target_os = "ios")]
-    fn refresh_ios_bus_hook(&self) {
-        if let Some(hook) = self.ios_layer_bus_slot.lock().as_mut() {
-            hook.refresh_switch_ctx(self.switch_context());
-        }
-    }
-
-    fn switch_context(&self) -> SwitchContext {
-        SwitchContext {
+    fn shell_transition(&self) -> ShellTransition {
+        ShellTransition {
             emitter: self.emitter.clone(),
             looping: self.looping.clone(),
             desired_playing: self.desired_playing.clone(),
@@ -187,9 +194,29 @@ impl PlaybackEngine {
             orientation: *self.orientation.lock(),
             aspect: *self.aspect_mode.lock(),
             surface: self.surface.clone_for_switch(),
-            #[cfg(target_os = "ios")]
-            ios_layer_bus_slot: Some(self.ios_layer_bus_slot.clone()),
         }
+    }
+
+    fn overlay_play_bundle(&self) -> OverlayPlayBundle {
+        OverlayPlayBundle {
+            replay: PlayReplayContext {
+                desired_playing: self.desired_playing.clone(),
+                at_eos: self.at_eos.clone(),
+                running: self.running.clone(),
+            },
+            shell: self.shell_transition(),
+        }
+    }
+
+    fn overlay_play_intent(&self) -> OverlayPlayIntent {
+        OverlayPlayIntent {
+            bundle: self.overlay_play_bundle(),
+        }
+    }
+
+    #[cfg(target_os = "ios")]
+    fn sync_play_bundle(&self) {
+        *self.play_bundle.lock() = self.overlay_play_bundle();
     }
 
     fn run_on_gst<R, F>(&self, f: F) -> Result<R>
@@ -225,24 +252,28 @@ impl PlaybackEngine {
         #[cfg(target_os = "ios")]
         {
             self.surface.mark_media_changed();
-            self.refresh_ios_bus_hook();
+            self.sync_play_bundle();
         }
-        let ctx = self.switch_context();
-        let ctx_for_gst = ctx.clone_for_async();
+        let transition = self.shell_transition();
+        let transition_for_gst = transition.clone_for_async();
+        #[cfg(target_os = "ios")]
+        let ios_layer_bus_slot = self.ios_layer_bus_slot.clone();
         self.run_on_gst(move |pipeline_shell| {
-            switch_shell(pipeline_shell, resolved, &ctx_for_gst)?;
+            switch_shell(
+                pipeline_shell,
+                resolved,
+                &transition_for_gst,
+                #[cfg(target_os = "ios")]
+                Some(&ios_layer_bus_slot),
+            )?;
             Ok(())
         })?;
         #[cfg(target_os = "ios")]
         {
             let shell = self.shell.clone();
-            let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
-                desired_playing: self.desired_playing.clone(),
-                at_eos: self.at_eos.clone(),
-                switch_ctx: ctx.clone_for_async(),
-            };
-            if ctx.surface.overlay_ready_for_preroll() {
-                let surface = ctx.surface.clone_for_switch();
+            let play_intent = self.overlay_play_intent().clone_for_async();
+            if transition.surface.overlay_ready_for_preroll() {
+                let surface = transition.surface.clone_for_switch();
                 spawn_on_gst_thread(move || {
                     let _ = surface.schedule_ios_layer_attach(shell, play_intent);
                 });
@@ -255,9 +286,9 @@ impl PlaybackEngine {
         }
         #[cfg(not(target_os = "ios"))]
         {
-            let at_eos = self.at_eos.clone();
-            if auto_play && ctx.surface.overlay_ready_for_preroll() {
-                self.run_on_gst(move |shell| pipeline_play(shell, &at_eos, &ctx.surface, &ctx))?;
+            let bundle = self.overlay_play_bundle().clone_for_async();
+            if auto_play && bundle.shell.surface.overlay_ready_for_preroll() {
+                self.run_on_gst(move |shell| pipeline_play(shell, &bundle))?;
             }
         }
         Ok(())
@@ -289,47 +320,39 @@ impl PlaybackEngine {
         }
 
         #[cfg(target_os = "ios")]
-        self.refresh_ios_bus_hook();
-        let at_eos = self.at_eos.clone();
-        let ctx = self.switch_context();
+        self.sync_play_bundle();
         #[cfg(target_os = "ios")]
         {
             if self.surface.is_overlay_bound_on_gst() {
                 let shell = self.shell.clone();
-                let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
-                    desired_playing: self.desired_playing.clone(),
-                    at_eos: self.at_eos.clone(),
-                    switch_ctx: ctx.clone_for_async(),
-                };
+                let play_intent = self.overlay_play_intent().clone_for_async();
                 return self.run_on_gst(move |_shell| {
-                    ctx.surface.resume_ios_play(shell, play_intent);
+                    play_intent
+                        .bundle
+                        .shell
+                        .surface
+                        .resume_ios_play(shell, play_intent);
                     Ok(())
                 });
             }
             let shell = self.shell.clone();
-            let surface = self.surface.clone_for_switch();
-            let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
-                desired_playing: self.desired_playing.clone(),
-                at_eos: self.at_eos.clone(),
-                switch_ctx: ctx.clone_for_async(),
-            };
+            let play_intent = self.overlay_play_intent().clone_for_async();
+            let surface = play_intent.bundle.shell.surface.clone_for_switch();
             spawn_on_gst_thread(move || {
                 let _ = surface.schedule_ios_layer_attach(shell, play_intent);
             });
             log::info!("gst: deferring play until iOS layer is attached");
             return Ok(());
         }
-        #[cfg(not(target_os = "ios"))]
+        let bundle = self.overlay_play_bundle().clone_for_async();
         self.run_on_gst(move |shell| {
             #[cfg(target_os = "android")]
-            if !ctx.surface.is_overlay_bound_on_gst() {
-                ctx.surface.rebind_cached_overlay(shell)?;
+            if !bundle.shell.surface.is_overlay_bound_on_gst() {
+                bundle.shell.surface.rebind_cached_overlay(shell)?;
             }
             #[cfg(not(target_os = "android"))]
-            {
-                ctx.surface.rebind_cached_overlay(shell)?;
-            }
-            pipeline_play(shell, &at_eos, &ctx.surface, &ctx)
+            bundle.shell.surface.rebind_cached_overlay(shell)?;
+            pipeline_play(shell, &bundle)
         })
     }
 
@@ -518,11 +541,7 @@ impl PlaybackEngine {
     fn notify_mobile_surface(&self, handle: i64, width: i32, height: i32) -> Result<()> {
         #[cfg(target_os = "android")]
         {
-            let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
-                desired_playing: self.desired_playing.clone(),
-                at_eos: self.at_eos.clone(),
-                switch_ctx: self.switch_context(),
-            };
+            let play_intent = self.overlay_play_intent();
             return self.surface.notify_android_surface(
                 self.shell.clone(),
                 handle,
@@ -544,18 +563,14 @@ impl PlaybackEngine {
     pub fn notify_ios_overlay(&self, handle: i64, width: i32, height: i32) -> Result<()> {
         self.surface.notify_ios_overlay(handle, width, height)?;
         if handle != 0 && width > 0 && height > 0 {
-            self.refresh_ios_bus_hook();
+            self.sync_play_bundle();
         }
         Ok(())
     }
 
     #[cfg(target_os = "ios")]
     pub fn apply_ios_overlay_gstreamer(&self, width: i32, height: i32) -> Result<()> {
-        let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
-            desired_playing: self.desired_playing.clone(),
-            at_eos: self.at_eos.clone(),
-            switch_ctx: self.switch_context(),
-        };
+        let play_intent = self.overlay_play_intent();
         self.surface
             .apply_ios_overlay_gstreamer(self.shell.clone(), width, height, play_intent)
     }
@@ -630,16 +645,11 @@ fn pipeline_seek(
     Ok(())
 }
 
-fn pipeline_play(
-    shell: &mut PipelineShell,
-    at_eos: &AtomicBool,
-    surface: &VideoSurface,
-    ctx: &SwitchContext,
-) -> Result<()> {
-    crate::playback::state::resume_or_replay_from_eos(shell, at_eos, Some(ctx))?;
+fn pipeline_play(shell: &mut PipelineShell, bundle: &OverlayPlayBundle) -> Result<()> {
+    crate::playback::state::resume_or_replay_from_eos(shell, Some(bundle))?;
     #[cfg(target_os = "android")]
-    if let Some(handle) = *surface.stored_handle().lock() {
-        let (width, height) = surface.cached_dimensions();
+    if let Some(handle) = *bundle.shell.surface.stored_handle().lock() {
+        let (width, height) = bundle.shell.surface.cached_dimensions();
         crate::playback::surface::refresh_mobile_overlay_on_gst(
             shell,
             handle,

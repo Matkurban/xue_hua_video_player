@@ -377,7 +377,7 @@ by default, an adaptive control bar.
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `controller` | required | The `XueHuaPlayerController` to render. |
-| `fit` | `BoxFit.contain` | How the video is inscribed. |
+| `aspectRatioMode` | `AspectRatioMode.fit` | GStreamer sink scaling (`fit` / `fill` / `stretch`). Also available via `controller.setAspectRatioMode`. |
 | `backgroundColor` | black | Letterbox / background color. |
 | `showControls` | `true` | Overlay the built-in control bar. |
 | `controlsStyle` | `adaptive` | `adaptive` / `material` / `cupertino`. |

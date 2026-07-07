@@ -3,138 +3,43 @@ use std::sync::{
     Arc,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gstreamer as gst;
-use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::gst_runtime::spawn_on_gst_thread;
 #[cfg(target_os = "ios")]
-use crate::playback::ios_overlay::{IosIdleWork, IosOverlayPlayIntent, IosOverlaySession};
+use crate::playback::overlay::ios_session::IosOverlaySession;
+#[cfg(target_os = "ios")]
+use crate::playback::overlay::IosLayerBackend;
+#[cfg(target_os = "macos")]
+use crate::playback::overlay::MacosOverlayBackend;
+use crate::playback::overlay::VideoOverlayBackend;
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "macos"),
+    not(target_os = "ios")
+))]
+use crate::playback::overlay::{apply_overlay_handle, DesktopOverlayBackend};
+#[cfg(target_os = "android")]
+use crate::playback::overlay::{
+    cache_android_native_window, refresh_mobile_overlay_on_gst, schedule_mobile_overlay_apply,
+};
+use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
-#[cfg(any(target_os = "android", target_os = "ios"))]
-use crate::playback::state::resume_or_replay_from_eos;
-use crate::playback::state::set_state_sync;
-use crate::playback::switch::SwitchContext;
+use crate::video::clear_overlay_window_handle;
 #[cfg(target_os = "ios")]
 use crate::video::ios_layer::IosLayerAttachOutcome;
-use crate::video::{
-    clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
-    set_overlay_window_handle,
-};
 
-/// Shared state for iOS layer attach retries on the Gst bus (`READY → PAUSED`).
-#[cfg(target_os = "ios")]
-pub struct IosLayerBusHook {
-    pub shell: Arc<Mutex<PipelineShell>>,
-    pub ios_session: IosOverlaySession,
-    pub stored: Arc<Mutex<Option<usize>>>,
-    pub overlay_sink: Arc<Mutex<gst::Element>>,
-    pub desired_playing: Arc<AtomicBool>,
-    pub at_eos: Arc<AtomicBool>,
-    pub switch_ctx: SwitchContext,
-}
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use crate::playback::overlay::assign_overlay_sink;
 
-#[cfg(target_os = "ios")]
-impl IosLayerBusHook {
-    pub fn from_engine(
-        surface: &VideoSurface,
-        shell: Arc<Mutex<PipelineShell>>,
-        desired_playing: Arc<AtomicBool>,
-        at_eos: Arc<AtomicBool>,
-        switch_ctx: SwitchContext,
-    ) -> Self {
-        Self {
-            shell,
-            ios_session: surface.ios_session(),
-            stored: surface.stored.clone(),
-            overlay_sink: surface
-                .overlay_sink
-                .as_ref()
-                .expect("ios overlay sink slot")
-                .clone(),
-            desired_playing,
-            at_eos,
-            switch_ctx,
-        }
-    }
-
-    pub fn refresh_switch_ctx(&mut self, ctx: SwitchContext) {
-        self.switch_ctx = ctx;
-    }
-
-    pub fn is_overlay_bound(&self) -> bool {
-        self.ios_session.is_bound()
-    }
-
-    pub fn set_pending_play_after_overlay(&self) {
-        self.ios_session.set_pending_play_after_overlay(true);
-    }
-
-    pub fn set_buffering_active(&self, active: bool) {
-        self.ios_session.set_buffering_active(active);
-    }
-
-    fn idle_work(&self) -> IosIdleWork {
-        self.ios_session.idle_work(
-            self.shell.clone(),
-            &IosOverlayPlayIntent {
-                desired_playing: self.desired_playing.clone(),
-                at_eos: self.at_eos.clone(),
-                switch_ctx: self.switch_ctx.clone_for_async(),
-            },
-        )
-    }
-
-    pub fn schedule_apply(&self) {
-        self.ios_session.schedule_apply(self.idle_work());
-    }
-
-    pub fn schedule_attach(&self) {
-        self.ios_session.schedule_attach(self.idle_work());
-    }
-
-    /// Routes PLAYING resume through idle [`IosOverlaySession::apply_target_state`].
-    pub fn request_playing_resume(&self) {
-        self.schedule_apply();
-    }
-
-    pub fn try_attach(&self) {
-        let play_intent = IosOverlayPlayIntent {
-            desired_playing: self.desired_playing.clone(),
-            at_eos: self.at_eos.clone(),
-            switch_ctx: self.switch_ctx.clone_for_async(),
-        };
-        match self.ios_session.request_attach(
-            self.shell.clone(),
-            self.stored.clone(),
-            play_intent,
-            "READY→PAUSED",
-            self.ios_session.overlay_generation().load(Ordering::SeqCst),
-        ) {
-            Ok(IosLayerAttachOutcome::LayerNotReady) => {
-                log::debug!("gst: ios layer attach on READY→PAUSED: layer not ready yet");
-            }
-            Ok(IosLayerAttachOutcome::Scheduled) => {}
-            Ok(IosLayerAttachOutcome::Skipped) => {}
-            Err(e) => {
-                log::debug!("gst: ios layer attach on READY→PAUSED: {e:#}");
-            }
-        }
-    }
-}
-
-/// Play intent forwarded to the Gst thread when a mobile overlay binds (Android/iOS).
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub struct MobileOverlayPlayIntent {
-    pub desired_playing: Arc<AtomicBool>,
-    pub at_eos: Arc<AtomicBool>,
-    pub switch_ctx: SwitchContext,
-}
+#[cfg(target_os = "android")]
+pub use crate::playback::overlay::refresh_mobile_overlay_on_gst;
 
 /// Cached native overlay handle and platform-specific bind helpers.
 pub struct VideoSurface {
-    stored: std::sync::Arc<Mutex<Option<usize>>>,
+    stored: Arc<Mutex<Option<usize>>>,
     #[cfg(any(target_os = "android", target_os = "ios"))]
     overlay_bound: Arc<AtomicBool>,
     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -145,12 +50,25 @@ pub struct VideoSurface {
     last_applied_handle: Arc<AtomicUsize>,
     #[cfg(target_os = "ios")]
     ios_session: IosOverlaySession,
+    #[cfg(target_os = "ios")]
+    ios_layer_bus_slot: Option<Arc<Mutex<Option<crate::playback::overlay::IosLayerBackend>>>>,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    overlay_sink: Option<std::sync::Arc<Mutex<gst::Element>>>,
+    overlay_sink: Option<Arc<Mutex<gst::Element>>>,
+}
+
+impl VideoOverlayBackend for VideoSurface {
+    fn stored_handle(&self) -> &Mutex<Option<usize>> {
+        self.stored.as_ref()
+    }
+
+    #[cfg(target_os = "android")]
+    fn overlay_ready_for_preroll(&self) -> bool {
+        self.has_cached_handle() && self.is_overlay_bound_on_gst()
+    }
 }
 
 impl VideoSurface {
-    pub fn new(stored: std::sync::Arc<Mutex<Option<usize>>>) -> Self {
+    pub fn new(stored: Arc<Mutex<Option<usize>>>) -> Self {
         #[cfg(any(target_os = "android", target_os = "ios"))]
         let overlay_bound = Arc::new(AtomicBool::new(false));
         #[cfg(target_os = "ios")]
@@ -176,7 +94,22 @@ impl VideoSurface {
             ios_session,
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             overlay_sink: None,
+            #[cfg(target_os = "ios")]
+            ios_layer_bus_slot: None,
         }
+    }
+
+    #[cfg(target_os = "ios")]
+    pub fn set_ios_layer_bus_slot(&mut self, slot: Arc<Mutex<Option<IosLayerBackend>>>) {
+        self.ios_layer_bus_slot = Some(slot);
+    }
+
+    #[cfg(target_os = "ios")]
+    fn ios_layer_bus_slot(&self) -> Arc<Mutex<Option<IosLayerBackend>>> {
+        self.ios_layer_bus_slot
+            .as_ref()
+            .expect("ios layer bus slot not wired")
+            .clone()
     }
 
     #[cfg(target_os = "ios")]
@@ -186,9 +119,9 @@ impl VideoSurface {
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     pub fn with_overlay_sink_slot(
-        stored: std::sync::Arc<Mutex<Option<usize>>>,
-        overlay_sink: std::sync::Arc<Mutex<gst::Element>>,
-        #[cfg(target_os = "ios")] running: std::sync::Arc<AtomicBool>,
+        stored: Arc<Mutex<Option<usize>>>,
+        overlay_sink: Arc<Mutex<gst::Element>>,
+        #[cfg(target_os = "ios")] running: Arc<AtomicBool>,
     ) -> Self {
         #[cfg(any(target_os = "android", target_os = "ios"))]
         let overlay_bound = Arc::new(AtomicBool::new(false));
@@ -214,13 +147,15 @@ impl VideoSurface {
             #[cfg(target_os = "ios")]
             ios_session,
             overlay_sink: Some(overlay_sink),
+            #[cfg(target_os = "ios")]
+            ios_layer_bus_slot: None,
         }
     }
 
     #[cfg(target_os = "macos")]
     pub fn with_macos_overlay_sink(
-        stored: std::sync::Arc<Mutex<Option<usize>>>,
-        overlay_sink: std::sync::Arc<Mutex<gst::Element>>,
+        stored: Arc<Mutex<Option<usize>>>,
+        overlay_sink: Arc<Mutex<gst::Element>>,
     ) -> Self {
         Self::with_overlay_sink_slot(stored, overlay_sink)
     }
@@ -230,7 +165,7 @@ impl VideoSurface {
         match &self.overlay_sink {
             Some(slot) => *slot.lock() = element,
             None => {
-                self.overlay_sink = Some(std::sync::Arc::new(Mutex::new(element)));
+                self.overlay_sink = Some(Arc::new(Mutex::new(element)));
             }
         }
     }
@@ -240,12 +175,12 @@ impl VideoSurface {
         self.set_overlay_sink_slot(element);
     }
 
-    pub fn stored_handle(&self) -> std::sync::Arc<Mutex<Option<usize>>> {
+    pub fn stored_handle(&self) -> Arc<Mutex<Option<usize>>> {
         self.stored.clone()
     }
 
     pub fn has_cached_handle(&self) -> bool {
-        self.stored.lock().is_some()
+        VideoOverlayBackend::has_cached_handle(self)
     }
 
     /// True once the platform overlay is bound on the Gst thread (Android: VideoOverlay; iOS: CALayer attached).
@@ -260,20 +195,8 @@ impl VideoSurface {
     }
 
     /// True when a cached native handle exists (Android: also requires Gst-thread bind).
-    #[cfg(target_os = "android")]
     pub fn overlay_ready_for_preroll(&self) -> bool {
-        self.has_cached_handle() && self.is_overlay_bound_on_gst()
-    }
-
-    /// iOS: host UIView cached — layer attach happens after preroll, not before.
-    #[cfg(target_os = "ios")]
-    pub fn overlay_ready_for_preroll(&self) -> bool {
-        self.has_cached_handle()
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn overlay_ready_for_preroll(&self) -> bool {
-        self.has_cached_handle()
+        VideoOverlayBackend::overlay_ready_for_preroll(self)
     }
 
     /// Schedules async CALayer attach on the main thread (Tutorial 4 target_state flow).
@@ -281,13 +204,9 @@ impl VideoSurface {
     pub fn schedule_ios_layer_attach(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
-        play_intent: MobileOverlayPlayIntent,
+        play_intent: OverlayPlayIntent,
     ) -> Result<IosLayerAttachOutcome> {
-        let ios_intent = IosOverlayPlayIntent {
-            desired_playing: play_intent.desired_playing.clone(),
-            at_eos: play_intent.at_eos.clone(),
-            switch_ctx: play_intent.switch_ctx.clone_for_async(),
-        };
+        let ios_intent = play_intent.clone_for_async();
         let work_generation = self.ios_session.overlay_generation().load(Ordering::SeqCst);
         self.ios_session.request_attach(
             shell,
@@ -295,6 +214,7 @@ impl VideoSurface {
             ios_intent,
             "load/play",
             work_generation,
+            self.ios_layer_bus_slot(),
         )
     }
 
@@ -303,7 +223,7 @@ impl VideoSurface {
     pub fn try_attach_ios_layer_on_gst(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
-        play_intent: MobileOverlayPlayIntent,
+        play_intent: OverlayPlayIntent,
     ) -> Result<bool> {
         match self.schedule_ios_layer_attach(shell, play_intent)? {
             IosLayerAttachOutcome::Scheduled => Ok(true),
@@ -343,17 +263,14 @@ impl VideoSurface {
     pub fn resume_ios_play(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
-        play_intent: MobileOverlayPlayIntent,
+        play_intent: OverlayPlayIntent,
     ) {
-        let ios_intent = IosOverlayPlayIntent {
-            desired_playing: play_intent.desired_playing,
-            at_eos: play_intent.at_eos,
-            switch_ctx: play_intent.switch_ctx,
-        };
+        let ios_intent = play_intent.clone_for_async();
         self.ios_session.drain_pending_play(
             shell,
             &ios_intent,
             self.ios_session.overlay_generation().load(Ordering::SeqCst),
+            self.ios_layer_bus_slot(),
         );
     }
 
@@ -379,29 +296,25 @@ impl VideoSurface {
     }
 
     pub fn cache_handle(&self, handle: usize) {
-        if handle == 0 {
-            self.stored.lock().take();
-        } else {
-            *self.stored.lock() = Some(handle);
-        }
+        VideoOverlayBackend::cache_handle(self, handle);
     }
 
     #[cfg(target_os = "macos")]
     pub fn cache_macos_handle(&self, view_ptr: i64) {
         if view_ptr == 0 {
-            self.stored.lock().take();
+            self.cache_handle(0);
         } else {
-            *self.stored.lock() = Some(view_ptr as usize);
+            self.cache_handle(view_ptr as usize);
         }
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    pub fn overlay_sink_slot(&self) -> Option<&std::sync::Arc<Mutex<gst::Element>>> {
+    pub fn overlay_sink_slot(&self) -> Option<&Arc<Mutex<gst::Element>>> {
         self.overlay_sink.as_ref()
     }
 
     #[cfg(target_os = "macos")]
-    pub fn macos_overlay_sink(&self) -> Option<&std::sync::Arc<Mutex<gst::Element>>> {
+    pub fn macos_overlay_sink(&self) -> Option<&Arc<Mutex<gst::Element>>> {
         self.overlay_sink_slot()
     }
 
@@ -411,27 +324,12 @@ impl VideoSurface {
         let Some(slot) = self.overlay_sink.as_ref() else {
             return Ok(());
         };
-        let sink = slot.lock().clone();
-        match *self.stored.lock() {
-            None => clear_overlay_window_handle(&sink),
-            Some(handle) => {
-                set_overlay_window_handle(&sink, handle)?;
-                if width > 0 && height > 0 {
-                    set_overlay_render_rectangle(&sink, width, height);
-                }
-                Ok(())
-            }
-        }
+        MacosOverlayBackend::apply_gstreamer(&self.stored, &slot.lock(), width, height)
     }
 
     #[cfg(target_os = "macos")]
     pub fn ensure_overlay_ready(&self) -> Result<()> {
-        if self.stored.lock().is_none() {
-            log::warn!(
-                "macOS overlay handle not cached yet; playback may fail until platform view binds"
-            );
-        }
-        Ok(())
+        MacosOverlayBackend::ensure_overlay_ready(&self.stored)
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -445,29 +343,28 @@ impl VideoSurface {
             let _ = (self, shell);
             return Ok(());
         }
-        #[cfg(any(target_os = "android", target_os = "ios"))]
+        #[cfg(target_os = "android")]
         {
             if let Some(handle) = *self.stored.lock() {
                 let (width, height) = self.cached_dimensions();
-                #[cfg(target_os = "android")]
-                {
-                    refresh_mobile_overlay_on_gst(shell, handle, width, height, "rebind")?;
-                    self.overlay_bound.store(true, Ordering::SeqCst);
-                    crate::diag::logcat_info("gst: overlay rebound on new video_sink");
-                }
-                #[cfg(target_os = "ios")]
-                {
-                    let _ = (self, shell);
-                }
+                refresh_mobile_overlay_on_gst(shell, handle, width, height, "rebind")?;
+                self.overlay_bound.store(true, Ordering::SeqCst);
+                crate::diag::logcat_info("gst: overlay rebound on new video_sink");
             }
             return Ok(());
         }
-        #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
+        #[cfg(target_os = "ios")]
         {
-            if let Some(handle) = *self.stored.lock() {
-                apply_overlay_handle(&shell.video_sink, handle, &self.stored)?;
-            }
-            Ok(())
+            let _ = (self, shell);
+            return Ok(());
+        }
+        #[cfg(all(
+            not(target_os = "macos"),
+            not(target_os = "android"),
+            not(target_os = "ios")
+        ))]
+        {
+            DesktopOverlayBackend::rebind_cached_overlay(&self.stored, shell)
         }
     }
 
@@ -494,10 +391,10 @@ impl VideoSurface {
     #[cfg(target_os = "ios")]
     pub fn apply_ios_overlay_gstreamer(
         &self,
-        shell: std::sync::Arc<Mutex<PipelineShell>>,
+        shell: Arc<Mutex<PipelineShell>>,
         width: i32,
         height: i32,
-        play_intent: MobileOverlayPlayIntent,
+        play_intent: OverlayPlayIntent,
     ) -> Result<()> {
         if width <= 0 || height <= 0 {
             return Ok(());
@@ -518,15 +415,18 @@ impl VideoSurface {
             && self.last_applied_handle.load(Ordering::SeqCst) == host_view
         {
             let dimensions_changed = prev_w != width || prev_h != height;
-            if dimensions_changed || play_intent.desired_playing.load(Ordering::SeqCst) {
+            if dimensions_changed
+                || play_intent
+                    .bundle
+                    .replay
+                    .desired_playing
+                    .load(Ordering::SeqCst)
+            {
                 let session = self.ios_session.clone();
-                let running = play_intent.switch_ctx.running.clone();
+                let running = play_intent.bundle.replay.running.clone();
                 let work_generation = session.overlay_generation().load(Ordering::SeqCst);
-                let ios_intent = IosOverlayPlayIntent {
-                    desired_playing: play_intent.desired_playing.clone(),
-                    at_eos: play_intent.at_eos.clone(),
-                    switch_ctx: play_intent.switch_ctx.clone_for_async(),
-                };
+                let ios_intent = play_intent.clone_for_async();
+                let ios_slot = self.ios_layer_bus_slot();
                 spawn_on_gst_thread(move || {
                     if !running.load(Ordering::SeqCst)
                         || work_generation != session.overlay_generation().load(Ordering::SeqCst)
@@ -551,7 +451,7 @@ impl VideoSurface {
                     {
                         return;
                     }
-                    session.drain_pending_play(shell, &ios_intent, work_generation);
+                    session.drain_pending_play(shell, &ios_intent, work_generation, ios_slot);
                 });
             }
             return Ok(());
@@ -559,21 +459,24 @@ impl VideoSurface {
 
         let session = self.ios_session.clone();
         let stored = self.stored.clone();
-        let running = play_intent.switch_ctx.running.clone();
+        let running = play_intent.bundle.replay.running.clone();
         let work_generation = session.overlay_generation().load(Ordering::SeqCst);
-        let ios_intent = IosOverlayPlayIntent {
-            desired_playing: play_intent.desired_playing,
-            at_eos: play_intent.at_eos,
-            switch_ctx: play_intent.switch_ctx.clone_for_async(),
-        };
+        let ios_intent = play_intent.clone_for_async();
+        let ios_slot = self.ios_layer_bus_slot();
         spawn_on_gst_thread(move || {
             if !running.load(Ordering::SeqCst)
                 || work_generation != session.overlay_generation().load(Ordering::SeqCst)
             {
                 return;
             }
-            let _ =
-                session.request_attach(shell, stored, ios_intent, "Swift apply", work_generation);
+            let _ = session.request_attach(
+                shell,
+                stored,
+                ios_intent,
+                "Swift apply",
+                work_generation,
+                ios_slot,
+            );
         });
         Ok(())
     }
@@ -587,11 +490,11 @@ impl VideoSurface {
     #[cfg(target_os = "android")]
     pub fn notify_android_surface(
         &self,
-        shell: std::sync::Arc<Mutex<PipelineShell>>,
+        shell: Arc<Mutex<PipelineShell>>,
         handle: i64,
         width: i32,
         height: i32,
-        play_intent: MobileOverlayPlayIntent,
+        play_intent: OverlayPlayIntent,
     ) -> Result<()> {
         if handle == 0 {
             self.overlay_bound.store(false, Ordering::SeqCst);
@@ -613,7 +516,6 @@ impl VideoSurface {
             shell,
             self.stored.clone(),
             self.overlay_bound.clone(),
-            None,
             width,
             height,
             play_intent,
@@ -621,7 +523,11 @@ impl VideoSurface {
         Ok(())
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "macos"),
+        not(target_os = "ios")
+    ))]
     pub fn set_window_handle_on_gst(
         &self,
         shell: &mut PipelineShell,
@@ -635,26 +541,18 @@ impl VideoSurface {
     #[cfg(not(any(target_os = "android", target_os = "macos", target_os = "ios")))]
     pub fn schedule_overlay_rectangle_sync(
         &self,
-        shell: std::sync::Arc<Mutex<PipelineShell>>,
+        shell: Arc<Mutex<PipelineShell>>,
         width: i32,
         height: i32,
     ) {
-        let stored = self.stored.clone();
-        spawn_on_gst_thread(move || {
-            let guard = shell.lock();
-            if width > 0 && height > 0 {
-                set_overlay_render_rectangle(&guard.video_sink, width, height);
-            } else if stored.lock().is_some() {
-                expose_overlay(&guard.video_sink);
-            }
-        });
+        DesktopOverlayBackend::schedule_rectangle_sync(self.stored.clone(), shell, width, height);
     }
 
     /// Re-applies VideoOverlay render rectangle + expose after surface resize (Android/iOS).
     #[cfg(any(target_os = "android", target_os = "ios"))]
     pub fn schedule_mobile_overlay_rectangle_sync(
         &self,
-        shell: std::sync::Arc<Mutex<PipelineShell>>,
+        shell: Arc<Mutex<PipelineShell>>,
         width: i32,
         height: i32,
     ) {
@@ -681,7 +579,7 @@ impl VideoSurface {
         }
     }
 
-    /// Shares overlay state for [`super::switch::SwitchContext`].
+    /// Shares overlay state for [`super::switch::ShellTransition`].
     pub fn clone_for_switch(&self) -> Self {
         Self {
             stored: self.stored.clone(),
@@ -695,233 +593,10 @@ impl VideoSurface {
             last_applied_handle: self.last_applied_handle.clone(),
             #[cfg(target_os = "ios")]
             ios_session: self.ios_session.clone(),
+            #[cfg(target_os = "ios")]
+            ios_layer_bus_slot: self.ios_layer_bus_slot.clone(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             overlay_sink: self.overlay_sink.clone(),
         }
     }
-}
-
-pub fn apply_overlay_handle(
-    video_sink: &gst::Element,
-    handle: usize,
-    stored: &Mutex<Option<usize>>,
-) -> Result<()> {
-    #[cfg(target_os = "android")]
-    {
-        if handle == 0 {
-            cache_android_native_window(stored, 0)?;
-            clear_overlay_window_handle(video_sink)?;
-            return Ok(());
-        }
-        cache_android_native_window(stored, handle)?;
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        if handle == 0 {
-            stored.lock().take();
-        } else {
-            *stored.lock() = Some(handle);
-        }
-    }
-
-    if handle == 0 {
-        clear_overlay_window_handle(video_sink)?;
-    } else {
-        set_overlay_window_handle(video_sink, handle)?;
-    }
-    Ok(())
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-pub fn assign_overlay_sink(slot: &std::sync::Arc<Mutex<gst::Element>>, element: &gst::Element) {
-    *slot.lock() = element.clone();
-}
-
-#[cfg(target_os = "android")]
-pub fn cache_android_native_window(stored: &Mutex<Option<usize>>, handle: usize) -> Result<()> {
-    if handle == 0 {
-        if let Some(old) = stored.lock().take() {
-            crate::platform_view_android::release_native_window(old);
-        }
-        return Ok(());
-    }
-    let mut guard = stored.lock();
-    if let Some(old) = *guard {
-        if old != handle {
-            crate::platform_view_android::release_native_window(old);
-        }
-    }
-    *guard = Some(handle);
-    Ok(())
-}
-
-/// Rebinds the cached native window on the Gst thread (Android).
-#[cfg(target_os = "android")]
-pub fn refresh_mobile_overlay_on_gst(
-    shell: &PipelineShell,
-    handle: usize,
-    width: i32,
-    height: i32,
-    reason: &str,
-) -> Result<()> {
-    set_overlay_window_handle(&shell.video_sink, handle)?;
-    if width > 0 && height > 0 {
-        set_overlay_render_rectangle(&shell.video_sink, width, height);
-    }
-    expose_overlay(&shell.video_sink);
-    crate::diag::logcat_info(&format!("gst: overlay refresh {reason} ({width}x{height})"));
-    Ok(())
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub fn refresh_mobile_overlay_on_gst(
-    _shell: &PipelineShell,
-    _handle: usize,
-    _width: i32,
-    _height: i32,
-    _reason: &str,
-) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub fn apply_mobile_overlay_on_gst(
-    shell: &mut PipelineShell,
-    handle: usize,
-    width: i32,
-    height: i32,
-    play_intent: &MobileOverlayPlayIntent,
-    overlay_bound: &AtomicBool,
-    last_applied_handle: Option<&AtomicUsize>,
-) -> Result<()> {
-    #[cfg(target_os = "android")]
-    {
-        refresh_mobile_overlay_on_gst(shell, handle, width, height, "surface bind")?;
-        overlay_bound.store(true, Ordering::SeqCst);
-        let (_, current, pending) = shell.pipeline.state(gst::ClockTime::ZERO);
-        crate::diag::logcat_info(&format!(
-            "gst: overlay applied on Gst thread — pipeline {current:?} pending {pending:?}"
-        ));
-        maybe_preroll_and_resume_play(shell, play_intent, handle, width, height)
-    }
-    #[cfg(target_os = "ios")]
-    {
-        let _ = (
-            shell,
-            handle,
-            width,
-            height,
-            play_intent,
-            overlay_bound,
-            last_applied_handle,
-        );
-        log::warn!("apply_mobile_overlay_on_gst: use apply_ios_overlay_gstreamer on iOS");
-        Ok(())
-    }
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn maybe_preroll_and_resume_play(
-    shell: &mut PipelineShell,
-    play_intent: &MobileOverlayPlayIntent,
-    handle: usize,
-    width: i32,
-    height: i32,
-) -> Result<()> {
-    let (_, current, pending) = shell.pipeline.state(gst::ClockTime::ZERO);
-    let desired = play_intent.desired_playing.load(Ordering::SeqCst);
-
-    if pending != gst::State::VoidPending {
-        #[cfg(target_os = "android")]
-        crate::diag::logcat_info(&format!(
-            "gst: overlay bind — pipeline pending {pending:?}, current {current:?}"
-        ));
-        #[cfg(target_os = "ios")]
-        log::info!("gst: overlay bind — pipeline pending {pending:?}, current {current:?}");
-        if desired && current == gst::State::Paused {
-            #[cfg(target_os = "android")]
-            crate::diag::logcat_info("gst: overlay bound — resuming play while pending");
-            resume_or_replay_from_eos(shell, &play_intent.at_eos, Some(&play_intent.switch_ctx))?;
-            #[cfg(target_os = "android")]
-            return refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Playing");
-            #[cfg(target_os = "ios")]
-            return Ok(());
-        }
-        return Ok(());
-    }
-
-    if current == gst::State::Ready && shell.has_pending_media() {
-        #[cfg(target_os = "android")]
-        crate::diag::logcat_info("gst: overlay bound — starting Paused preroll");
-        #[cfg(target_os = "ios")]
-        log::info!("gst: overlay bound — starting Paused preroll");
-        set_state_sync(&shell.pipeline, gst::State::Paused)?;
-        #[cfg(target_os = "android")]
-        refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Paused preroll")?;
-    } else if current != gst::State::Ready && current != gst::State::Paused {
-        return Ok(());
-    }
-
-    if desired {
-        #[cfg(target_os = "android")]
-        crate::diag::logcat_info("gst: overlay bound — resuming play (desired_playing=true)");
-        #[cfg(target_os = "ios")]
-        log::info!("gst: overlay bound — resuming play (desired_playing=true)");
-        resume_or_replay_from_eos(shell, &play_intent.at_eos, Some(&play_intent.switch_ctx))?;
-        #[cfg(target_os = "android")]
-        refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Playing")?;
-    }
-    Ok(())
-}
-
-pub fn maybe_preroll_after_overlay_bind(shell: &PipelineShell) -> Result<()> {
-    let (_, current, pending) = shell.pipeline.state(gst::ClockTime::ZERO);
-    if pending != gst::State::VoidPending {
-        return Ok(());
-    }
-    if current != gst::State::Ready {
-        return Ok(());
-    }
-    if !shell.has_pending_media() {
-        return Ok(());
-    }
-    #[cfg(target_os = "android")]
-    crate::diag::logcat_info("gst: overlay bound — starting Paused preroll");
-    set_state_sync(&shell.pipeline, gst::State::Paused)
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub fn schedule_mobile_overlay_apply(
-    bundle: std::sync::Arc<Mutex<PipelineShell>>,
-    stored: std::sync::Arc<Mutex<Option<usize>>>,
-    overlay_bound: Arc<AtomicBool>,
-    last_applied_handle: Option<Arc<AtomicUsize>>,
-    width: i32,
-    height: i32,
-    play_intent: MobileOverlayPlayIntent,
-) {
-    spawn_on_gst_thread(move || {
-        let mut guard = bundle.lock();
-        let Some(handle) = *stored.lock() else {
-            overlay_bound.store(false, Ordering::SeqCst);
-            return;
-        };
-        let last_applied_ref = last_applied_handle.as_deref();
-        if let Err(e) = apply_mobile_overlay_on_gst(
-            &mut guard,
-            handle,
-            width,
-            height,
-            &play_intent,
-            &overlay_bound,
-            last_applied_ref,
-        ) {
-            overlay_bound.store(false, Ordering::SeqCst);
-            #[cfg(target_os = "android")]
-            crate::diag::logcat_error(&format!("mobile overlay apply: {e:#}"));
-            #[cfg(target_os = "ios")]
-            log::warn!("ios overlay apply: {e:#}");
-        }
-    });
 }

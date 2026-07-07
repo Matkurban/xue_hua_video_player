@@ -143,8 +143,7 @@ class CargokitCrateOptions {
         }
       } else {
         throw SourceSpanException(
-            'Unknown cargokit option type. Must be "cargo".',
-            entry.key.span);
+            'Unknown cargokit option type. Must be "cargo".', entry.key.span);
       }
     }
     return CargokitCrateOptions(

@@ -1,44 +1,33 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
-import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../xue_hua_player_controller.dart';
+import 'playback_controls_model.dart';
 
-/// Shared drag/seek handling for the built-in sliders.
+/// Drag/seek handling for built-in progress sliders.
 ///
-/// While the user drags, the slider is pinned to the finger position. On
-/// release the value stays pinned to the requested target and only unpins once
-/// the reported [XueHuaPlayerController.position] catches up (or after a safety
-/// timeout), so the thumb never bounces back to the stale play position while
-/// the async seek is in flight.
-mixin SeekMixin<T extends StatefulWidget> on State<T> {
-  static const _dragSafetyMs = 300;
-  static const _seekSettleMs = 1500;
+/// While the user drags, the slider pins to the finger position. On release the
+/// value stays pinned until [PlaybackControlsModel.position] catches up (or
+/// after a safety timeout), so the thumb never bounces back to a stale position
+/// while the async seek is in flight.
+class ScrubController {
+  ScrubController({required this.model, required this.onInteract}) {
+    _seekWatch = effect(_checkSeekSettled);
+  }
+
+  static const dragSafetyMs = 300;
+  static const seekSettleMs = 1500;
+
+  final PlaybackControlsModel model;
+  final VoidCallback onInteract;
 
   final FlutterSignal<double?> _dragValue = signal(null);
   bool _dragging = false;
   bool _seeking = false;
   Timer? _seekTimeout;
-  void Function()? _seekWatch;
-
-  XueHuaPlayerController get seekController;
-
-  VoidCallback get onSeekInteract;
-
-  @override
-  void initState() {
-    super.initState();
-    _seekWatch = effect(_checkSeekSettled);
-  }
-
-  @override
-  void dispose() {
-    _seekTimeout?.cancel();
-    _seekWatch?.call();
-    super.dispose();
-  }
+  late final void Function() _seekWatch;
 
   double _seekToleranceMs(double durMs) => math.max(400.0, durMs * 0.01);
 
@@ -49,8 +38,8 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
 
   void _checkSeekSettled() {
     final target = _dragValue.value;
-    final dur = seekController.duration.value.inMilliseconds.toDouble();
-    final pos = seekController.position.value.inMilliseconds.toDouble();
+    final dur = model.duration.value.inMilliseconds.toDouble();
+    final pos = model.position.value.inMilliseconds.toDouble();
     if (target == null || dur <= 0) return;
     if (!_isNearPosition(target, dur, pos)) return;
     if (_seeking || !_dragging) {
@@ -68,7 +57,7 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
 
   void _armDragSafetyTimeout() {
     _seekTimeout?.cancel();
-    _seekTimeout = Timer(const Duration(milliseconds: _dragSafetyMs), () {
+    _seekTimeout = Timer(const Duration(milliseconds: dragSafetyMs), () {
       if (_dragging && !_seeking) _clearSeek();
     });
   }
@@ -76,7 +65,7 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
   void _armSeekSettleTimeout() {
     _seekTimeout?.cancel();
     _seekTimeout = Timer(
-      const Duration(milliseconds: _seekSettleMs),
+      const Duration(milliseconds: seekSettleMs),
       _clearSeek,
     );
   }
@@ -92,7 +81,7 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
   bool get isScrubbing => _dragValue.value != null;
 
   void onSeekStart() {
-    onSeekInteract();
+    onInteract();
     _dragging = true;
     _armDragSafetyTimeout();
   }
@@ -100,7 +89,7 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
   void onSeekChanged(double v, double durMs) {
     if (durMs <= 0) return;
     _dragging = true;
-    onSeekInteract();
+    onInteract();
     _dragValue.value = v;
     _armDragSafetyTimeout();
   }
@@ -109,13 +98,19 @@ mixin SeekMixin<T extends StatefulWidget> on State<T> {
     if (durMs <= 0) return;
     _dragging = false;
     _dragValue.value = v;
-    final pos = seekController.position.value.inMilliseconds.toDouble();
+    final pos = model.position.value.inMilliseconds.toDouble();
     if (_isNearPosition(v, durMs, pos)) {
       _clearSeek();
       return;
     }
     _seeking = true;
-    seekController.seek(Duration(milliseconds: (v * durMs).round()));
+    model.seek(Duration(milliseconds: (v * durMs).round()));
     _armSeekSettleTimeout();
+  }
+
+  void dispose() {
+    _seekTimeout?.cancel();
+    _seekWatch();
+    _dragValue.dispose();
   }
 }

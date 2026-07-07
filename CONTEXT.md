@@ -10,10 +10,18 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | `PipelineShell` | Shared sinks, bus handlers, and overlay sync wiring for both source adapters |
 | `MediaSource` | Unified load descriptor: `Uri` or `FlutterAsset`, resolved in `media/` |
 | `GstPlayer` | Type alias for `PlaybackEngine` (backward compatible) |
-| `XueHuaPlayerController` | Dart controller; exposes signals and playback API |
+| `XueHuaPlayerController` | Dart public facade; wires command port + state store; implements [PlaybackControlsModel] |
+| `PlaybackControlsModel` | Narrow controls seam: readonly playback signals + transport commands (play/seek/mute/…) |
+| `ScrubController` | Drag/seek settle logic for built-in sliders; depends on [PlaybackControlsModel] |
+| `PlayerCommandPort` | Dart/Rust seam adapter: create/dispose, event stream, all FRB playback commands |
+| `PlayerStateStore` | Dart playback state: event reducer, readonly signals, computed (`isPlaying`, `aspectRatio`, …) |
+| `MediaSourceResolver` | Dart: `VideoSource` → `MediaSourceDto` before crossing the Rust seam |
 | `XueHuaVideoView` | Flutter widget embedding a native Platform View for video |
 | `playbin3` | GStreamer high-level playback element (URI in, A/V out) |
 | `VideoOverlay` | GStreamer interface for rendering into an application-provided native window/surface |
+| `VideoSurface` | Cached native overlay handles + `overlay_bound`; delegates bind/preroll to platform overlay backend |
+| `VideoOverlayBackend` | Android / macOS / desktop overlay adapter trait (`set_window_handle`, JNI/main-thread defer) |
+| `IosLayerBackend` | iOS overlay adapter; owns internal `IosOverlaySession` (CALayer attach, idle `apply_target_state`) |
 
 ## Platform video sinks (GStreamer recommended)
 
@@ -62,7 +70,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - **iOS Tutorial 4 `check_media_size` timing:** attach sink `CALayer` on bus `READY → PAUSED` and via `IosOverlaySession` after load/play — not at `READY` like `glimagesink` + VideoOverlay.
 - **Verified CALayer attach:** `xhvp_ios_attach_layer_to_host_sync` returns `bool` — host bounds must be non-zero and sublayer must appear in hierarchy. `read_sink_layer` `CFRetain`s; shim `CFRelease`s only on verified attach; Rust `release_sink_layer` on defer/failure. **No PAUSED preroll** until `xhvp_ios_host_view_has_bounds` is true; failed post-preroll attach rolls pipeline back to `READY`. First attach uses async main-thread CALayer bind (resize re-attach may use sync). **First attach with pending media always prerolls to PAUSED before reading `layer`** — do not attach when the sink `layer` property is readable at `READY` but decode has not prerolled.
 - **Host-change reset:** `reset_for_host_change` runs only when the cached host pointer actually changes (not on first bind). It is skipped while `attach_in_flight` is set.
-- **`IosOverlaySession`** (`playback/ios_overlay.rs`): single seam for iOS overlay attach phase — `request_attach` dedupes via `attach_in_flight`, `finish_attach` sets `overlay_bound` only after verified attach, `schedule_apply` / `schedule_attach` coalesce idle work, and `apply_target_state` implements Tutorial 4 `target_state` + Tutorial 12 buffering (`buffering_active`). Bus callbacks set flags only — zero `set_state_sync` / inline attach on iOS. **`overlay_generation`** invalidates queued idle/spawn work on `load`, shell rebuild, and `PlaybackEngine::Drop`; paired with `running` to match bus-watch teardown semantics.
+- **`IosOverlaySession`** (`playback/overlay/ios_session.rs`): single seam for iOS overlay attach phase — `request_attach` dedupes via `attach_in_flight`, `finish_attach` sets `overlay_bound` only after verified attach, `schedule_apply` / `schedule_attach` coalesce idle work, and `apply_target_state` implements Tutorial 4 `target_state` + Tutorial 12 buffering (`buffering_active`). Bus callbacks set flags only — zero `set_state_sync` / inline attach on iOS. **`overlay_generation`** invalidates queued idle/spawn work on `load`, shell rebuild, and `PlaybackEngine::Drop`; paired with `running` to match bus-watch teardown semantics.
 - **Layout retry:** `player_notify_ios_overlay` caches handle/dimensions only; Swift `scheduleOverlayApply` triggers Gst attach when bounds are non-zero (not only when `!overlay_bound`); zero bounds defer attach until layout.
 - **xhvp-gst threading:** `spawn_on_gst_thread_and_wait` / `run_on_gst_thread` runs inline when `MainContext::is_owner()` — never nest invoke+recv on the same Gst thread. `gst::init()` runs once in `gst_runtime_thread_main`; `ensure_gst_init` only registers iOS plugins/TLS on xhvp-gst.
 - iOS bus `prepare-window-handle`: **Pass** (ignored) — `avsamplebufferlayersink` uses `IosOverlaySession` sync CALayer attach, not VideoOverlay `dispatch_sync` bind.
@@ -85,10 +93,27 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - Prefer `playerLoadSource` / `PlaybackEngine::load(MediaSource)` — legacy `playerSetAssetSource` delegates to the same path.
 - Local files use `MediaSource::Uri` with a `file://` URI (Dart: `VideoSource.file`).
 
+## Dart rendering surface
+
+- **`lib/src/surface/`** (not exported): routes a player's `playerId` into the correct Flutter embedding path via **`VideoSurfaceHandle`** + **`VideoSurfaceKind`** — `platformView` (Android/iOS/macOS PlatformView), `desktopOverlay` (Windows/Linux MethodChannel bounds sync), or `unsupported`.
+- **`buildXueHuaVideoPlatformView(playerId:)`** remains a thin wrapper over internal `buildVideoSurface(handle)` for README/custom layouts; prefer **`XueHuaVideoView`** for playback UI.
+- Win/Linux overlay IO goes through injectable **`DesktopOverlayClient`**; bounds come from **`DesktopOverlayBounds.fromRenderBox`**.
+- **`XueHuaVideoView.aspectRatioMode`** syncs **`AspectRatioMode`** to the Rust pipeline (`setAspectRatioMode`); letterbox/crop/stretch is applied on the GStreamer sink, not via Flutter `BoxFit`.
+
+## Testing
+
+- **Dart/Rust seam**: mock **`PlayerCommandPort`** via **`test/support/fake_player_command_port.dart`**; do **not** use `RustLib.initMock` for controller tests.
+- **Event boilerplate**: **`test/support/player_event_fixtures.dart`** builds `PlayerEvent` values for reducer/controller tests.
+- **Controls seam**: **`FakePlaybackControlsModel`** for widget tests under `test/controls/`.
+- **Rust pure logic**: `preroll_gate`, `replay`, overlay mock backends, resolver/shell/tracks — run with `cd rust && cargo test`.
+- **Out of scope for unit tests**: real GStreamer pipelines, PlatformView native embed, device/integration playback (use manual QA or future `integration_test` work).
+
 ## Source switching
 
-- `playback/switch.rs` exposes `switch_shell(resolved, ctx)` — the single Gst-thread entry for URI ↔ asset transitions.
-- `VideoSurface` (`playback/surface.rs`) owns cached overlay handles and platform bind scheduling (Android/iOS Gst-thread defer, macOS main-thread apply).
+- `playback/switch.rs` exposes `switch_shell(resolved, ShellTransition, …)` — the single Gst-thread entry for URI ↔ asset transitions. **`ShellTransition`** holds shared shell/surface state for swaps; **`ios_layer_bus_slot`** stays engine-owned and is passed separately on iOS.
+- **`playback/replay.rs`**: **`PlayReplayContext`** (playback atomics), **`OverlayPlayBundle { replay, shell }`**, unified **`OverlayPlayIntent`**, and **`replay_asset_shell`** for AppSrc EOS replay. Async overlay callbacks use **`clone_for_async()`** (shared `Arc` identity); **`IosLayerBackend`** no longer stores switch context or `refresh_ios_bus_hook`.
+- `VideoSurface` (`playback/surface.rs`) caches handles/flags and delegates to `playback/overlay/` backends (`VideoOverlayBackend` or `IosLayerBackend`).
+- **`OverlayPrerollGate`** (`playback/overlay/preroll_gate.rs`): single pure-function source for overlay-gated Ready→Paused→Playing transition rules (`decide_preroll_action`); consumed by `switch.rs` load paths, `android.rs` bind, and `IosOverlaySession::apply_target_state`. Platform readiness is passed as a context-specific `bool` at each call site; execution (set_state, overlay refresh) stays at call sites.
 - `PipelineCapabilities` (`playback/capabilities.rs`) types playbin-only features (seek, tracks, orientation); AppSrc pipelines report reduced capability.
 - Playbin track lists are cached on bus `StreamCollection` / `StreamsSelected` and enriched from `GstStream::tags()` — playbin3 does not expose legacy `n-audio` properties.
 

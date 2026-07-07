@@ -1,0 +1,95 @@
+import 'package:signals/signals_flutter.dart';
+import 'package:xue_hua_video_player/src/controls/playback_controls_model.dart';
+import 'package:xue_hua_video_player/src/rust/player_events.dart';
+
+/// Test double for [PlaybackControlsModel].
+class FakePlaybackControlsModel implements PlaybackControlsModel {
+  FakePlaybackControlsModel({
+    PlayerState initialState = PlayerState.idle,
+    Duration initialPosition = Duration.zero,
+    Duration initialDuration = const Duration(seconds: 100),
+    bool initialSeekable = true,
+  }) : _state = signal(initialState),
+       _position = signal(initialPosition),
+       _duration = signal(initialDuration),
+       _isSeekable = signal(initialSeekable);
+
+  final FlutterSignal<PlayerState> _state;
+  final FlutterSignal<Duration> _position;
+  final FlutterSignal<Duration> _duration;
+  final FlutterSignal<bool> _isSeekable;
+  final FlutterSignal<bool> _muted = signal(false);
+  final FlutterSignal<double> _volume = signal(1.0);
+  final FlutterSignal<bool> _looping = signal(false);
+  final FlutterSignal<double> _speed = signal(1.0);
+
+  @override
+  late final ReadonlySignal<bool> isPlaying = computed(
+    () => _state.value == PlayerState.playing,
+  );
+
+  Duration? lastSeek;
+  int seekCallCount = 0;
+
+  @override
+  ReadonlySignal<PlayerState> get state => _state;
+
+  @override
+  ReadonlySignal<Duration> get position => _position;
+
+  @override
+  ReadonlySignal<Duration> get duration => _duration;
+
+  @override
+  ReadonlySignal<bool> get isSeekable => _isSeekable;
+
+  @override
+  ReadonlySignal<bool> get muted => _muted;
+
+  @override
+  ReadonlySignal<double> get volume => _volume;
+
+  @override
+  ReadonlySignal<bool> get looping => _looping;
+
+  @override
+  ReadonlySignal<double> get speed => _speed;
+
+  @override
+  Future<void> togglePlayPause() async {}
+
+  @override
+  Future<void> toggleMuted() async {}
+
+  @override
+  Future<void> setLooping(bool looping) async {
+    _looping.value = looping;
+  }
+
+  @override
+  Future<void> setSpeed(double speed) async {
+    _speed.value = speed;
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    seekCallCount++;
+    lastSeek = position;
+  }
+
+  void setPosition(Duration position) {
+    _position.value = position;
+  }
+
+  void dispose() {
+    isPlaying.dispose();
+    _state.dispose();
+    _position.dispose();
+    _duration.dispose();
+    _isSeekable.dispose();
+    _muted.dispose();
+    _volume.dispose();
+    _looping.dispose();
+    _speed.dispose();
+  }
+}

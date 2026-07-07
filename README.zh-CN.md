@@ -313,7 +313,7 @@ issue）。
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `controller` | 必填 | 要渲染的 `XueHuaPlayerController`。 |
-| `fit` | `BoxFit.contain` | 视频的填充方式。 |
+| `aspectRatioMode` | `AspectRatioMode.fit` | GStreamer sink 缩放（`fit` / `fill` / `stretch`）；亦可通过 `controller.setAspectRatioMode` 设置。 |
 | `backgroundColor` | 黑色 | 黑边 / 背景颜色。 |
 | `showControls` | `true` | 是否叠加内置控制条。 |
 | `controlsStyle` | `adaptive` | `adaptive` / `material` / `cupertino`。 |

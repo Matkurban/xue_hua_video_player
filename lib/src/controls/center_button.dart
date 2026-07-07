@@ -2,19 +2,20 @@ import 'package:flutter/cupertino.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../xue_hua_player_controller.dart';
+import '../rust/player_events.dart';
 import '../theme/video_controls_theme.dart';
+import 'playback_controls_model.dart';
 
 /// Central play/pause/buffering affordance shared by both styles.
 class CenterButton extends StatelessWidget {
   const CenterButton({
     super.key,
-    required this.controller,
+    required this.model,
     required this.theme,
     required this.onInteract,
   });
 
-  final XueHuaPlayerController controller;
+  final PlaybackControlsModel model;
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
 
@@ -23,7 +24,7 @@ class CenterButton extends StatelessWidget {
     return Center(
       child: SignalBuilder(
         builder: (context) {
-          final PlayerState state = controller.state.value;
+          final PlayerState state = model.state.value;
           if (state == PlayerState.buffering) {
             return SizedBox(
               width: theme.primaryIconSize,
@@ -37,7 +38,7 @@ class CenterButton extends StatelessWidget {
           return GlassIconButton(
             onPressed: () async {
               onInteract();
-              await controller.togglePlayPause();
+              await model.togglePlayPause();
             },
             icon: Icon(
               icon,

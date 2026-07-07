@@ -1,134 +1,14 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
-/// Platform view type registered by native plugin code.
-const String kXueHuaVideoViewType = 'xue_hua_video_player/view';
+import 'surface/build_video_surface.dart';
+import 'surface/video_surface_handle.dart';
 
-const MethodChannel _desktopOverlayChannel = MethodChannel(
-  'xue_hua_video_player/desktop_overlay',
-);
+export 'surface/mobile_platform_view.dart' show kXueHuaVideoViewType;
 
 /// Builds the platform-appropriate video surface for [playerId].
+///
+/// Prefer [XueHuaVideoView] for full playback UI. This entry point remains for
+/// custom layouts documented in README.
 Widget buildXueHuaVideoPlatformView({required int playerId}) {
-  final creationParams = <String, dynamic>{'playerId': playerId};
-  const paramsCodec = StandardMessageCodec();
-
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    return Builder(
-      builder: (context) {
-        final layoutDirection =
-            Directionality.maybeOf(context) ?? TextDirection.ltr;
-        return PlatformViewLink(
-          viewType: kXueHuaVideoViewType,
-          surfaceFactory:
-              (BuildContext context, PlatformViewController controller) {
-                return AndroidViewSurface(
-                  controller: controller as AndroidViewController,
-                  gestureRecognizers:
-                      const <Factory<OneSequenceGestureRecognizer>>{},
-                  hitTestBehavior: PlatformViewHitTestBehavior.opaque,
-                );
-              },
-          onCreatePlatformView: (PlatformViewCreationParams params) {
-            return PlatformViewsService.initSurfaceAndroidView(
-                id: params.id,
-                viewType: kXueHuaVideoViewType,
-                layoutDirection: layoutDirection,
-                creationParams: creationParams,
-                creationParamsCodec: paramsCodec,
-                onFocus: () => params.onFocusChanged(true),
-              )
-              ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
-              ..create();
-          },
-        );
-      },
-    );
-  }
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
-    return UiKitView(
-      viewType: kXueHuaVideoViewType,
-      creationParams: creationParams,
-      creationParamsCodec: paramsCodec,
-      gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-    );
-  }
-  if (defaultTargetPlatform == TargetPlatform.macOS) {
-    return AppKitView(
-      viewType: kXueHuaVideoViewType,
-      creationParams: creationParams,
-      creationParamsCodec: paramsCodec,
-      gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
-    );
-  }
-  if (defaultTargetPlatform == TargetPlatform.windows ||
-      defaultTargetPlatform == TargetPlatform.linux) {
-    return _DesktopVideoOverlay(playerId: playerId);
-  }
-  return ColoredBox(
-    color: Colors.black,
-    child: Center(child: Text('Video not supported on $defaultTargetPlatform')),
-  );
-}
-
-/// Positions a native overlay window for GStreamer on desktop platforms where
-/// Flutter PlatformView embedding is not yet available in the framework.
-class _DesktopVideoOverlay extends StatefulWidget {
-  const _DesktopVideoOverlay({required this.playerId});
-
-  final int playerId;
-
-  @override
-  State<_DesktopVideoOverlay> createState() => _DesktopVideoOverlayState();
-}
-
-class _DesktopVideoOverlayState extends State<_DesktopVideoOverlay>
-    with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _desktopOverlayChannel.invokeMethod<void>('attach', <String, dynamic>{
-      'playerId': widget.playerId,
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncBounds());
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _desktopOverlayChannel.invokeMethod<void>('detach', <String, dynamic>{
-      'playerId': widget.playerId,
-    });
-    super.dispose();
-  }
-
-  @override
-  void didChangeMetrics() {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncBounds());
-  }
-
-  void _syncBounds() {
-    if (!mounted) return;
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
-    final offset = box.localToGlobal(Offset.zero);
-    final size = box.size;
-    _desktopOverlayChannel.invokeMethod<void>('setBounds', <String, dynamic>{
-      'playerId': widget.playerId,
-      'x': offset.dx,
-      'y': offset.dy,
-      'width': size.width,
-      'height': size.height,
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncBounds());
-    return const SizedBox.expand();
-  }
+  return buildVideoSurface(VideoSurfaceHandle.fromPlayerId(playerId));
 }

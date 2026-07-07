@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../enum/video_controls_style.dart';
-import '../xue_hua_player_controller.dart';
+import '../rust/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import 'cupertino_video_controls.dart';
 import 'material_video_controls.dart';
+import 'playback_controls_model.dart';
 
 /// Overlay that draws an adaptive, auto-hiding control bar on top of the video.
 ///
@@ -17,12 +18,12 @@ import 'material_video_controls.dart';
 class VideoControls extends StatefulWidget {
   const VideoControls({
     super.key,
-    required this.controller,
+    required this.model,
     this.style = VideoControlsStyle.adaptive,
     this.autoHide = const Duration(seconds: 3),
   });
 
-  final XueHuaPlayerController controller;
+  final PlaybackControlsModel model;
   final VideoControlsStyle style;
   final Duration autoHide;
 
@@ -41,7 +42,7 @@ class _VideoControlsState extends State<VideoControls> {
     super.initState();
     _scheduleHide();
     _disposeStateEffect = effect(() {
-      final state = widget.controller.state.value;
+      final state = widget.model.state.value;
       if (state == PlayerState.buffering || state == PlayerState.idle) {
         _visible.value = true;
         _scheduleHide();
@@ -60,7 +61,7 @@ class _VideoControlsState extends State<VideoControls> {
     _hideTimer?.cancel();
     _hideTimer = Timer(widget.autoHide, () {
       if (!mounted) return;
-      if (widget.controller.isPlaying.value) {
+      if (widget.model.isPlaying.value) {
         _visible.value = false;
       }
     });
@@ -102,12 +103,12 @@ class _VideoControlsState extends State<VideoControls> {
 
     final controls = cupertino
         ? CupertinoVideoControls(
-            controller: widget.controller,
+            model: widget.model,
             theme: theme,
             onInteract: _keepAlive,
           )
         : MaterialVideoControls(
-            controller: widget.controller,
+            model: widget.model,
             theme: theme,
             onInteract: _keepAlive,
           );

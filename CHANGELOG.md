@@ -1,3 +1,29 @@
+## 1.3.0
+
+### Breaking
+
+- **`XueHuaVideoView`**: removed `BoxFit fit`; use `AspectRatioMode aspectRatioMode`
+  (default `AspectRatioMode.fit`). Maps to the Rust pipeline sink (`force-aspect-ratio`).
+
+  ```dart
+  // Before
+  XueHuaVideoView(controller: c, fit: BoxFit.cover)
+
+  // After
+  XueHuaVideoView(controller: c, aspectRatioMode: AspectRatioMode.fill)
+  ```
+
+### Added
+
+- **`lib/src/surface/`** (package-private): `VideoSurfaceHandle`, `VideoSurfaceKind`
+  (`platformView` / `desktopOverlay` / `unsupported`), mobile PlatformView builders,
+  and Windows/Linux `DesktopVideoOverlay` with injectable `DesktopOverlayClient`.
+- Widget/unit tests for handle routing, desktop bounds geometry, and overlay lifecycle.
+- **`test/support/`** test seam: `FakePlayerCommandPort`, `PlayerEventFixtures`, and
+  `FakePlaybackControlsModel`. Dart/Rust boundary tests mock **`PlayerCommandPort`**
+  (not `RustLib.initMock`). Added controller command coverage and `XueHuaVideoView`
+  aspect-ratio sync widget tests.
+
 ## 1.2.0
 
 ### Breaking

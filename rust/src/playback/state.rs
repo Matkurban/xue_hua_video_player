@@ -1,12 +1,16 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use anyhow::{anyhow, Result};
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer::StateChangeSuccess;
+use parking_lot::Mutex;
 
+use crate::playback::replay::{replay_asset_shell, OverlayPlayBundle};
 use crate::playback::shell::{PipelineShell, SourceKind};
-use crate::playback::switch::{replay_asset_shell, SwitchContext};
 
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
 
@@ -54,18 +58,25 @@ pub fn set_state_sync_timeout(
 /// Resumes or replays from EOS using the correct adapter for the active shell.
 pub fn resume_or_replay_from_eos(
     shell: &mut PipelineShell,
-    at_eos: &AtomicBool,
-    ctx: Option<&SwitchContext>,
+    bundle: Option<&OverlayPlayBundle>,
+    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<
+        &Arc<Mutex<Option<crate::playback::overlay::IosLayerBackend>>>,
+    >,
 ) -> Result<()> {
     #[cfg(target_os = "ios")]
-    if let Some(ctx) = ctx {
-        if !ctx.surface.is_overlay_bound_on_gst() {
+    if let Some(bundle) = bundle {
+        if !bundle.shell.surface.is_overlay_bound_on_gst() {
             log::debug!("gst: deferring play until iOS layer is attached");
             return Ok(());
         }
         log::debug!("gst: PLAYING resume delegated to IosOverlaySession");
         return Ok(());
     }
+
+    let at_eos = bundle
+        .and_then(|b| Some(b.replay.at_eos.as_ref()))
+        .ok_or_else(|| anyhow!("resume_or_replay_from_eos requires OverlayPlayBundle"))?;
+
     if !at_eos.swap(false, Ordering::SeqCst) {
         return set_state_sync(&shell.pipeline, gst::State::Playing);
     }
@@ -81,8 +92,14 @@ pub fn resume_or_replay_from_eos(
             set_state_sync(&shell.pipeline, gst::State::Playing)
         }
         SourceKind::Asset => {
-            let ctx = ctx.ok_or_else(|| anyhow!("asset EOS replay requires SwitchContext"))?;
-            replay_asset_shell(shell, ctx)
+            let bundle =
+                bundle.ok_or_else(|| anyhow!("asset EOS replay requires OverlayPlayBundle"))?;
+            replay_asset_shell(
+                shell,
+                bundle,
+                #[cfg(target_os = "ios")]
+                ios_layer_bus_slot,
+            )
         }
     }
 }

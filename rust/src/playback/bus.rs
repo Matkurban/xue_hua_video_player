@@ -11,14 +11,14 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 #[cfg(target_os = "ios")]
-use crate::playback::surface::IosLayerBusHook;
+use crate::playback::overlay::IosLayerBackend;
 use crate::playback::tracks::{mark_selected_streams, update_cache_from_collection, TrackCache};
 use crate::player_events::{map_state, PlayerEvent, PlayerState};
 
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
 #[cfg(target_os = "ios")]
-fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) -> bool {
+fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) -> bool {
     ios_layer_bus
         .as_ref()
         .and_then(|slot| slot.lock().as_ref().map(|hook| hook.is_overlay_bound()))
@@ -26,7 +26,7 @@ fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>
 }
 
 #[cfg(target_os = "ios")]
-fn set_pending_play_after_overlay(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
+fn set_pending_play_after_overlay(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) {
     if let Some(slot) = ios_layer_bus.as_ref() {
         if let Some(hook) = slot.lock().as_ref() {
             hook.set_pending_play_after_overlay();
@@ -35,7 +35,7 @@ fn set_pending_play_after_overlay(ios_layer_bus: &Option<Arc<Mutex<Option<IosLay
 }
 
 #[cfg(target_os = "ios")]
-fn set_buffering_active(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>, active: bool) {
+fn set_buffering_active(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>, active: bool) {
     if let Some(slot) = ios_layer_bus.as_ref() {
         if let Some(hook) = slot.lock().as_ref() {
             hook.set_buffering_active(active);
@@ -44,7 +44,7 @@ fn set_buffering_active(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>
 }
 
 #[cfg(target_os = "ios")]
-fn schedule_ios_apply(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
+fn schedule_ios_apply(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) {
     if let Some(slot) = ios_layer_bus.as_ref() {
         if let Some(hook) = slot.lock().as_ref() {
             hook.schedule_apply();
@@ -53,7 +53,7 @@ fn schedule_ios_apply(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>
 }
 
 #[cfg(target_os = "ios")]
-fn schedule_ios_attach(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
+fn schedule_ios_attach(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) {
     if let Some(slot) = ios_layer_bus.as_ref() {
         if let Some(hook) = slot.lock().as_ref() {
             hook.schedule_attach();
@@ -71,7 +71,7 @@ pub fn attach_gst_bus_handlers(
     running: &Arc<AtomicBool>,
     is_playbin: bool,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
-    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<Arc<Mutex<Option<IosLayerBusHook>>>>,
+    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<Arc<Mutex<Option<IosLayerBackend>>>>,
 ) -> Result<(gst::bus::BusWatchGuard, gst::glib::SourceId)> {
     let bus = pipeline
         .bus()
