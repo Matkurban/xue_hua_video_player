@@ -130,49 +130,19 @@ pub fn bus_sync_reply_for_overlay_message(
     gst::BusSyncReply::Drop
 }
 
-/// iOS `prepare-window-handle` (glimagesink fallback): bind on main thread and drop the message.
+/// iOS `prepare-window-handle`: pass — `avsamplebufferlayersink` uses [`IosOverlaySession`] async CALayer attach, not VideoOverlay sync bind.
 #[cfg(target_os = "ios")]
 pub fn bus_sync_reply_for_ios_overlay(
     msg: &gst::MessageRef,
-    cached_handle: Option<usize>,
-    overlay_sink: Option<&Arc<Mutex<gst::Element>>>,
+    _cached_handle: Option<usize>,
+    _overlay_sink: Option<&Arc<Mutex<gst::Element>>>,
 ) -> gst::BusSyncReply {
     use gstreamer_video::is_video_overlay_prepare_window_handle_message;
 
     if !is_video_overlay_prepare_window_handle_message(msg) {
         return gst::BusSyncReply::Pass;
     }
-    let Some(handle) = cached_handle else {
-        log::warn!("prepare-window-handle received but no overlay handle is cached yet");
-        return gst::BusSyncReply::Pass;
-    };
-    if let Some(slot) = overlay_sink {
-        let sink = slot.lock().clone();
-        if let Err(e) = crate::platform_view_ios::bind_overlay_on_main_thread(&sink, handle) {
-            log::warn!("prepare-window-handle main-thread bind: {e:#}");
-        } else {
-            log::info!("prepare-window-handle: main-thread bind handle {handle:#x}");
-        }
-        return gst::BusSyncReply::Drop;
-    }
-    if let Some(src) = msg.src() {
-        if let Ok(element) = src.clone().dynamic_cast::<gst::Element>() {
-            if element
-                .clone()
-                .dynamic_cast::<gst_video::VideoOverlay>()
-                .is_ok()
-            {
-                if let Err(e) =
-                    crate::platform_view_ios::bind_overlay_on_main_thread(&element, handle)
-                {
-                    log::warn!("prepare-window-handle main-thread bind: {e:#}");
-                } else {
-                    log::info!("prepare-window-handle: main-thread bind handle {handle:#x}");
-                }
-                return gst::BusSyncReply::Drop;
-            }
-        }
-    }
+    log::debug!("prepare-window-handle: ignored on iOS (IosOverlaySession handles CALayer attach)");
     gst::BusSyncReply::Pass
 }
 

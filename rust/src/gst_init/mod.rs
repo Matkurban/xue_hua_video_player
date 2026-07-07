@@ -4,9 +4,8 @@ mod ios_plugins;
 mod tls;
 
 use anyhow::{anyhow, Result};
-use gstreamer as gst;
 
-use crate::gst_runtime::spawn_on_gst_thread_and_wait;
+use crate::gst_runtime::run_on_gst_thread;
 
 /// Ensures `gst::init()` runs exactly once for the process.
 pub fn ensure_gst_init() -> Result<()> {
@@ -28,8 +27,7 @@ pub fn ensure_gst_init() -> Result<()> {
                 }
                 #[cfg(not(target_os = "android"))]
                 {
-                    spawn_on_gst_thread_and_wait(|| {
-                        gst::init().map_err(|e| anyhow!("gst::init failed: {e}"))?;
+                    run_on_gst_thread(|| {
                         #[cfg(target_os = "ios")]
                         {
                             ios_plugins::register_ios_static_plugins();

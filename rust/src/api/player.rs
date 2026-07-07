@@ -46,7 +46,10 @@ pub fn create_player() -> Result<PlayerHandle> {
         #[cfg(target_os = "android")]
         get_player(player_id)?.notify_android_surface(handle, 0, 0)?;
         #[cfg(target_os = "ios")]
-        get_player(player_id)?.notify_ios_overlay(handle, 0, 0)?;
+        {
+            get_player(player_id)?.notify_ios_overlay(handle, 0, 0)?;
+            let _ = apply_ios_overlay_gstreamer(player_id, 0, 0);
+        }
         #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
         get_player(player_id)?.set_video_overlay_window(handle)?;
     }

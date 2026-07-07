@@ -84,16 +84,31 @@ where
 }
 
 /// Runs `f` on the Gst thread and blocks until it completes.
+///
+/// If already on the xhvp-gst thread (`MainContext::is_owner`), runs `f` inline to avoid
+/// nested invoke + recv deadlock on the same GMainContext.
 pub fn spawn_on_gst_thread_and_wait<F, R>(f: F) -> Result<R>
 where
     F: FnOnce() -> Result<R> + Send + 'static,
     R: Send + 'static,
 {
     let ctx = gst_context()?.clone();
+    if ctx.is_owner() {
+        return f();
+    }
     let (tx, rx) = mpsc::sync_channel(1);
     ctx.invoke(move || {
         let _ = tx.send(f());
     });
     rx.recv()
         .map_err(|e| anyhow!("Gst thread invoke dropped: {e}"))?
+}
+
+/// Alias for [`spawn_on_gst_thread_and_wait`] — runs inline when already on xhvp-gst.
+pub fn run_on_gst_thread<F, R>(f: F) -> Result<R>
+where
+    F: FnOnce() -> Result<R> + Send + 'static,
+    R: Send + 'static,
+{
+    spawn_on_gst_thread_and_wait(f)
 }

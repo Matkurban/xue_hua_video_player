@@ -11,9 +11,55 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::playback::tracks::{mark_selected_streams, update_cache_from_collection, TrackCache};
+#[cfg(target_os = "ios")]
+use crate::playback::surface::IosLayerBusHook;
 use crate::player_events::{map_state, PlayerEvent, PlayerState};
 
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
+
+#[cfg(target_os = "ios")]
+fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) -> bool {
+    ios_layer_bus
+        .as_ref()
+        .and_then(|slot| slot.lock().as_ref().map(|hook| hook.is_overlay_bound()))
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "ios")]
+fn set_pending_play_after_overlay(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
+    if let Some(slot) = ios_layer_bus.as_ref() {
+        if let Some(hook) = slot.lock().as_ref() {
+            hook.set_pending_play_after_overlay();
+        }
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn set_buffering_active(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>, active: bool) {
+    if let Some(slot) = ios_layer_bus.as_ref() {
+        if let Some(hook) = slot.lock().as_ref() {
+            hook.set_buffering_active(active);
+        }
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn schedule_ios_apply(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
+    if let Some(slot) = ios_layer_bus.as_ref() {
+        if let Some(hook) = slot.lock().as_ref() {
+            hook.schedule_apply();
+        }
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn schedule_ios_attach(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
+    if let Some(slot) = ios_layer_bus.as_ref() {
+        if let Some(hook) = slot.lock().as_ref() {
+            hook.schedule_attach();
+        }
+    }
+}
 
 /// Installs a bus watch and position polling timer on the Gst thread's MainContext.
 pub fn attach_gst_bus_handlers(
@@ -25,6 +71,7 @@ pub fn attach_gst_bus_handlers(
     running: &Arc<AtomicBool>,
     is_playbin: bool,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
+    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<Arc<Mutex<Option<IosLayerBusHook>>>>,
 ) -> Result<(gst::bus::BusWatchGuard, gst::glib::SourceId)> {
     let bus = pipeline
         .bus()
@@ -39,6 +86,8 @@ pub fn attach_gst_bus_handlers(
     let at_eos = at_eos.clone();
     let running_bus = running.clone();
     let running_pos = running.clone();
+    #[cfg(target_os = "ios")]
+    let ios_layer_bus = ios_layer_bus_slot;
 
     let bus_watch = bus
         .add_watch_local(move |_, msg| {
@@ -80,42 +129,76 @@ pub fn attach_gst_bus_handlers(
                     if !desired_playing.load(Ordering::SeqCst) {
                         return gst::glib::ControlFlow::Continue;
                     }
-                    if percent < 100 {
-                        emit(PlayerEvent::state(PlayerState::Buffering));
-                        #[cfg(target_os = "android")]
-                        if let Err(e) = pipeline_bus.set_state(gst::State::Paused) {
-                            log::warn!("buffering set_state(Paused): {e}");
+                    #[cfg(target_os = "ios")]
+                    {
+                        if percent < 100 {
+                            emit(PlayerEvent::state(PlayerState::Buffering));
+                            set_buffering_active(&ios_layer_bus, true);
+                        } else {
+                            set_buffering_active(&ios_layer_bus, false);
+                            if !ios_overlay_bound(&ios_layer_bus) {
+                                log::debug!(
+                                    "gst: deferring buffering resume until iOS layer attached"
+                                );
+                                set_pending_play_after_overlay(&ios_layer_bus);
+                            }
                         }
-                        #[cfg(not(target_os = "android"))]
-                        if let Err(e) = crate::playback::state::set_state_sync(
-                            &pipeline_bus,
-                            gst::State::Paused,
-                        ) {
-                            log::warn!("buffering set_state_sync(Paused): {e}");
+                        schedule_ios_apply(&ios_layer_bus);
+                        if percent >= 100 && desired_playing.load(Ordering::SeqCst) {
+                            emit(PlayerEvent::state(PlayerState::Playing));
                         }
-                    } else {
-                        let resume = {
+                        return gst::glib::ControlFlow::Continue;
+                    }
+                    #[cfg(not(target_os = "ios"))]
+                    {
+                        if percent < 100 {
+                            emit(PlayerEvent::state(PlayerState::Buffering));
                             #[cfg(target_os = "android")]
-                            {
-                                pipeline_bus.set_state(gst::State::Playing)
+                            if let Err(e) = pipeline_bus.set_state(gst::State::Paused) {
+                                log::warn!("buffering set_state(Paused): {e}");
                             }
                             #[cfg(not(target_os = "android"))]
-                            {
-                                crate::playback::state::set_state_sync(
-                                    &pipeline_bus,
-                                    gst::State::Playing,
-                                )
+                            if let Err(e) = crate::playback::state::set_state_sync(
+                                &pipeline_bus,
+                                gst::State::Paused,
+                            ) {
+                                log::warn!("buffering set_state_sync(Paused): {e}");
                             }
-                        };
-                        if let Err(e) = resume {
-                            log::warn!("buffering resume Playing: {e}");
                         } else {
-                            emit(PlayerEvent::state(PlayerState::Playing));
+                            let resume = {
+                                #[cfg(target_os = "android")]
+                                {
+                                    pipeline_bus.set_state(gst::State::Playing)
+                                }
+                                #[cfg(not(target_os = "android"))]
+                                {
+                                    crate::playback::state::set_state_sync(
+                                        &pipeline_bus,
+                                        gst::State::Playing,
+                                    )
+                                }
+                            };
+                            if let Err(e) = resume {
+                                log::warn!("buffering resume Playing: {e}");
+                            } else {
+                                emit(PlayerEvent::state(PlayerState::Playing));
+                            }
                         }
                     }
                 }
                 MessageView::ClockLost(..) => {
                     if desired_playing.load(Ordering::SeqCst) {
+                        #[cfg(target_os = "ios")]
+                        {
+                            if !ios_overlay_bound(&ios_layer_bus) {
+                                log::debug!(
+                                    "gst: deferring clock-lost resume until iOS layer attached"
+                                );
+                                set_pending_play_after_overlay(&ios_layer_bus);
+                            }
+                            schedule_ios_apply(&ios_layer_bus);
+                            return gst::glib::ControlFlow::Continue;
+                        }
                         #[cfg(target_os = "android")]
                         {
                             let _ = pipeline_bus.set_state(gst::State::Paused);
@@ -123,13 +206,14 @@ pub fn attach_gst_bus_handlers(
                                 log::warn!("clock-lost resume Playing: {e}");
                             }
                         }
-                        #[cfg(not(target_os = "android"))]
+                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         {
                             if let Err(e) =
                                 crate::playback::state::set_state_sync(&pipeline_bus, gst::State::Paused)
                             {
                                 log::warn!("clock-lost set_state_sync(Paused): {e}");
-                            } else if let Err(e) = crate::playback::state::set_state_sync(
+                            }
+                            if let Err(e) = crate::playback::state::set_state_sync(
                                 &pipeline_bus,
                                 gst::State::Playing,
                             ) {
@@ -144,6 +228,8 @@ pub fn attach_gst_bus_handlers(
                     }
                 }
                 MessageView::AsyncDone(..) => {
+                    #[cfg(target_os = "ios")]
+                    schedule_ios_attach(&ios_layer_bus);
                     if desired_playing.load(Ordering::SeqCst) {
                         if let Some(p) = pipeline_bus.query_position::<gst::ClockTime>() {
                             emit(PlayerEvent::position(p.mseconds() as i64));
@@ -153,6 +239,10 @@ pub fn attach_gst_bus_handlers(
                 MessageView::StateChanged(sc) => {
                     if sc.src().map(|s| s == &pipeline_bus).unwrap_or(false) {
                         let current = sc.current();
+                        #[cfg(target_os = "ios")]
+                        if sc.old() == gst::State::Ready && current == gst::State::Paused {
+                            schedule_ios_attach(&ios_layer_bus);
+                        }
                         if !(current == gst::State::Paused
                             && desired_playing.load(Ordering::SeqCst))
                         {

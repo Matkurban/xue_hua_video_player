@@ -11,6 +11,8 @@ use parking_lot::Mutex;
 use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
+#[cfg(target_os = "ios")]
+use crate::playback::surface::IosLayerBusHook;
 use crate::playback::capabilities::PipelineCapabilities;
 use crate::playback::tracks::TrackCache;
 use crate::playback::uri_pipeline::build_uri_playbin;
@@ -65,6 +67,7 @@ pub fn install_uri_shell(
     running: &Arc<AtomicBool>,
     metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
+    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<&Arc<Mutex<Option<IosLayerBusHook>>>>,
 ) -> Result<PipelineShell> {
     let (pipeline, video_sink) = build_uri_playbin(emitter, metadata_cache)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
@@ -76,6 +79,8 @@ pub fn install_uri_shell(
         running,
         true,
         track_cache,
+        #[cfg(target_os = "ios")]
+        ios_layer_bus_slot.cloned(),
     )?;
     Ok(PipelineShell {
         pipeline,
@@ -97,6 +102,7 @@ pub fn install_asset_shell(
     at_eos: &Arc<AtomicBool>,
     running: &Arc<AtomicBool>,
     metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
+    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<&Arc<Mutex<Option<IosLayerBusHook>>>>,
 ) -> Result<PipelineShell> {
     let (pipeline, video_sink, feed) = build_asset_pipeline(asset_key, emitter, metadata_cache)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
@@ -108,6 +114,8 @@ pub fn install_asset_shell(
         running,
         false,
         None,
+        #[cfg(target_os = "ios")]
+        ios_layer_bus_slot.cloned(),
     )?;
     Ok(PipelineShell {
         pipeline,

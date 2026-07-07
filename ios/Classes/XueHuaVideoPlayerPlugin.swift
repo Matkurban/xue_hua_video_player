@@ -155,6 +155,7 @@ final class XueHuaVideoPlatformView: UIView, FlutterPlatformView {
       self.applyScheduled = false
       let w = self.pendingApplyWidth
       let h = self.pendingApplyHeight
+      guard w > 0, h > 0 else { return }
       player_apply_ios_overlay_gstreamer(self.playerId, w, h)
     }
   }
@@ -162,9 +163,6 @@ final class XueHuaVideoPlatformView: UIView, FlutterPlatformView {
   deinit {
     let id = playerId
     player_notify_ios_overlay(id, 0, 0, 0)
-    DispatchQueue.main.async {
-      player_apply_ios_overlay_gstreamer(id, 0, 0)
-    }
   }
 }
 

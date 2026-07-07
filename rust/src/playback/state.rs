@@ -57,6 +57,15 @@ pub fn resume_or_replay_from_eos(
     at_eos: &AtomicBool,
     ctx: Option<&SwitchContext>,
 ) -> Result<()> {
+    #[cfg(target_os = "ios")]
+    if let Some(ctx) = ctx {
+        if !ctx.surface.is_overlay_bound_on_gst() {
+            log::debug!("gst: deferring play until iOS layer is attached");
+            return Ok(());
+        }
+        log::debug!("gst: PLAYING resume delegated to IosOverlaySession");
+        return Ok(());
+    }
     if !at_eos.swap(false, Ordering::SeqCst) {
         return set_state_sync(&shell.pipeline, gst::State::Playing);
     }

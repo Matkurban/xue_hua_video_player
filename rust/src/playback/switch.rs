@@ -20,6 +20,8 @@ use crate::playback::surface::refresh_mobile_overlay_on_gst;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use crate::playback::surface::assign_overlay_sink;
 use crate::playback::surface::VideoSurface;
+#[cfg(target_os = "ios")]
+use crate::playback::surface::IosLayerBusHook;
 use crate::playback::tracks::TrackCache;
 use crate::video::orientation::apply_orientation_to_playbin;
 use crate::video::{
@@ -39,6 +41,28 @@ pub struct SwitchContext {
     pub orientation: InternalVideoOrientationConfig,
     pub aspect: InternalAspectRatioMode,
     pub surface: VideoSurface,
+    #[cfg(target_os = "ios")]
+    pub ios_layer_bus_slot: Option<Arc<Mutex<Option<IosLayerBusHook>>>>,
+}
+
+impl SwitchContext {
+    /// Clones shared handles for async iOS layer attach completion callbacks.
+    pub fn clone_for_async(&self) -> Self {
+        Self {
+            emitter: self.emitter.clone(),
+            looping: self.looping.clone(),
+            desired_playing: self.desired_playing.clone(),
+            at_eos: self.at_eos.clone(),
+            running: self.running.clone(),
+            metadata: self.metadata.clone(),
+            track_cache: self.track_cache.clone(),
+            orientation: self.orientation,
+            aspect: self.aspect,
+            surface: self.surface.clone_for_switch(),
+            #[cfg(target_os = "ios")]
+            ios_layer_bus_slot: self.ios_layer_bus_slot.clone(),
+        }
+    }
 }
 
 /// Rebuilds or reconfigures the pipeline shell for `resolved` and applies overlay/orientation.
@@ -65,6 +89,8 @@ fn switch_uri_shell(shell: &mut PipelineShell, uri: &str, ctx: &SwitchContext) -
             &ctx.running,
             Some(ctx.metadata.clone()),
             Some(ctx.track_cache.clone()),
+            #[cfg(target_os = "ios")]
+            ctx.ios_layer_bus_slot.as_ref(),
         )?;
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
@@ -99,6 +125,8 @@ fn switch_asset_shell(
         &ctx.at_eos,
         &ctx.running,
         Some(ctx.metadata.clone()),
+        #[cfg(target_os = "ios")]
+        ctx.ios_layer_bus_slot.as_ref(),
     )?;
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
@@ -134,11 +162,10 @@ fn preroll_asset_shell(
     overlay_ready: bool,
     surface: &VideoSurface,
 ) -> Result<()> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(target_os = "android")]
     {
         if overlay_ready {
             set_state_sync(&shell.pipeline, gst::State::Paused)?;
-            #[cfg(target_os = "android")]
             if let Some(handle) = *surface.stored_handle().lock() {
                 let (width, height) = surface.cached_dimensions();
                 refresh_mobile_overlay_on_gst(
@@ -150,12 +177,19 @@ fn preroll_asset_shell(
                 )?;
             }
         } else {
-            #[cfg(target_os = "android")]
             crate::diag::logcat_info(
                 "gst: deferring asset Paused preroll until Android overlay is bound",
             );
-            #[cfg(target_os = "ios")]
-            log::info!("gst: deferring asset Paused preroll until iOS overlay is bound");
+        }
+        return Ok(());
+    }
+    #[cfg(target_os = "ios")]
+    {
+        let _ = shell;
+        if overlay_ready {
+            log::debug!("gst: ios layer attach deferred to IosOverlaySession after load");
+        } else {
+            log::info!("gst: deferring asset load until iOS host view is cached");
         }
         return Ok(());
     }
@@ -178,11 +212,18 @@ fn pipeline_set_uri(
     set_state_sync(pipeline, gst::State::Ready)?;
     pipeline.set_property("uri", uri);
     if overlay_ready {
-        set_state_sync(pipeline, gst::State::Paused)?;
         #[cfg(target_os = "android")]
-        if let Some(handle) = *surface.stored_handle().lock() {
-            let (width, height) = surface.cached_dimensions();
-            refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Paused preroll")?;
+        {
+            set_state_sync(pipeline, gst::State::Paused)?;
+            if let Some(handle) = *surface.stored_handle().lock() {
+                let (width, height) = surface.cached_dimensions();
+                refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Paused preroll")?;
+            }
+        }
+        #[cfg(target_os = "ios")]
+        {
+            let _ = surface;
+            log::debug!("gst: ios layer attach deferred to IosOverlaySession after setUri");
         }
         Ok(())
     } else {
@@ -191,7 +232,7 @@ fn pipeline_set_uri(
             "gst: deferring URI Paused preroll until Android overlay is bound",
         );
         #[cfg(target_os = "ios")]
-        log::info!("gst: deferring URI Paused preroll until iOS overlay is bound");
+        log::info!("gst: deferring URI load until iOS host view is cached");
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         set_state_sync(pipeline, gst::State::Paused)?;
         Ok(())
