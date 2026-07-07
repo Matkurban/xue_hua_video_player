@@ -31,6 +31,11 @@ pub fn setup_sandbox_writable_env() {
 #[cfg(target_os = "ios")]
 pub fn setup_ios_env() {
     setup_sandbox_writable_env();
+
+    std::env::set_var(
+        "GST_PLUGIN_FEATURE_RANK",
+        "vtdec:PRIMARY,vtdemux:PRIMARY,avdec_h264:SECONDARY,avdec_h265:SECONDARY",
+    );
 }
 
 /// Locates GStreamer libraries inside the app bundle, or the system framework.

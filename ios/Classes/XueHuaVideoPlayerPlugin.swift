@@ -62,9 +62,15 @@ final class XueHuaVideoViewFactory: NSObject, FlutterPlatformViewFactory {
   }
 }
 
+class XueHuaGLView: UIView {
+  override class var layerClass: AnyClass {
+    return CAEAGLLayer.self
+  }
+}
+
 final class XueHuaVideoPlatformView: UIView, FlutterPlatformView {
   private let playerId: Int64
-  private let videoHostView = UIView()
+  private let videoHostView = XueHuaGLView()
   private var lastBoundViewPtr: Int64 = 0
   private var lastSyncedWidth: Int32 = 0
   private var lastSyncedHeight: Int32 = 0

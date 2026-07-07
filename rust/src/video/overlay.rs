@@ -21,7 +21,7 @@ pub fn video_sink_factory_name() -> &'static str {
     }
     #[cfg(target_os = "ios")]
     {
-        "avsamplebufferlayersink"
+        "glimagesink"
     }
     #[cfg(all(
         not(target_os = "windows"),
