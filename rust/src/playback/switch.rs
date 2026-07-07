@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
@@ -16,7 +16,11 @@ use crate::playback::shell::{
     SourceKind,
 };
 use crate::playback::state::set_state_sync;
-use crate::playback::surface::{assign_overlay_sink, VideoSurface};
+#[cfg(target_os = "macos")]
+use crate::playback::surface::assign_overlay_sink;
+#[cfg(target_os = "android")]
+use crate::playback::surface::refresh_android_overlay_on_gst;
+use crate::playback::surface::VideoSurface;
 use crate::video::{
     info::InternalVideoMetadata,
     orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig},
@@ -52,6 +56,7 @@ pub fn switch_shell(
 fn switch_uri_shell(shell: &mut PipelineShell, uri: &str, ctx: &SwitchContext) -> Result<()> {
     if shell.kind != SourceKind::Uri {
         teardown_shell(shell);
+        ctx.surface.mark_shell_rebuilt();
         *shell = install_uri_shell(
             &ctx.emitter,
             &ctx.looping,
@@ -71,11 +76,12 @@ fn switch_uri_shell(shell: &mut PipelineShell, uri: &str, ctx: &SwitchContext) -
     ctx.aspect.apply_to_sink(&shell.video_sink);
     apply_orientation_to_playbin(shell.pipeline.upcast_ref::<gst::Element>(), ctx.orientation)?;
     let has_overlay = ctx.surface.has_cached_handle();
-    pipeline_set_uri(&shell.pipeline, uri, &ctx.at_eos, has_overlay)
+    pipeline_set_uri(shell, uri, &ctx.at_eos, has_overlay, &ctx.surface)
 }
 
 fn switch_asset_shell(shell: &mut PipelineShell, asset_key: &str, ctx: &SwitchContext) -> Result<()> {
     teardown_shell(shell);
+    ctx.surface.mark_shell_rebuilt();
     *shell = install_asset_shell(
         asset_key,
         &ctx.emitter,
@@ -93,14 +99,37 @@ fn switch_asset_shell(shell: &mut PipelineShell, asset_key: &str, ctx: &SwitchCo
     ctx.surface.rebind_cached_overlay(shell)?;
     ctx.aspect.apply_to_sink(&shell.video_sink);
     ctx.at_eos.store(false, Ordering::SeqCst);
-    preroll_asset_shell(shell, ctx.surface.has_cached_handle())
+    preroll_asset_shell(shell, ctx.surface.has_cached_handle(), &ctx.surface)
 }
 
-fn preroll_asset_shell(shell: &PipelineShell, has_overlay: bool) -> Result<()> {
+/// Replays an asset from EOS by tearing down and rebuilding the shell (fresh decodebin).
+pub fn replay_asset_shell(shell: &mut PipelineShell, ctx: &SwitchContext) -> Result<()> {
+    let key = shell
+        .asset_key
+        .clone()
+        .ok_or_else(|| anyhow!("asset replay requested but asset_key missing"))?;
+    switch_asset_shell(shell, &key, ctx)?;
+    set_state_sync(&shell.pipeline, gst::State::Playing)?;
+    #[cfg(target_os = "android")]
+    crate::diag::logcat_info("gst: AppSrc replay from EOS (shell reload)");
+    Ok(())
+}
+
+fn preroll_asset_shell(shell: &PipelineShell, has_overlay: bool, surface: &VideoSurface) -> Result<()> {
     #[cfg(target_os = "android")]
     {
         if has_overlay {
             set_state_sync(&shell.pipeline, gst::State::Paused)?;
+            if let Some(handle) = *surface.stored_handle().lock() {
+                let (width, height) = surface.cached_dimensions();
+                refresh_android_overlay_on_gst(
+                    shell,
+                    handle,
+                    width,
+                    height,
+                    "after Paused preroll",
+                )?;
+            }
         } else {
             crate::diag::logcat_info(
                 "gst: deferring asset Paused preroll until Android overlay is bound",
@@ -113,16 +142,30 @@ fn preroll_asset_shell(shell: &PipelineShell, has_overlay: bool) -> Result<()> {
 }
 
 fn pipeline_set_uri(
-    pipeline: &gst::Pipeline,
+    shell: &PipelineShell,
     uri: &str,
     at_eos: &AtomicBool,
     has_overlay: bool,
+    surface: &VideoSurface,
 ) -> Result<()> {
+    let pipeline = &shell.pipeline;
     at_eos.store(false, Ordering::SeqCst);
     set_state_sync(pipeline, gst::State::Ready)?;
     pipeline.set_property("uri", uri);
     if has_overlay {
-        set_state_sync(pipeline, gst::State::Paused)
+        set_state_sync(pipeline, gst::State::Paused)?;
+        #[cfg(target_os = "android")]
+        if let Some(handle) = *surface.stored_handle().lock() {
+            let (width, height) = surface.cached_dimensions();
+            refresh_android_overlay_on_gst(
+                shell,
+                handle,
+                width,
+                height,
+                "after Paused preroll",
+            )?;
+        }
+        Ok(())
     } else {
         #[cfg(target_os = "android")]
         crate::diag::logcat_info(

@@ -43,6 +43,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - `glimagesink` + [`VideoOverlay`](https://gstreamer.freedesktop.org/documentation/rust/stable/latest/docs/gstreamer_video/index.html) bind via `ANativeWindow_fromSurface` from `SurfaceView` callbacks.
 - **Never** call `spawn_on_gst_thread_and_wait` from Android JNI / main thread (`surfaceCreated` / `surfaceChanged`). Cache the native window handle on the JNI thread, then apply overlay + `set_render_rectangle` + `expose` via `spawn_on_gst_thread` (fire-and-forget).
 - If no overlay handle is cached when `load` runs, defer `PAUSED` preroll until the first surface bind (`maybe_preroll_after_overlay_bind`).
+- After `PipelineShell` rebuild (URI ↔ asset switch), `mark_shell_rebuilt()` clears `overlay_bound`; `rebind_cached_overlay()` on the same Gst-thread stack must re-apply VideoOverlay to the new `video_sink` and set `overlay_bound` before preroll/play.
 - Answer `prepare-window-handle` in the pipeline bus sync handler; proactive `set_window_handle` before preroll is preferred.
 - Flutter Android uses `PlatformViewLink` + `initSurfaceAndroidView` (hybrid composition) — not legacy virtual-display `AndroidView` — so `SurfaceView` gets a reliable surface.
 - `GStreamerInitProvider` loads `gstreamer_android` then `xue_hua_video_player` before Dart FRB `dlopen`.
@@ -57,6 +58,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 
 - Flutter assets are resolved in Rust (`media/resolver`): `flutter_assets/{key}` on desktop, `AssetManager` on Android.
 - Bytes are pushed through `gstreamer-app` `AppSrc` into `decodebin`, sharing the same `VideoOverlay` video sink as URI mode.
+- AppSrc EOS replay reloads the asset shell (`teardown` + fresh `decodebin` pipeline) via `replay_asset_shell`; in-place rewind/state cycles break `pad_added` topology.
 - Prefer `playerLoadSource` / `PlaybackEngine::load(MediaSource)` — legacy `playerSetAssetSource` delegates to the same path.
 - Local files use `MediaSource::Uri` with a `file://` URI (Dart: `VideoSource.file`).
 

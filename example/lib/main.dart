@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
@@ -54,18 +56,23 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller.initialize().then((_) {
-      debugPrint('xue_hua_video_player: playerId=${_controller.playerId.value}');
-      if (mounted) setState(() => _ready = true);
-    }).catchError((Object e, StackTrace st) {
-      debugPrint('xue_hua_video_player initialize failed: $e\n$st');
-      if (mounted) {
-        setState(() {
-          _initError = e.toString();
-          _ready = true;
+    _controller
+        .initialize()
+        .then((_) {
+          debugPrint(
+            'xue_hua_video_player: playerId=${_controller.playerId.value}',
+          );
+          if (mounted) setState(() => _ready = true);
+        })
+        .catchError((Object e, StackTrace st) {
+          debugPrint('xue_hua_video_player initialize failed: $e\n$st');
+          if (mounted) {
+            setState(() {
+              _initError = e.toString();
+              _ready = true;
+            });
+          }
         });
-      }
-    });
   }
 
   @override
@@ -245,7 +252,9 @@ class _PlayerPageState extends State<PlayerPage> {
           SignalBuilder(
             builder: (context) {
               final error = _controller.error.value;
-              debugPrint(error.toString());
+              if (error != null) {
+                developer.log(error);
+              }
               final buffering = _controller.bufferingPercent.value;
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -261,6 +270,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   if (error != null)
                     SelectableText(
                       '错误: $error',
+                      maxLines: 2,
                       style: const TextStyle(color: Colors.red),
                     ),
                 ],

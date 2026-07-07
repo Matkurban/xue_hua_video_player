@@ -187,19 +187,18 @@ class XueHuaPlayerController {
       _videoMetadata.value = null;
       _tracks.value = const [];
       _speed.value = 1.0;
-      _state.value = PlayerState.buffering;
     });
     await _guard(() async {
       await rust.playerLoadSource(
         playerId: _id,
         source: _toMediaSourceDto(source),
+        autoPlay: autoPlay,
       );
       final caps = await rust.playerGetPipelineCapabilities(playerId: _id);
       _isSeekable.value = caps.seek;
       _supportsTracks.value = caps.tracks;
       _supportsOrientation.value = caps.orientation;
       await refreshTracks();
-      if (autoPlay) await rust.playerPlay(playerId: _id);
     });
   }
 

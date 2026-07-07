@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -62,6 +62,20 @@ impl AssetByteSource {
             } => read == 0 || *position >= *length,
         };
         Ok((buf, eos))
+    }
+
+    /// Rewinds the byte cursor so AppSrc can push from the start again after EOS.
+    pub fn rewind(&mut self) -> Result<()> {
+        match self {
+            AssetByteSource::File(file) => {
+                file.seek(SeekFrom::Start(0))?;
+            }
+            #[cfg(target_os = "android")]
+            AssetByteSource::AndroidFd { position, .. } => {
+                *position = 0;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -143,5 +157,42 @@ impl AppSrcFeedState {
         Ok(Self {
             source: Mutex::new(AssetByteSource::open(asset_key)?),
         })
+    }
+
+    pub fn rewind(&self) -> Result<()> {
+        self.source
+            .lock()
+            .map_err(|_| anyhow!("AppSrc feed lock poisoned"))?
+            .rewind()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn asset_byte_source_rewind_after_eof() {
+        let path = std::env::temp_dir().join("xhvp_rewind_test.bin");
+        {
+            let mut file = File::create(&path).unwrap();
+            file.write_all(b"hello world").unwrap();
+        }
+        let mut source = AssetByteSource::File(File::open(&path).unwrap());
+        let (chunk, eos) = source.read_chunk(1024).unwrap();
+        assert_eq!(chunk, b"hello world");
+        assert!(!eos);
+
+        let (chunk2, eos2) = source.read_chunk(1024).unwrap();
+        assert!(chunk2.is_empty());
+        assert!(eos2);
+
+        source.rewind().unwrap();
+        let (chunk3, eos3) = source.read_chunk(1024).unwrap();
+        assert_eq!(chunk3, b"hello world");
+        assert!(!eos3);
+
+        let _ = std::fs::remove_file(path);
     }
 }

@@ -61,21 +61,17 @@ pub fn attach_gst_bus_handlers(
                         );
                     } else {
                         at_eos.store(true, Ordering::SeqCst);
+                        desired_playing.store(false, Ordering::SeqCst);
                         emit(PlayerEvent::eos());
                         emit(PlayerEvent::state(PlayerState::Completed));
                     }
                 }
                 MessageView::Error(err) => {
-                    log::error!(
-                        "GStreamer error: {} ({:?})",
-                        err.error(),
-                        err.debug()
-                    );
-                    emit(PlayerEvent::error(format!(
-                        "{} ({:?})",
-                        err.error(),
-                        err.debug()
-                    )));
+                    let msg = format!("{} ({:?})", err.error(), err.debug());
+                    log::error!("GStreamer error: {msg}");
+                    #[cfg(target_os = "android")]
+                    crate::diag::logcat_error(&format!("GStreamer error: {msg}"));
+                    emit(PlayerEvent::error(msg.clone()));
                     emit(PlayerEvent::state(PlayerState::Error));
                 }
                 MessageView::Buffering(b) => {

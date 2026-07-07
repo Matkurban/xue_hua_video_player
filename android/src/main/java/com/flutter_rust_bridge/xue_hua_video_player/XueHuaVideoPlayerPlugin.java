@@ -1,7 +1,11 @@
 package com.flutter_rust_bridge.xue_hua_video_player;
 
+import android.content.Context;
+
 import androidx.annotation.NonNull;
 
+import io.flutter.FlutterInjector;
+import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 
 /** Registers the GStreamer video Platform View factory. */
@@ -16,6 +20,15 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin {
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
+        Context context = binding.getApplicationContext();
+        FlutterAssetHelper.init(context);
+        FlutterLoader loader = FlutterInjector.instance().flutterLoader();
+        try {
+            loader.ensureInitializationComplete(context, null);
+        } catch (IllegalStateException e) {
+            loader.startInitialization(context);
+            loader.ensureInitializationComplete(context, null);
+        }
         binding
             .getPlatformViewRegistry()
             .registerViewFactory(

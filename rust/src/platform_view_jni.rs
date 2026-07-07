@@ -15,6 +15,20 @@ use jni::{jni_mangle, Env, EnvUnowned};
 #[cfg(target_os = "android")]
 use crate::platform_view_android::{native_window_handle_from_surface, store_java_vm};
 
+/// Caches the process JavaVM when the native library loads (before Platform View surface).
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "system" fn JNI_OnLoad(
+    vm: *mut jni::sys::JavaVM,
+    _reserved: *mut std::ffi::c_void,
+) -> jni::sys::jint {
+    // SAFETY: JNI passes a valid JavaVM pointer during library load.
+    let java_vm = unsafe { jni::JavaVM::from_raw(vm) };
+    store_java_vm(java_vm.get_raw());
+    crate::diag::logcat_info("JNI_OnLoad: JavaVM cached for Rust JNI calls");
+    jni::sys::JNI_VERSION_1_6
+}
+
 /// C ABI entry for Swift / C++ platform views.
 #[no_mangle]
 pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle: i64) {
@@ -181,5 +195,25 @@ fn on_android_surface(
         store_java_vm(vm.get_raw());
     }
     let handle = native_window_handle_from_surface(env, surface)? as i64;
+    crate::diag::logcat_info(&format!(
+        "gst: android surface callback player_id={player_id} handle={handle:#x} {width}x{height}"
+    ));
     notify_android_surface(player_id, handle, width, height)
+}
+
+#[cfg(target_os = "android")]
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.FlutterAssetHelper",
+    "nativeBindAssetHelperClass",
+    "()V"
+)]
+pub extern "system" fn native_bind_asset_helper_class<'caller>(
+    mut env: EnvUnowned<'caller>,
+    class: JClass<'caller>,
+) {
+    env.with_env(|env| {
+        crate::platform_view_android::bind_flutter_asset_helper_class(env, class);
+        Ok::<(), jni::errors::Error>(())
+    })
+    .resolve::<LogErrorAndDefault>();
 }

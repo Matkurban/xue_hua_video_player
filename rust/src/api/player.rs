@@ -171,18 +171,18 @@ pub fn player_event_stream(player_id: i64, sink: StreamSink<PlayerEvent>) -> Res
 }
 
 /// Loads media from a unified source descriptor (URI or Flutter asset).
-pub fn player_load_source(player_id: i64, source: MediaSourceDto) -> Result<()> {
-    get_player(player_id)?.load(source.into())
+pub fn player_load_source(player_id: i64, source: MediaSourceDto, auto_play: bool) -> Result<()> {
+    get_player(player_id)?.load(source.into(), auto_play)
 }
 
 /// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.
 pub fn player_set_source(player_id: i64, uri: String) -> Result<()> {
-    get_player(player_id)?.load(MediaSourceDto::Uri(uri).into())
+    get_player(player_id)?.load(MediaSourceDto::Uri(uri).into(), false)
 }
 
 /// Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
 pub fn player_set_asset_source(player_id: i64, asset_key: String) -> Result<()> {
-    get_player(player_id)?.load(MediaSourceDto::FlutterAsset(asset_key).into())
+    get_player(player_id)?.load(MediaSourceDto::FlutterAsset(asset_key).into(), false)
 }
 
 pub fn player_play(player_id: i64) -> Result<()> {

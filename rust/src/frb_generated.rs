@@ -513,12 +513,16 @@ fn wire__crate__api__player__player_load_source_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_player_id = <i64>::sse_decode(&mut deserializer);
             let api_source = <crate::player_events::MediaSourceDto>::sse_decode(&mut deserializer);
+            let api_auto_play = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok =
-                            crate::api::player::player_load_source(api_player_id, api_source)?;
+                        let output_ok = crate::api::player::player_load_source(
+                            api_player_id,
+                            api_source,
+                            api_auto_play,
+                        )?;
                         Ok(output_ok)
                     })(),
                 )

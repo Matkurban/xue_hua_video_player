@@ -76,9 +76,11 @@ Stream<PlayerEvent> playerEventStream({required PlatformInt64 playerId}) =>
 Future<void> playerLoadSource({
   required PlatformInt64 playerId,
   required MediaSourceDto source,
+  required bool autoPlay,
 }) => RustLib.instance.api.crateApiPlayerPlayerLoadSource(
   playerId: playerId,
   source: source,
+  autoPlay: autoPlay,
 );
 
 /// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.

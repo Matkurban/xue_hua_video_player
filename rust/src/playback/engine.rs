@@ -11,6 +11,8 @@ use parking_lot::Mutex;
 use crate::gst_init::ensure_gst_init;
 use crate::gst_runtime::spawn_on_gst_thread_and_wait;
 use crate::media::{is_seekable, MediaSource};
+#[cfg(target_os = "android")]
+use crate::media::ResolvedSource;
 use crate::playback::bus::Emitter;
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
 use crate::playback::state::set_state_sync;
@@ -142,7 +144,10 @@ impl PlaybackEngine {
         *self.emitter.lock() = Some(emitter);
     }
 
-    pub fn load(&self, source: MediaSource) -> Result<()> {
+    pub fn load(&self, source: MediaSource, auto_play: bool) -> Result<()> {
+        if auto_play {
+            self.desired_playing.store(true, Ordering::SeqCst);
+        }
         let resolved = source.resolve()?;
         self.seekable
             .store(is_seekable(&resolved), Ordering::SeqCst);
@@ -154,29 +159,48 @@ impl PlaybackEngine {
         }
         self.surface.ensure_overlay_ready()?;
         let ctx = self.switch_context();
-        self.run_on_gst(move |shell| switch_shell(shell, resolved, &ctx))
+        let at_eos = self.at_eos.clone();
+        self.run_on_gst(move |shell| {
+            switch_shell(shell, resolved, &ctx)?;
+            if auto_play && ctx.surface.has_cached_handle() {
+                pipeline_play(shell, &at_eos, &ctx.surface, &ctx)?;
+            }
+            Ok(())
+        })
     }
 
     #[deprecated(note = "use load(MediaSource::Uri(...)) instead")]
     pub fn set_uri(&self, uri: &str) -> Result<()> {
-        self.load(MediaSource::Uri(uri.to_string()))
+        self.load(MediaSource::Uri(uri.to_string()), false)
     }
 
     #[deprecated(note = "use load(MediaSource::FlutterAsset(...)) instead")]
     pub fn set_asset_source(&self, asset_key: &str) -> Result<()> {
-        self.load(MediaSource::FlutterAsset(asset_key.to_string()))
+        self.load(MediaSource::FlutterAsset(asset_key.to_string()), false)
     }
 
     pub fn play(&self) -> Result<()> {
         self.desired_playing.store(true, Ordering::SeqCst);
         self.surface.ensure_overlay_ready()?;
 
+        #[cfg(target_os = "android")]
+        if !self.surface.has_cached_handle() {
+            crate::diag::logcat_info("gst: deferring play until Android overlay is bound");
+            return Ok(());
+        }
+
         let at_eos = self.at_eos.clone();
-        let rate = *self.rate.lock();
-        let surface = self.surface.clone_for_switch();
+        let ctx = self.switch_context();
         self.run_on_gst(move |shell| {
-            surface.rebind_cached_overlay(shell)?;
-            pipeline_play(&shell.pipeline, &at_eos, rate)
+            #[cfg(target_os = "android")]
+            if !ctx.surface.is_overlay_bound_on_gst() {
+                ctx.surface.rebind_cached_overlay(shell)?;
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                ctx.surface.rebind_cached_overlay(shell)?;
+            }
+            pipeline_play(shell, &at_eos, &ctx.surface, &ctx)
         })
     }
 
@@ -327,9 +351,7 @@ impl PlaybackEngine {
         }
         #[cfg(target_os = "android")]
         {
-            return self
-                .surface
-                .notify_android_surface(self.shell.clone(), window_handle, 0, 0);
+            return self.notify_android_surface(window_handle, 0, 0);
         }
         #[cfg(not(any(target_os = "macos", target_os = "android")))]
         {
@@ -346,7 +368,10 @@ impl PlaybackEngine {
         }
         #[cfg(target_os = "android")]
         {
-            let _ = (width, height);
+            self.surface.set_cached_dimensions(width, height);
+            let shell = self.shell.clone();
+            let surface = self.surface.clone_for_switch();
+            surface.schedule_android_overlay_rectangle_sync(shell, width, height);
             return Ok(());
         }
         #[cfg(not(any(target_os = "macos", target_os = "android")))]
@@ -370,8 +395,18 @@ impl PlaybackEngine {
         width: i32,
         height: i32,
     ) -> Result<()> {
-        self.surface
-            .notify_android_surface(self.shell.clone(), handle, width, height)
+        let play_intent = crate::playback::surface::AndroidOverlayPlayIntent {
+            desired_playing: self.desired_playing.clone(),
+            at_eos: self.at_eos.clone(),
+            switch_ctx: self.switch_context(),
+        };
+        self.surface.notify_android_surface(
+            self.shell.clone(),
+            handle,
+            width,
+            height,
+            play_intent,
+        )
     }
 
     #[cfg(target_os = "macos")]
@@ -442,9 +477,23 @@ fn pipeline_seek(
     Ok(())
 }
 
-fn pipeline_play(pipeline: &gst::Pipeline, at_eos: &AtomicBool, rate: f64) -> Result<()> {
-    if at_eos.swap(false, Ordering::SeqCst) {
-        pipeline_seek(pipeline, at_eos, 0, rate, true, None)?;
+fn pipeline_play(
+    shell: &mut PipelineShell,
+    at_eos: &AtomicBool,
+    surface: &VideoSurface,
+    ctx: &SwitchContext,
+) -> Result<()> {
+    crate::playback::state::resume_or_replay_from_eos(shell, at_eos, Some(ctx))?;
+    #[cfg(target_os = "android")]
+    if let Some(handle) = *surface.stored_handle().lock() {
+        let (width, height) = surface.cached_dimensions();
+        crate::playback::surface::refresh_android_overlay_on_gst(
+            shell,
+            handle,
+            width,
+            height,
+            "after Playing",
+        )?;
     }
-    set_state_sync(pipeline, gst::State::Playing)
+    Ok(())
 }

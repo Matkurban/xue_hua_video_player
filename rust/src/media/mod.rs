@@ -71,21 +71,22 @@ fn resolve_flutter_asset(asset_key: &str) -> Result<ResolvedSource> {
         if asset_android::can_open_asset_fd(key) {
             return Ok(ResolvedSource::AppSrc(key.to_string()));
         }
+        return Err(anyhow!(
+            "Android asset unavailable: {key} (see logcat FlutterAssetHelper)"
+        ));
     }
 
-    if let Ok(path) = resolve_flutter_asset_path(key) {
-        #[cfg(not(target_os = "android"))]
-        {
+    #[cfg(not(target_os = "android"))]
+    {
+        if let Ok(path) = resolve_flutter_asset_path(key) {
             let uri = url::Url::from_file_path(&path)
                 .map_err(|_| anyhow!("invalid asset path: {}", path.display()))?
                 .to_string();
             return Ok(ResolvedSource::Uri(uri));
         }
-        #[cfg(target_os = "android")]
-        let _ = path;
-    }
 
-    Ok(ResolvedSource::AppSrc(key.to_string()))
+        Ok(ResolvedSource::AppSrc(key.to_string()))
+    }
 }
 
 /// Whether the resolved source supports accurate seeking.

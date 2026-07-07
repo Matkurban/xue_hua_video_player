@@ -130,6 +130,7 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiPlayerPlayerLoadSource({
     required PlatformInt64 playerId,
     required MediaSourceDto source,
+    required bool autoPlay,
   });
 
   Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId});
@@ -618,6 +619,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<void> crateApiPlayerPlayerLoadSource({
     required PlatformInt64 playerId,
     required MediaSourceDto source,
+    required bool autoPlay,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -625,6 +627,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_i_64(playerId, serializer);
           sse_encode_box_autoadd_media_source_dto(source, serializer);
+          sse_encode_bool(autoPlay, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -637,7 +640,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiPlayerPlayerLoadSourceConstMeta,
-        argValues: [playerId, source],
+        argValues: [playerId, source, autoPlay],
         apiImpl: this,
       ),
     );
@@ -646,7 +649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiPlayerPlayerLoadSourceConstMeta =>
       const TaskConstMeta(
         debugName: "player_load_source",
-        argNames: ["playerId", "source"],
+        argNames: ["playerId", "source", "autoPlay"],
       );
 
   @override
