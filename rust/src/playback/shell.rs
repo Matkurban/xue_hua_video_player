@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use anyhow::Result;
 use gstreamer as gst;
@@ -8,9 +11,9 @@ use parking_lot::Mutex;
 use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
-use crate::playback::capabilities::PipelineCapabilities;
 #[cfg(target_os = "ios")]
 use crate::playback::surface::IosLayerBusHook;
+use crate::playback::capabilities::PipelineCapabilities;
 use crate::playback::tracks::TrackCache;
 use crate::playback::uri_pipeline::build_uri_playbin;
 use crate::video::attach_overlay_bus_sync_handler;
@@ -48,7 +51,10 @@ impl PipelineShell {
                 .pipeline
                 .property::<Option<String>>("uri")
                 .is_some_and(|uri| !uri.is_empty()),
-            SourceKind::Asset => self.asset_key.as_ref().is_some_and(|key| !key.is_empty()),
+            SourceKind::Asset => self
+                .asset_key
+                .as_ref()
+                .is_some_and(|key| !key.is_empty()),
         }
     }
 }

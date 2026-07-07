@@ -2,7 +2,7 @@
 mod asset_android;
 mod resolver;
 
-pub use resolver::{resolve_flutter_asset_path, AppSrcFeedState};
+pub use resolver::{resolve_flutter_asset_path, set_flutter_assets_dir, AppSrcFeedState};
 
 use anyhow::{anyhow, Result};
 

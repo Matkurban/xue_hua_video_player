@@ -15,13 +15,13 @@ use crate::playback::shell::{
     SourceKind,
 };
 use crate::playback::state::set_state_sync;
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-use crate::playback::surface::assign_overlay_sink;
 #[cfg(target_os = "android")]
 use crate::playback::surface::refresh_mobile_overlay_on_gst;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use crate::playback::surface::assign_overlay_sink;
+use crate::playback::surface::VideoSurface;
 #[cfg(target_os = "ios")]
 use crate::playback::surface::IosLayerBusHook;
-use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::TrackCache;
 use crate::video::orientation::apply_orientation_to_playbin;
 use crate::video::{
@@ -159,8 +159,8 @@ pub fn replay_asset_shell(shell: &mut PipelineShell, ctx: &SwitchContext) -> Res
 
 fn preroll_asset_shell(
     shell: &PipelineShell,
-    _overlay_ready: bool,
-    _surface: &VideoSurface,
+    overlay_ready: bool,
+    surface: &VideoSurface,
 ) -> Result<()> {
     #[cfg(target_os = "android")]
     {
@@ -205,7 +205,7 @@ fn pipeline_set_uri(
     uri: &str,
     at_eos: &AtomicBool,
     overlay_ready: bool,
-    _surface: &VideoSurface,
+    surface: &VideoSurface,
 ) -> Result<()> {
     let pipeline = &shell.pipeline;
     at_eos.store(false, Ordering::SeqCst);
@@ -217,13 +217,7 @@ fn pipeline_set_uri(
             set_state_sync(pipeline, gst::State::Paused)?;
             if let Some(handle) = *surface.stored_handle().lock() {
                 let (width, height) = surface.cached_dimensions();
-                refresh_mobile_overlay_on_gst(
-                    shell,
-                    handle,
-                    width,
-                    height,
-                    "after Paused preroll",
-                )?;
+                refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Paused preroll")?;
             }
         }
         #[cfg(target_os = "ios")]
