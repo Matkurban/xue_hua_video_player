@@ -15,13 +15,13 @@ use crate::playback::shell::{
     SourceKind,
 };
 use crate::playback::state::set_state_sync;
-#[cfg(target_os = "android")]
-use crate::playback::surface::refresh_mobile_overlay_on_gst;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use crate::playback::surface::assign_overlay_sink;
-use crate::playback::surface::VideoSurface;
+#[cfg(target_os = "android")]
+use crate::playback::surface::refresh_mobile_overlay_on_gst;
 #[cfg(target_os = "ios")]
 use crate::playback::surface::IosLayerBusHook;
+use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::TrackCache;
 use crate::video::orientation::apply_orientation_to_playbin;
 use crate::video::{
@@ -217,7 +217,13 @@ fn pipeline_set_uri(
             set_state_sync(pipeline, gst::State::Paused)?;
             if let Some(handle) = *surface.stored_handle().lock() {
                 let (width, height) = surface.cached_dimensions();
-                refresh_mobile_overlay_on_gst(shell, handle, width, height, "after Paused preroll")?;
+                refresh_mobile_overlay_on_gst(
+                    shell,
+                    handle,
+                    width,
+                    height,
+                    "after Paused preroll",
+                )?;
             }
         }
         #[cfg(target_os = "ios")]
@@ -227,7 +233,12 @@ fn pipeline_set_uri(
                 set_state_sync(pipeline, gst::State::Paused)?;
                 if let Some(handle) = *surface.stored_handle().lock() {
                     let (width, height) = surface.cached_dimensions();
-                    let _ = crate::platform_view_ios::bind_overlay_on_main_thread(&shell.video_sink, handle, width, height);
+                    let _ = crate::platform_view_ios::bind_overlay_on_main_thread(
+                        &shell.video_sink,
+                        handle,
+                        width,
+                        height,
+                    );
                     crate::video::expose_overlay(&shell.video_sink);
                 }
             } else {

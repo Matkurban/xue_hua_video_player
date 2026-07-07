@@ -23,13 +23,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        // The plugin ships bundled GStreamer runtime; Rust lib is built from source.
-        // All four ABIs are supported. Uncomment to narrow the
-        // set and shrink the APK; leaving it open builds every supported ABI.
-        // ndk {
-        //     abiFilters += listOf("arm64-v8a", "x86_64")
-        // }
     }
 
     buildTypes {

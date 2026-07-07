@@ -10,9 +10,9 @@ use gstreamer::glib::source::{self, Priority};
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::playback::tracks::{mark_selected_streams, update_cache_from_collection, TrackCache};
 #[cfg(target_os = "ios")]
 use crate::playback::surface::IosLayerBusHook;
+use crate::playback::tracks::{mark_selected_streams, update_cache_from_collection, TrackCache};
 use crate::player_events::{map_state, PlayerEvent, PlayerState};
 
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
@@ -217,9 +217,10 @@ pub fn attach_gst_bus_handlers(
                         }
                         #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         {
-                            if let Err(e) =
-                                crate::playback::state::set_state_sync(&pipeline_bus, gst::State::Paused)
-                            {
+                            if let Err(e) = crate::playback::state::set_state_sync(
+                                &pipeline_bus,
+                                gst::State::Paused,
+                            ) {
                                 log::warn!("clock-lost set_state_sync(Paused): {e}");
                             }
                             if let Err(e) = crate::playback::state::set_state_sync(

@@ -221,13 +221,8 @@ where
     // Primary path: layer readable at READY — attach before any pipeline preroll.
     if let Ok(layer) = read_sink_layer(sink) {
         log::info!("gst: ios read_sink_layer ok at READY layer={layer:#x}");
-        let attached = sync_attach_then_preroll(
-            host_view,
-            layer,
-            pipeline,
-            has_pending_media,
-            &lifecycle,
-        )?;
+        let attached =
+            sync_attach_then_preroll(host_view, layer, pipeline, has_pending_media, &lifecycle)?;
         on_complete(attached);
         return if attached {
             Ok(IosLayerAttachOutcome::Scheduled)
@@ -261,8 +256,7 @@ where
     match read_sink_layer(sink) {
         Ok(layer) => {
             log::info!("gst: ios read_sink_layer ok after fallback preroll layer={layer:#x}");
-            let attached =
-                sync_attach_then_preroll(host_view, layer, pipeline, false, &lifecycle)?;
+            let attached = sync_attach_then_preroll(host_view, layer, pipeline, false, &lifecycle)?;
             if !attached && prerolled {
                 rollback_pipeline_from_ios_preroll(pipeline);
             }
@@ -342,7 +336,9 @@ pub fn setup_ios_notify_layer_handler(
                 return;
             }
             if attach_layer_on_main_thread_sync(host_view, layer) {
-                log::info!("gst: notify::layer - layer attached sync host={host_view:#x} layer={layer:#x}");
+                log::info!(
+                    "gst: notify::layer - layer attached sync host={host_view:#x} layer={layer:#x}"
+                );
                 overlay_bound_clone.store(true, Ordering::SeqCst);
             } else {
                 release_sink_layer(layer);
@@ -356,5 +352,5 @@ pub fn setup_ios_notify_layer_handler(
     _sink: &gst::Element,
     _stored: std::sync::Arc<parking_lot::Mutex<Option<usize>>>,
     _overlay_bound: std::sync::Arc<std::sync::atomic::AtomicBool>,
-) {}
-
+) {
+}
