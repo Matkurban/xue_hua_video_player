@@ -9,19 +9,19 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::gst_runtime::spawn_on_gst_thread;
-use crate::playback::shell::PipelineShell;
-use crate::playback::state::set_state_sync;
-#[cfg(any(target_os = "android", target_os = "ios"))]
-use crate::playback::state::resume_or_replay_from_eos;
 #[cfg(target_os = "ios")]
 use crate::playback::ios_overlay::{IosIdleWork, IosOverlayPlayIntent, IosOverlaySession};
+use crate::playback::shell::PipelineShell;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use crate::playback::state::resume_or_replay_from_eos;
+use crate::playback::state::set_state_sync;
 use crate::playback::switch::SwitchContext;
+#[cfg(target_os = "ios")]
+use crate::video::ios_layer::IosLayerAttachOutcome;
 use crate::video::{
     clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
     set_overlay_window_handle,
 };
-#[cfg(target_os = "ios")]
-use crate::video::ios_layer::IosLayerAttachOutcome;
 
 /// Shared state for iOS layer attach retries on the Gst bus (`READY → PAUSED`).
 #[cfg(target_os = "ios")]
@@ -572,18 +572,14 @@ impl VideoSurface {
             {
                 return;
             }
-            let _ = session.request_attach(shell, stored, ios_intent, "Swift apply", work_generation);
+            let _ =
+                session.request_attach(shell, stored, ios_intent, "Swift apply", work_generation);
         });
         Ok(())
     }
 
     #[cfg(target_os = "ios")]
-    pub fn notify_ios_overlay(
-        &self,
-        handle: i64,
-        width: i32,
-        height: i32,
-    ) -> Result<()> {
+    pub fn notify_ios_overlay(&self, handle: i64, width: i32, height: i32) -> Result<()> {
         self.cache_ios_overlay(handle, width, height);
         Ok(())
     }

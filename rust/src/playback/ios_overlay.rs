@@ -99,7 +99,8 @@ impl IosOverlaySession {
     }
 
     pub fn set_pending_play_after_overlay(&self, pending: bool) {
-        self.pending_play_after_overlay.store(pending, Ordering::SeqCst);
+        self.pending_play_after_overlay
+            .store(pending, Ordering::SeqCst);
     }
 
     pub fn set_buffering_active(&self, active: bool) {
@@ -110,7 +111,8 @@ impl IosOverlaySession {
         self.overlay_bound.store(false, Ordering::SeqCst);
         self.attach_in_flight.store(false, Ordering::SeqCst);
         self.state_apply_in_flight.store(false, Ordering::SeqCst);
-        self.pending_play_after_overlay.store(false, Ordering::SeqCst);
+        self.pending_play_after_overlay
+            .store(false, Ordering::SeqCst);
         self.buffering_active.store(false, Ordering::SeqCst);
         self.apply_scheduled.store(false, Ordering::SeqCst);
         self.attach_scheduled.store(false, Ordering::SeqCst);
@@ -366,7 +368,9 @@ impl IosOverlaySession {
         }
 
         let want_play = work.play_intent.desired_playing.load(Ordering::SeqCst)
-            || self.pending_play_after_overlay.swap(false, Ordering::SeqCst);
+            || self
+                .pending_play_after_overlay
+                .swap(false, Ordering::SeqCst);
 
         let snapshot = {
             let guard = work.shell.lock();
