@@ -69,6 +69,3 @@ pub fn ensure_android_diagnostics_initialized() {
         logcat::info("diag: panic hook installed");
     });
 }
-
-#[cfg(not(target_os = "android"))]
-pub fn ensure_android_diagnostics_initialized() {}

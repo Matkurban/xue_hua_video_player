@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::AtomicBool,
-    Arc,
-};
+use std::sync::{atomic::AtomicBool, Arc};
 
 use anyhow::Result;
 use gstreamer as gst;
@@ -39,20 +36,6 @@ pub struct PipelineShell {
 impl PipelineShell {
     pub fn capabilities(&self) -> PipelineCapabilities {
         PipelineCapabilities::from_source_kind(self.kind)
-    }
-
-    /// True when the shell has a URI or asset key ready for preroll.
-    ///
-    /// An empty playbin (`SourceKind::Uri` with `uri` unset) returns `false` so
-    /// early overlay bind does not panic or preroll before `load()`.
-    pub fn has_pending_media(&self) -> bool {
-        match self.kind {
-            SourceKind::Uri => self
-                .pipeline
-                .property::<Option<String>>("uri")
-                .is_some_and(|uri| !uri.is_empty()),
-            SourceKind::Asset => self.asset_key.as_ref().is_some_and(|key| !key.is_empty()),
-        }
     }
 }
 
@@ -141,85 +124,4 @@ pub fn wire_overlay_sync(
     >,
 ) {
     attach_overlay_bus_sync_handler(&shell.pipeline, overlay_handle, overlay_sink);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn init_gst() {
-        let _ = gst::init();
-    }
-
-    fn empty_shell(kind: SourceKind, asset_key: Option<String>) -> PipelineShell {
-        init_gst();
-        let pipeline = gst::Pipeline::new();
-        PipelineShell {
-            pipeline,
-            video_sink: gst::ElementFactory::make("fakesink")
-                .build()
-                .expect("fakesink"),
-            kind,
-            is_playbin: kind == SourceKind::Uri,
-            asset_key,
-            appsrc_feed: None,
-            bus_watch: None,
-            position_source: None,
-        }
-    }
-
-    fn uri_shell(uri: Option<&str>) -> PipelineShell {
-        init_gst();
-        let playbin = gst::ElementFactory::make("playbin3")
-            .build()
-            .expect("playbin3");
-        if let Some(uri) = uri {
-            playbin.set_property("uri", uri);
-        }
-        let pipeline = playbin
-            .dynamic_cast::<gst::Pipeline>()
-            .expect("playbin3 pipeline");
-        PipelineShell {
-            pipeline,
-            video_sink: gst::ElementFactory::make("fakesink")
-                .build()
-                .expect("fakesink"),
-            kind: SourceKind::Uri,
-            is_playbin: true,
-            asset_key: None,
-            appsrc_feed: None,
-            bus_watch: None,
-            position_source: None,
-        }
-    }
-
-    #[test]
-    fn has_pending_media_asset_with_key() {
-        let shell = empty_shell(SourceKind::Asset, Some("assets/sample.mp4".to_string()));
-        assert!(shell.has_pending_media());
-    }
-
-    #[test]
-    fn has_pending_media_asset_without_key() {
-        let shell = empty_shell(SourceKind::Asset, None);
-        assert!(!shell.has_pending_media());
-    }
-
-    #[test]
-    fn has_pending_media_asset_empty_key() {
-        let shell = empty_shell(SourceKind::Asset, Some(String::new()));
-        assert!(!shell.has_pending_media());
-    }
-
-    #[test]
-    fn has_pending_media_uri_unset() {
-        let shell = uri_shell(None);
-        assert!(!shell.has_pending_media());
-    }
-
-    #[test]
-    fn has_pending_media_uri_set() {
-        let shell = uri_shell(Some("https://example.com/video.mp4"));
-        assert!(shell.has_pending_media());
-    }
 }
