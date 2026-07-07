@@ -52,7 +52,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
 
   s.script_phase = {
     :name => 'Build Rust library',
-    :script => 'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; export GSTREAMER_ROOT_IOS="' + gst_root + '"; export PKG_CONFIG_ALLOW_CROSS=1; ' + gst_env + 'sh "$PODS_TARGET_SRCROOT/../cargokit/build_pod.sh" ../rust xue_hua_video_player',
+    :script => 'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; export GSTREAMER_ROOT_IOS="' + gst_root + '"; export PKG_CONFIG_ALLOW_CROSS=1; ' + gst_env + '. "$PODS_TARGET_SRCROOT/scripts/ios_rust_link_flags.sh"; sh "$PODS_TARGET_SRCROOT/../cargokit/build_pod.sh" ../rust xue_hua_video_player',
     :execution_position => :before_compile,
     :input_files => ['${BUILT_PRODUCTS_DIR}/cargokit_phony'],
     :output_files => ["${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a"],
@@ -67,9 +67,8 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     # framework. iOS plugins are static and are registered explicitly by the
     # Rust core (`register_ios_static_plugins()` in `rust/src/player.rs`); the
     # linker pulls the referenced `gst_plugin_*_register` objects from the
-    # framework archive. The static GStreamer archive also references a few OS
-    # libraries/frameworks (iconv, resolv, compression, media) linked here.
-    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
+    # framework archive. gstgl/glimagesink also needs UIKit/QuartzCore/OpenGLES.
+    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
   }
   s.vendored_frameworks = []
 end

@@ -150,7 +150,7 @@ class CargoKitPlugin implements Plugin<Project> {
             // GStreamer .so is shipped per-ABI in jniLibs and the GStreamer
             // Android SDK provides a per-ABI lib dir; see
             // cargokit/build_tool/lib/src/android_environment.dart). Consumers
-            // without the Rust toolchain download precompiled binaries instead.
+            // requires the Rust toolchain to compile from source.
 
             // The task name depends on plugin properties, which are not available
             // at this point

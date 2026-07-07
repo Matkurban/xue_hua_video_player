@@ -26,7 +26,6 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - [Permissions & platform configuration](#permissions--platform-configuration)
 - [API reference](#api-reference)
 - [Native GStreamer setup (per platform)](#native-gstreamer-setup-per-platform)
-- [Precompiled binaries](#precompiled-binaries)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
 - [Maintainers](#maintainers)
@@ -79,11 +78,11 @@ Then:
 flutter pub get
 ```
 
-The Rust core is fetched as a **precompiled binary** by default, so consumers do
-**not** normally need the Rust toolchain even on machines that already have Rust
-installed (see [Precompiled binaries](#precompiled-binaries)).
-Each desktop/iOS platform still needs the GStreamer SDK available at build/run
-time; Android bundles everything (see the sections below).
+The Rust core is **compiled from source** during your app build via [cargokit].
+You need the **Rust toolchain** (`rustup`) on the machine that builds the app.
+Each desktop/iOS platform also needs the GStreamer SDK at build/run time; Android
+bundles the GStreamer runtime but still compiles the Rust plugin at build time
+(see the sections below).
 
 ## Quick start
 
@@ -258,9 +257,8 @@ already own the global `log` logger). Panics are written via `__android_log_writ
 **v1.0.10+** additionally hardens frame upload (no `assert!` on buffer size
 mismatch), refreshes `ANativeWindow` in `onSurfaceAvailable`, and logs Rust panic
 backtraces to logcat (`xue_hua_video_player` tag). If the app still crashes,
-build locally with `use_precompiled_binaries: false` (see
-[`example/android/cargokit_options.yaml`](example/android/cargokit_options.yaml))
-and symbolicate with [`scripts/symbolicate_android_tombstone.sh`](scripts/symbolicate_android_tombstone.sh).
+build with a clean tree and symbolicate with
+[`scripts/symbolicate_android_tombstone.sh`](scripts/symbolicate_android_tombstone.sh).
 
 ### Consumer integration checklist (e.g. chat / IM apps)
 
@@ -511,8 +509,10 @@ Simulator slice, so the Apple-Silicon iOS Simulator is not supported.
    This installs `GStreamer.framework` under
    `~/Library/Developer/GStreamer/iPhone.sdk` (override with `GSTREAMER_ROOT_IOS`).
 2. `ios/xue_hua_video_player.podspec` already exports the `system-deps` overrides
-   and `PKG_CONFIG_ALLOW_CROSS=1` for the Rust cross-build and links the umbrella
-   `-framework GStreamer`.
+   and `PKG_CONFIG_ALLOW_CROSS=1` for the Rust cross-build, injects `RUSTFLAGS` via
+   `ios/scripts/ios_rust_link_flags.sh` (UIKit/OpenGLES/QuartzCore, etc. for the
+   Cargokit staticlib link step), and links the umbrella `-framework GStreamer`
+   in `OTHER_LDFLAGS` for the final Xcode link.
 3. Build/run on a connected device: `flutter run -d <device>` (or
    `flutter build ios --no-codesign` to verify the build).
 
@@ -531,7 +531,8 @@ GStreamer setup**: the plugin bundles the entire GStreamer runtime.
 `android/src/main/jniLibs/<abi>/` ships the umbrella `libgstreamer_android.so`
 (all of GStreamer + its plugins, linked statically) and `libc++_shared.so` for
 each ABI; these are packaged into the plugin AAR and merged into the app. The
-Rust `libxue_hua_video_player.so` is fetched as a precompiled binary per ABI.
+Rust `libxue_hua_video_player.so` is compiled from source at build time via
+cargokit (requires the Rust toolchain).
 
 The GStreamer Android runtime is initialized automatically at process startup by
 `GStreamerInitProvider` (a `ContentProvider` in the plugin's
@@ -554,8 +555,7 @@ maintainer who needs to rebuild the umbrella libraries.
 #### Regenerating the bundled `.so` (maintainers)
 
 The GStreamer Android SDK is only needed by maintainers who rebuild the Rust
-library from source (instead of using the precompiled binary) or regenerate the
-umbrella `.so`.
+library locally or regenerate the umbrella `.so`.
 
 **1. Download + extract the GStreamer Android SDK** (per-ABI top-level dirs):
 
@@ -594,115 +594,6 @@ for abi in arm64-v8a armeabi-v7a x86 x86_64; do
     ../src/main/jniLibs/$abi/                                            # runtime
 done
 ```
-
-## Precompiled binaries
-
-The Rust core is built with [cargokit], which supports **precompiled binaries**
-so that consumers of this plugin do **not** need the Rust toolchain. When a
-consumer builds their app, cargokit computes a `crate-hash` from the Rust sources
-(`rust/src/**`, `Cargo.toml`, `Cargo.lock`, `cargokit.yaml`) and downloads a
-signed, prebuilt library for that hash from this repo's GitHub Releases instead
-of running `cargo`.
-
-> Precompiled binaries only remove the **Rust toolchain** requirement. The
-> artifact still references GStreamer symbols, so iOS/macOS/Linux/Windows
-> consumers still need the GStreamer SDK at link/runtime. Android is the
-> exception: the plugin bundles the GStreamer runtime, so it needs neither Rust
-> nor the GStreamer SDK.
-
-Behavior:
-
-- Consumers use the precompiled binary by default, including on machines where
-  Rust / `rustup` is already installed.
-- Maintainers who intentionally want a local source build can add a
-  `cargokit_options.yaml` next to the app's `pubspec.yaml` with:
-
-  ```yaml
-  use_precompiled_binaries: false
-  ```
-
-- If no matching signed artifact exists for the current `crate-hash`, or the
-  download fails due to network issues, cargokit falls back to building from
-  source (v1.0.2+ retries failed downloads up to 10 times automatically).
-- To force the precompiled path explicitly, add a `cargokit_options.yaml` next
-  to the app's
-  `pubspec.yaml` with:
-
-  ```yaml
-  use_precompiled_binaries: true
-  ```
-
-Configuration lives in [`rust/cargokit.yaml`](rust/cargokit.yaml) (the download
-URL prefix and the ed25519 **public** key used to verify signatures).
-
-### Troubleshooting
-
-If a macOS / iOS / Linux / Windows build fails with:
-
-```
-ClientException: Connection closed while receiving data
-uri=https://release-assets.githubusercontent.com/.../aarch64-apple-darwin_libxue_hua_video_player.a
-```
-
-Cargokit was interrupted while downloading a precompiled Rust library from GitHub
-Releases (the macOS static library is ~29 MB). **v1.0.2+** adds automatic retries
-and graceful fallback; if it still fails, try in order:
-
-1. **Retry and clear the cache**:
-
-   ```bash
-   flutter clean
-   rm -rf build/macos/Build/Intermediates.noindex/Pods.build/**/precompiled
-   flutter pub get
-   flutter build macos --release
-   ```
-
-2. **Improve GitHub access**: ensure `release-assets.githubusercontent.com` is
-   reachable; use a proxy if needed (common in regions with restricted GitHub
-   CDN access).
-
-3. **Disable precompiled binaries and build locally** (requires Rust +
-   GStreamer; for maintainers):
-
-   Create `cargokit_options.yaml` next to the app's `pubspec.yaml`:
-
-   ```yaml
-   use_precompiled_binaries: false
-   ```
-
-   On macOS also install: `brew install gstreamer pkg-config`, plus the
-   `rustup` toolchain.
-
-4. **Upgrade the plugin** to `xue_hua_video_player` **v1.0.2** or newer.
-
-### Publishing (maintainers)
-
-Precompiled binaries are produced by
-[`.github/workflows/precompile_binaries.yml`](.github/workflows/precompile_binaries.yml)
-on every push to `main` (macOS x86_64/arm64, iOS arm64, Linux x86_64, Windows
-x86_64, Android arm64-v8a/armeabi-v7a/x86/x86_64) and uploaded to a release
-tagged `precompiled_<hash>`.
-
-One-time setup in the GitHub repo (`Matkurban/xue_hua_video_player`):
-
-1. Generate a signing key pair:
-
-   ```bash
-   cd cargokit/build_tool
-   dart run build_tool gen-key
-   ```
-
-2. Put the **public key** in `rust/cargokit.yaml` (`public_key:`) and commit it.
-3. Add the **private key** as the repository secret `PRIVATE_KEY`
-   (Settings -> Secrets and variables -> Actions). Never commit it.
-4. The workflow uses the built-in `GITHUB_TOKEN` with `contents: write` to create
-   the release and upload assets.
-
-Whenever the Rust sources / `Cargo.lock` change, the crate hash changes and the
-workflow republishes a new release automatically. Keep `rust/Cargo.lock`
-committed so the hash matches between CI and consumers.
-
-[cargokit]: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
 
 ## Architecture
 
@@ -758,3 +649,4 @@ See [LICENSE](LICENSE).
 
 [`flutter_rust_bridge`]: https://pub.dev/packages/flutter_rust_bridge
 [`signals`]: https://pub.dev/packages/signals
+[cargokit]: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin

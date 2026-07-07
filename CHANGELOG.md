@@ -1,3 +1,14 @@
+## 1.2.0
+
+### Breaking
+
+- Removed Cargokit precompiled Rust binary support. The plugin now always
+  compiles `libxue_hua_video_player` from source during the app build. Consumers
+  need the Rust toolchain (`rustup`) on the machine that builds the app.
+  Precompiled release downloads, `rust/cargokit.yaml`, `cargokit_options.yaml`
+  (`use_precompiled_binaries`), and the `precompile_binaries` CI workflow are
+  gone.
+
 ## 1.1.0
 
 ### Breaking

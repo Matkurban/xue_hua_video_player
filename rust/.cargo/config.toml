@@ -8,5 +8,29 @@
 # patched cargokit (`cargokit/build_tool/lib/src/android_environment.dart`),
 # which points the gstreamer/glib `-sys` crates at the single
 # `libgstreamer_android.so`. See the plugin README ("Android").
+#
+# iOS: cross-compiling with `cargo build --target aarch64-apple-ios` also needs
+# UIKit/OpenGLES/etc. when linking static GStreamer. Source
+# `ios/scripts/ios_rust_link_flags.sh` (sets RUSTFLAGS) and the same
+# SYSTEM_DEPS_* overrides as `ios/xue_hua_video_player.podspec`.
 [env]
 PKG_CONFIG_ALLOW_CROSS = "1"
+
+[target.aarch64-apple-ios]
+rustflags = [
+  "-C", "link-arg=-framework", "-C", "link-arg=UIKit",
+  "-C", "link-arg=-framework", "-C", "link-arg=QuartzCore",
+  "-C", "link-arg=-framework", "-C", "link-arg=OpenGLES",
+  "-C", "link-arg=-framework", "-C", "link-arg=CoreFoundation",
+  "-C", "link-arg=-framework", "-C", "link-arg=CoreMedia",
+  "-C", "link-arg=-framework", "-C", "link-arg=CoreVideo",
+  "-C", "link-arg=-framework", "-C", "link-arg=AVFoundation",
+  "-C", "link-arg=-framework", "-C", "link-arg=AudioToolbox",
+  "-C", "link-arg=-framework", "-C", "link-arg=VideoToolbox",
+  "-C", "link-arg=-framework", "-C", "link-arg=Foundation",
+  "-C", "link-arg=-framework", "-C", "link-arg=Security",
+  "-C", "link-arg=-liconv",
+  "-C", "link-arg=-lresolv",
+  "-C", "link-arg=-lz",
+  "-C", "link-arg=-lbz2",
+]

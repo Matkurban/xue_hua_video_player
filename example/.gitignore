@@ -46,4 +46,3 @@ app.*.map.json
 pubspec.lock
 lib/video_url.dart
 devtools_options.yaml
-cargokit_options.yaml

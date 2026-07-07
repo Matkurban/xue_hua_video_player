@@ -8,15 +8,10 @@ import 'package:path/path.dart' as path;
 import 'artifacts_provider.dart';
 import 'builder.dart';
 import 'environment.dart';
-import 'options.dart';
 import 'target.dart';
 import 'util.dart';
 
 class BuildPod {
-  BuildPod({required this.userOptions});
-
-  final CargokitUserOptions userOptions;
-
   Future<void> build() async {
     final targets = Environment.darwinArchs.map((arch) {
       final target = Target.forDarwin(
@@ -29,8 +24,7 @@ class BuildPod {
     }).toList();
 
     final environment = BuildEnvironment.fromEnvironment(isAndroid: false);
-    final provider =
-        ArtifactProvider(environment: environment, userOptions: userOptions);
+    final provider = ArtifactProvider(environment: environment);
     final artifacts = await provider.getArtifacts(targets);
 
     void performLipo(String targetFile, Iterable<String> sourceFiles) {

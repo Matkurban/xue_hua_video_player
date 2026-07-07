@@ -49,8 +49,8 @@ android {
         consumerProguardFiles 'proguard-rules.pro'
 
         // All four Android ABIs are wired up: the bundled umbrella GStreamer
-        // library and the precompiled Rust binary are provided for each of them
-        // (src/main/jniLibs/<abi>/). A consuming app can narrow this set with
+        // library is in jniLibs; libxue_hua_video_player.so is built from Rust
+        // source at build time via cargokit. A consuming app can narrow this set with
         // its own `abiFilters` (e.g. arm64-v8a only) to reduce APK size.
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
@@ -80,12 +80,11 @@ cargokit {
 // `libgstreamer_android.so` (all of GStreamer + its plugins, linked statically)
 // and `libc++_shared.so` are committed under `src/main/jniLibs/<abi>/` (for all
 // four ABIs) and bundled into the AAR. Consumers therefore need neither the
-// GStreamer Android SDK nor the Rust toolchain (the Rust
-// `libxue_hua_video_player.so` is fetched as a precompiled binary; see
-// `rust/cargokit.yaml`).
+// GStreamer Android SDK. The Rust `libxue_hua_video_player.so` is compiled from
+// source during the app build (requires Rust toolchain).
 //
-// The GStreamer Android SDK is only needed by MAINTAINERS who rebuild the Rust
-// library from source or regenerate the umbrella `.so` (see `gstreamer_build/`
+// The GStreamer Android SDK is only needed by MAINTAINERS who compile the Rust
+// library locally or regenerate the umbrella `.so` (see `gstreamer_build/`
 // and the plugin README, "Android"). In that case cargokit points the Rust
 // `-sys` crates at the umbrella `.so` via GSTREAMER_ROOT_ANDROID
 // (see `cargokit/build_tool/lib/src/android_environment.dart`).

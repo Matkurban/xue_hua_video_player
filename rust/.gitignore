@@ -1,5 +1,3 @@
 /target
 
-# Cargo.lock is intentionally committed: cargokit's precompiled-binaries
-# feature derives the crate hash from Cargo.lock (among other files), so it
-# must match between CI and consumers for the correct artifact to be resolved.
+# Cargo.lock is intentionally committed for reproducible local cargo builds.
