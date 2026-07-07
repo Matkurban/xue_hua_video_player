@@ -104,3 +104,29 @@ fn resolve_flutter_asset(asset_key: &str) -> Result<ResolvedSource> {
 pub fn is_seekable(resolved: &ResolvedSource) -> bool {
     matches!(resolved, ResolvedSource::Uri(_))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_http_uri_passthrough() {
+        let uri = normalize_uri("https://example.com/video.mp4").unwrap();
+        assert_eq!(uri, "https://example.com/video.mp4");
+    }
+
+    #[test]
+    fn normalize_absolute_file_path() {
+        let uri = normalize_uri("/tmp/sample.mp4").unwrap();
+        assert!(uri.starts_with("file://"));
+        assert!(uri.contains("sample.mp4"));
+    }
+
+    #[test]
+    fn media_source_uri_resolution() {
+        let src = MediaSource::Uri("rtsp://host/stream".into())
+            .resolve()
+            .unwrap();
+        assert!(matches!(src, ResolvedSource::Uri(u) if u == "rtsp://host/stream"));
+    }
+}
