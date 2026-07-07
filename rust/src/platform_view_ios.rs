@@ -54,12 +54,7 @@ unsafe extern "C" fn trampoline_bind_overlay(_ctx: *mut std::ffi::c_void) {
 }
 
 /// Runs `set_window_handle` on the UIKit main thread (bus sync / glimagesink fallback).
-pub fn bind_overlay_on_main_thread(
-    sink: &gst::Element,
-    handle: usize,
-    width: i32,
-    height: i32,
-) -> Result<()> {
+pub fn bind_overlay_on_main_thread(sink: &gst::Element, handle: usize, width: i32, height: i32) -> Result<()> {
     MAIN_THREAD_BIND.with(|cell| {
         *cell.borrow_mut() = Some((sink.clone(), handle, width, height));
     });
@@ -73,10 +68,8 @@ unsafe extern "C" fn trampoline_layer_attach_complete(attach_ok: bool, ctx: *mut
     if ctx.is_null() {
         return;
     }
-    let LayerAttachComplete {
-        lifecycle,
-        callback,
-    } = *Box::from_raw(ctx as *mut LayerAttachComplete);
+    let LayerAttachComplete { lifecycle, callback } =
+        *Box::from_raw(ctx as *mut LayerAttachComplete);
     if lifecycle.is_stale() {
         log::debug!("gst: ios layer attach trampoline skipped (stale lifecycle)");
         return;

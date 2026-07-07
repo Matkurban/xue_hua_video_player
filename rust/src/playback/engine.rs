@@ -16,9 +16,9 @@ use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
 use crate::playback::state::set_state_sync;
+use crate::playback::surface::VideoSurface;
 #[cfg(target_os = "ios")]
 use crate::playback::surface::IosLayerBusHook;
-use crate::playback::surface::VideoSurface;
 use crate::playback::switch::{switch_shell, SwitchContext};
 use crate::playback::tracks::{
     disable_subtitles_on_pipeline, read_cached_tracks, select_track_on_pipeline, TrackCache,
@@ -78,7 +78,8 @@ impl PlaybackEngine {
         let metadata_init = video_metadata.clone();
         let track_cache_init = track_cache.clone();
         #[cfg(target_os = "ios")]
-        let ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>> = Arc::new(Mutex::new(None));
+        let ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>> =
+            Arc::new(Mutex::new(None));
         #[cfg(target_os = "ios")]
         let ios_layer_bus_init = ios_layer_bus_slot.clone();
         #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -126,12 +127,16 @@ impl PlaybackEngine {
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         let surface = VideoSurface::new(native_window);
         let shell_arc = Arc::new(Mutex::new(shell));
-        #[cfg(target_os = "ios")]
+         #[cfg(target_os = "ios")]
         {
             let sink = shell_arc.lock().video_sink.clone();
             let stored = surface.stored_handle();
             let overlay_bound = surface.ios_session().overlay_bound.clone();
-            crate::video::ios_layer::setup_ios_notify_layer_handler(&sink, stored, overlay_bound);
+            crate::video::ios_layer::setup_ios_notify_layer_handler(
+                &sink,
+                stored,
+                overlay_bound,
+            );
 
             let switch_ctx = SwitchContext {
                 emitter: emitter.clone(),
@@ -265,9 +270,7 @@ impl PlaybackEngine {
             } else {
                 let at_eos = self.at_eos.clone();
                 if auto_play && ctx.surface.overlay_ready_for_preroll() {
-                    self.run_on_gst(move |shell| {
-                        pipeline_play(shell, &at_eos, &ctx.surface, &ctx)
-                    })?;
+                    self.run_on_gst(move |shell| pipeline_play(shell, &at_eos, &ctx.surface, &ctx))?;
                 }
             }
         }
@@ -578,12 +581,7 @@ impl PlaybackEngine {
             let shell_clone = self.shell.clone();
             spawn_on_gst_thread(move || {
                 let guard = shell_clone.lock();
-                let _ = crate::platform_view_ios::bind_overlay_on_main_thread(
-                    &guard.video_sink,
-                    0,
-                    0,
-                    0,
-                );
+                let _ = crate::platform_view_ios::bind_overlay_on_main_thread(&guard.video_sink, 0, 0, 0);
             });
         } else if width > 0 && height > 0 {
             self.refresh_ios_bus_hook();

@@ -157,9 +157,7 @@ pub(crate) fn ios_bundle_root(exe: &Path) -> Option<PathBuf> {
 
 /// macOS: `…/Contents/MacOS/Runner` → `…/Contents`.
 pub(crate) fn macos_bundle_contents_root(exe: &Path) -> Option<PathBuf> {
-    exe.parent()
-        .and_then(|macos| macos.parent())
-        .map(|path| path.to_path_buf())
+    exe.parent().and_then(|macos| macos.parent()).map(|path| path.to_path_buf())
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -180,10 +178,12 @@ pub(crate) fn darwin_framework_asset_candidates(
     asset_key: &str,
 ) -> Vec<PathBuf> {
     let frameworks = bundle_root.join("Frameworks");
-    let mut out = vec![frameworks
-        .join("App.framework")
-        .join("flutter_assets")
-        .join(asset_key)];
+    let mut out = vec![
+        frameworks
+            .join("App.framework")
+            .join("flutter_assets")
+            .join(asset_key),
+    ];
     for framework in ["App.framework", "Flutter.framework"] {
         out.push(
             frameworks
@@ -282,7 +282,10 @@ mod tests {
     fn macos_bundle_root_from_runner_exe() {
         let exe = PathBuf::from("/Applications/MyApp.app/Contents/MacOS/Runner");
         let root = macos_bundle_contents_root(&exe).unwrap();
-        assert_eq!(root, PathBuf::from("/Applications/MyApp.app/Contents"));
+        assert_eq!(
+            root,
+            PathBuf::from("/Applications/MyApp.app/Contents")
+        );
     }
 
     #[test]
@@ -307,9 +310,9 @@ mod tests {
         let key = "assets/sample.mp4";
         let candidates = darwin_framework_asset_candidates(&bundle, key);
         assert_eq!(candidates.len(), 5);
-        assert!(
-            candidates[0].ends_with("Frameworks/App.framework/flutter_assets/assets/sample.mp4")
-        );
+        assert!(candidates[0].ends_with(
+            "Frameworks/App.framework/flutter_assets/assets/sample.mp4"
+        ));
     }
 
     #[test]
@@ -319,8 +322,9 @@ mod tests {
         let key = "assets/sample.mp4";
         let candidates = darwin_candidates_for_exe(&exe, key);
         assert_eq!(candidates.len(), 5);
-        assert!(candidates[0]
-            .ends_with("Runner.app/Frameworks/App.framework/flutter_assets/assets/sample.mp4"));
+        assert!(candidates[0].ends_with(
+            "Runner.app/Frameworks/App.framework/flutter_assets/assets/sample.mp4"
+        ));
     }
 
     #[test]
@@ -330,7 +334,8 @@ mod tests {
         let key = "assets/sample.mp4";
         let candidates = darwin_candidates_for_exe(&exe, key);
         assert_eq!(candidates.len(), 5);
-        assert!(candidates[0]
-            .ends_with("Contents/Frameworks/App.framework/flutter_assets/assets/sample.mp4"));
+        assert!(candidates[0].ends_with(
+            "Contents/Frameworks/App.framework/flutter_assets/assets/sample.mp4"
+        ));
     }
 }

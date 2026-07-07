@@ -9,21 +9,21 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::gst_runtime::spawn_on_gst_thread;
+use crate::playback::shell::PipelineShell;
+use crate::playback::state::set_state_sync;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use crate::playback::state::resume_or_replay_from_eos;
 #[cfg(target_os = "ios")]
 use crate::platform_view_ios::detach_sink_layers_from_host;
 #[cfg(target_os = "ios")]
 use crate::playback::ios_overlay::{IosIdleWork, IosOverlayPlayIntent, IosOverlaySession};
-use crate::playback::shell::PipelineShell;
-#[cfg(any(target_os = "android", target_os = "ios"))]
-use crate::playback::state::resume_or_replay_from_eos;
-use crate::playback::state::set_state_sync;
 use crate::playback::switch::SwitchContext;
-#[cfg(target_os = "ios")]
-use crate::video::ios_layer::IosLayerAttachOutcome;
 use crate::video::{
     clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
     set_overlay_window_handle,
 };
+#[cfg(target_os = "ios")]
+use crate::video::ios_layer::IosLayerAttachOutcome;
 
 /// Shared state for iOS layer attach retries on the Gst bus (`READY → PAUSED`).
 #[cfg(target_os = "ios")]
@@ -490,12 +490,7 @@ impl VideoSurface {
                 {
                     let has_layer = shell.video_sink.find_property("layer").is_some();
                     if !has_layer {
-                        let _ = crate::platform_view_ios::bind_overlay_on_main_thread(
-                            &shell.video_sink,
-                            handle,
-                            width,
-                            height,
-                        );
+                        let _ = crate::platform_view_ios::bind_overlay_on_main_thread(&shell.video_sink, handle, width, height);
                         self.overlay_bound.store(true, Ordering::SeqCst);
                         log::info!("gst: ios glimagesink overlay rebound");
                     }
@@ -562,21 +557,14 @@ impl VideoSurface {
                 return;
             }
             let mut shell = shell_arc.lock();
-            let bind_res = crate::platform_view_ios::bind_overlay_on_main_thread(
-                &shell.video_sink,
-                host_view,
-                width,
-                height,
-            );
+            let bind_res = crate::platform_view_ios::bind_overlay_on_main_thread(&shell.video_sink, host_view, width, height);
             if let Err(e) = bind_res {
                 log::warn!("gst: ios glimagesink overlay bind failed: {e:#}");
             }
 
             overlay_bound.store(true, Ordering::SeqCst);
 
-            if let Err(e) =
-                maybe_preroll_and_resume_play(&mut shell, &play_intent, host_view, width, height)
-            {
+            if let Err(e) = maybe_preroll_and_resume_play(&mut shell, &play_intent, host_view, width, height) {
                 log::warn!("gst: ios preroll resume failed: {e:#}");
             }
         });
@@ -584,7 +572,12 @@ impl VideoSurface {
     }
 
     #[cfg(target_os = "ios")]
-    pub fn notify_ios_overlay(&self, handle: i64, width: i32, height: i32) -> Result<()> {
+    pub fn notify_ios_overlay(
+        &self,
+        handle: i64,
+        width: i32,
+        height: i32,
+    ) -> Result<()> {
         self.cache_ios_overlay(handle, width, height);
         Ok(())
     }

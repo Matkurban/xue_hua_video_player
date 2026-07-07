@@ -12,6 +12,7 @@ mod platform_view_android;
 mod platform_view_ios;
 mod platform_view_jni;
 mod playback;
+mod player;
 mod player_events;
 mod video;
 
