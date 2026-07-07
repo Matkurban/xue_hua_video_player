@@ -18,6 +18,10 @@ pub(crate) struct InternalVideoMetadata {
 }
 
 impl InternalVideoMetadata {
+    pub fn from_video_info(info: &gst_video::VideoInfo) -> Self {
+        Self::from_video_info_and_caps(info, info.to_caps().ok().as_ref().map(|c| c.as_ref()))
+    }
+
     pub fn from_video_info_and_caps(
         info: &gst_video::VideoInfo,
         caps: Option<&gst::CapsRef>,
@@ -54,6 +58,16 @@ impl InternalVideoMetadata {
             color_matrix: format!("{:?}", colorimetry.matrix()),
             color_range: format!("{:?}", colorimetry.range()),
             hdr_format,
+        }
+    }
+
+    pub fn display_aspect_ratio(&self) -> f64 {
+        if self.display_aspect_height > 0 {
+            self.display_aspect_width as f64 / self.display_aspect_height as f64
+        } else if self.height > 0 {
+            self.width as f64 / self.height as f64
+        } else {
+            16.0 / 9.0
         }
     }
 }

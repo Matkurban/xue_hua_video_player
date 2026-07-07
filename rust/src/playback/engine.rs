@@ -49,6 +49,8 @@ pub struct PlaybackEngine {
     ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBusHook>>>,
 }
 
+pub type GstPlayer = PlaybackEngine;
+
 impl PlaybackEngine {
     pub fn new() -> Result<Self> {
         crate::diag::logcat_info("PlaybackEngine::new enter");
@@ -277,6 +279,16 @@ impl PlaybackEngine {
             }
         }
         Ok(())
+    }
+
+    #[deprecated(note = "use load(MediaSource::Uri(...)) instead")]
+    pub fn set_uri(&self, uri: &str) -> Result<()> {
+        self.load(MediaSource::Uri(uri.to_string()), false)
+    }
+
+    #[deprecated(note = "use load(MediaSource::FlutterAsset(...)) instead")]
+    pub fn set_asset_source(&self, asset_key: &str) -> Result<()> {
+        self.load(MediaSource::FlutterAsset(asset_key.to_string()), false)
     }
 
     pub fn play(&self) -> Result<()> {

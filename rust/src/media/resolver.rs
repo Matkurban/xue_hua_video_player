@@ -7,6 +7,19 @@ use anyhow::{anyhow, Result};
 
 static FLUTTER_ASSETS_DIR: OnceLock<String> = OnceLock::new();
 
+/// Records the Flutter assets directory from native init (iOS plugin register).
+pub fn set_flutter_assets_dir(dir: &str) {
+    if dir.is_empty() {
+        return;
+    }
+    let _ = FLUTTER_ASSETS_DIR.set(dir.to_string());
+    // SAFETY: called during plugin init before concurrent asset loads.
+    unsafe {
+        std::env::set_var("FLUTTER_ASSETS_DIR", dir);
+    }
+    log::info!("flutter assets dir set: {dir}");
+}
+
 fn flutter_assets_dir_override() -> Option<String> {
     FLUTTER_ASSETS_DIR
         .get()
