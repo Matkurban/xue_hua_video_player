@@ -9,7 +9,7 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::gst_init::ensure_gst_init;
-use crate::gst_runtime::{spawn_on_gst_thread, spawn_on_gst_thread_and_wait};
+use crate::gst_runtime::spawn_on_gst_thread_and_wait;
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
@@ -678,7 +678,7 @@ fn pipeline_seek(
 fn pipeline_play(
     shell: &mut PipelineShell,
     at_eos: &AtomicBool,
-    surface: &VideoSurface,
+    _surface: &VideoSurface,
     ctx: &SwitchContext,
 ) -> Result<()> {
     crate::playback::state::resume_or_replay_from_eos(shell, at_eos, Some(ctx))?;

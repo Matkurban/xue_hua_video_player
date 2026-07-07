@@ -12,4 +12,4 @@ mod switch;
 mod tracks;
 mod uri_pipeline;
 
-pub use engine::{GstPlayer, PlaybackEngine};
+pub use engine::PlaybackEngine;

@@ -159,8 +159,8 @@ pub fn replay_asset_shell(shell: &mut PipelineShell, ctx: &SwitchContext) -> Res
 
 fn preroll_asset_shell(
     shell: &PipelineShell,
-    overlay_ready: bool,
-    surface: &VideoSurface,
+    _overlay_ready: bool,
+    _surface: &VideoSurface,
 ) -> Result<()> {
     #[cfg(target_os = "android")]
     {
@@ -205,7 +205,7 @@ fn pipeline_set_uri(
     uri: &str,
     at_eos: &AtomicBool,
     overlay_ready: bool,
-    surface: &VideoSurface,
+    _surface: &VideoSurface,
 ) -> Result<()> {
     let pipeline = &shell.pipeline;
     at_eos.store(false, Ordering::SeqCst);

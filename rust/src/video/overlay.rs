@@ -159,7 +159,7 @@ pub fn attach_overlay_bus_sync_handler(
         None => return,
     };
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let overlay_sink_bus = overlay_sink.clone();
+    let _overlay_sink_bus = overlay_sink.clone();
     bus.set_sync_handler(move |_bus, msg| {
         let handle = *overlay_handle.lock();
         #[cfg(target_os = "ios")]
