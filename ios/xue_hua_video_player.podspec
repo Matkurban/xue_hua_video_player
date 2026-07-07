@@ -16,7 +16,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
   s.module_name      = 'xue_hua_video_player'
 
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files = 'Classes/**/*.swift'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
   s.swift_version = '5.0'
@@ -68,7 +68,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     # Rust core (`register_ios_static_plugins()` in `rust/src/player.rs`); the
     # linker pulls the referenced `gst_plugin_*_register` objects from the
     # framework archive. gstgl/glimagesink also needs UIKit/QuartzCore/OpenGLES.
-    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
+    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework Metal -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AssetsLibrary -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
   }
   s.vendored_frameworks = []
 end

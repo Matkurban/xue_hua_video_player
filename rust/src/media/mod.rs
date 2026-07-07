@@ -2,7 +2,7 @@
 mod asset_android;
 mod resolver;
 
-pub use resolver::{resolve_flutter_asset_path, AppSrcFeedState};
+pub use resolver::{resolve_flutter_asset_path, set_flutter_assets_dir, AppSrcFeedState};
 
 use anyhow::{anyhow, Result};
 
@@ -78,14 +78,25 @@ fn resolve_flutter_asset(asset_key: &str) -> Result<ResolvedSource> {
 
     #[cfg(not(target_os = "android"))]
     {
-        if let Ok(path) = resolve_flutter_asset_path(key) {
-            let uri = url::Url::from_file_path(&path)
-                .map_err(|_| anyhow!("invalid asset path: {}", path.display()))?
-                .to_string();
-            return Ok(ResolvedSource::Uri(uri));
+        match resolve_flutter_asset_path(key) {
+            Ok(path) => {
+                let uri = url::Url::from_file_path(&path)
+                    .map_err(|_| anyhow!("invalid asset path: {}", path.display()))?
+                    .to_string();
+                Ok(ResolvedSource::Uri(uri))
+            }
+            Err(e) => {
+                #[cfg(any(target_os = "macos", target_os = "ios"))]
+                {
+                    return Err(e);
+                }
+                #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+                {
+                    log::debug!("asset path resolution failed: {e:#}, falling back to AppSrc");
+                    Ok(ResolvedSource::AppSrc(key.to_string()))
+                }
+            }
         }
-
-        Ok(ResolvedSource::AppSrc(key.to_string()))
     }
 }
 

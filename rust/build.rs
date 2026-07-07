@@ -7,17 +7,32 @@ fn main() {
     // must resolve the same symbols. Emit the flags for the iOS target only;
     // other platforms get their native deps elsewhere.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
+        let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let shim = manifest_dir.join("../ios/Classes/XueHuaMainThreadShim.m");
+        println!("cargo:rerun-if-changed={}", shim.display());
+        cc::Build::new()
+            .file(shim)
+            .flag("-fobjc-arc")
+            .compile("xhvp_ios_main_thread_shim");
+
         for framework in [
+            "UIKit",
+            "QuartzCore",
+            "CoreGraphics",
+            "IOSurface",
+            "Metal",
+            "Foundation",
             "AudioToolbox", // osxaudio: AudioQueue / AudioConverter / AudioUnit
             "AVFoundation",
             "AVFAudio", // osxaudio: AVAudioSessionCategory* constants
+            "AssetsLibrary",
             "CoreMedia",
             "CoreVideo",
             "CoreAudio",
         ] {
             println!("cargo:rustc-link-lib=framework={framework}");
         }
-        for lib in ["resolv", "iconv"] {
+        for lib in ["resolv", "iconv", "c++"] {
             // e.g. res_9_ninit / res_9_nquery referenced by GStreamer core.
             println!("cargo:rustc-link-lib={lib}");
         }

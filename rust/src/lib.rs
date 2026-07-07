@@ -8,6 +8,8 @@ mod macos_gio_tls;
 mod media;
 #[cfg(target_os = "android")]
 mod platform_view_android;
+#[cfg(target_os = "ios")]
+mod platform_view_ios;
 mod platform_view_jni;
 mod playback;
 mod player;

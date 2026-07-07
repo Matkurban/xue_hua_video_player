@@ -1509,6 +1509,7 @@ name = "xue_hua_video_player"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "cc",
  "flutter_rust_bridge",
  "gstreamer",
  "gstreamer-app",

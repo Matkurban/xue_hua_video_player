@@ -28,3 +28,6 @@ debug = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[build-dependencies]
+cc = "1.2.0"

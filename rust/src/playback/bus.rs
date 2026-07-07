@@ -77,20 +77,64 @@ pub fn attach_gst_bus_handlers(
                 MessageView::Buffering(b) => {
                     let percent = b.percent();
                     emit(PlayerEvent::buffering(percent));
-                    if desired_playing.load(Ordering::SeqCst) {
-                        if percent < 100 {
-                            emit(PlayerEvent::state(PlayerState::Buffering));
+                    if !desired_playing.load(Ordering::SeqCst) {
+                        return gst::glib::ControlFlow::Continue;
+                    }
+                    if percent < 100 {
+                        emit(PlayerEvent::state(PlayerState::Buffering));
+                        #[cfg(target_os = "android")]
+                        if let Err(e) = pipeline_bus.set_state(gst::State::Paused) {
+                            log::warn!("buffering set_state(Paused): {e}");
                         }
-                        let target = if percent < 100 {
-                            gst::State::Paused
-                        } else {
-                            gst::State::Playing
+                        #[cfg(not(target_os = "android"))]
+                        if let Err(e) = crate::playback::state::set_state_sync(
+                            &pipeline_bus,
+                            gst::State::Paused,
+                        ) {
+                            log::warn!("buffering set_state_sync(Paused): {e}");
+                        }
+                    } else {
+                        let resume = {
+                            #[cfg(target_os = "android")]
+                            {
+                                pipeline_bus.set_state(gst::State::Playing)
+                            }
+                            #[cfg(not(target_os = "android"))]
+                            {
+                                crate::playback::state::set_state_sync(
+                                    &pipeline_bus,
+                                    gst::State::Playing,
+                                )
+                            }
                         };
-                        if let Err(e) = pipeline_bus.set_state(target) {
-                            log::warn!("buffering set_state({target:?}): {e}");
-                        }
-                        if percent >= 100 {
+                        if let Err(e) = resume {
+                            log::warn!("buffering resume Playing: {e}");
+                        } else {
                             emit(PlayerEvent::state(PlayerState::Playing));
+                        }
+                    }
+                }
+                MessageView::ClockLost(..) => {
+                    if desired_playing.load(Ordering::SeqCst) {
+                        #[cfg(target_os = "android")]
+                        {
+                            let _ = pipeline_bus.set_state(gst::State::Paused);
+                            if let Err(e) = pipeline_bus.set_state(gst::State::Playing) {
+                                log::warn!("clock-lost resume Playing: {e}");
+                            }
+                        }
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            if let Err(e) =
+                                crate::playback::state::set_state_sync(&pipeline_bus, gst::State::Paused)
+                            {
+                                log::warn!("clock-lost set_state_sync(Paused): {e}");
+                            } else if let Err(e) = crate::playback::state::set_state_sync(
+                                &pipeline_bus,
+                                gst::State::Playing,
+                            ) {
+                                log::warn!("clock-lost set_state_sync(Playing): {e}");
+                            }
                         }
                     }
                 }

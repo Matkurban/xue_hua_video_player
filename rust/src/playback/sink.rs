@@ -14,6 +14,10 @@ pub fn configure_http_source(element: &gst::Element) {
     if element.find_property("ssl-strict").is_some() {
         element.set_property("ssl-strict", false);
     }
+    if element.find_property("tls-validation-flags").is_some() {
+        // GIO_TLS_CERTIFICATE_VALIDATE_ALL = 0x7f (permissive when combined with ssl-strict=false).
+        element.set_property("tls-validation-flags", 0u32);
+    }
     if element.find_property("user-agent").is_some() {
         element.set_property(
             "user-agent",
@@ -89,7 +93,7 @@ pub fn attach_video_probe(
         None => return,
     };
     let last_size = Arc::new(Mutex::new((0i32, 0i32)));
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     let sink_for_expose = video_sink.clone();
     sink_pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_, info| {
         if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
@@ -113,7 +117,7 @@ pub fn attach_video_probe(
                             }
                             cb(PlayerEvent::metadata(meta));
                         }
-                        #[cfg(not(target_os = "macos"))]
+                        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
                         if first && width > 0 && height > 0 {
                             expose_overlay(&sink_for_expose);
                         }

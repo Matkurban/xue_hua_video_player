@@ -15,6 +15,9 @@ IOS_FRAMEWORKS="
   GStreamer
   UIKit
   QuartzCore
+  CoreGraphics
+  IOSurface
+  Metal
   OpenGLES
   CoreFoundation
   CoreMedia
@@ -22,6 +25,7 @@ IOS_FRAMEWORKS="
   CoreAudio
   AVFoundation
   AVFAudio
+  AssetsLibrary
   AudioToolbox
   VideoToolbox
   Foundation
@@ -34,7 +38,7 @@ for fw in $IOS_FRAMEWORKS; do
   rustflags="$rustflags -C link-arg=-framework -C link-arg=$fw"
 done
 
-for lib in iconv resolv z bz2; do
+for lib in iconv resolv z bz2 c++; do
   rustflags="$rustflags -C link-arg=-l${lib}"
 done
 

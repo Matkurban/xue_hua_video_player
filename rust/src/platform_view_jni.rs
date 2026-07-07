@@ -1,9 +1,21 @@
 #[cfg(target_os = "android")]
 use crate::api::player::notify_android_surface;
 #[cfg(target_os = "macos")]
-use crate::api::player::{apply_macos_overlay_gstreamer, cache_macos_overlay_handle};
-#[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
-use crate::api::player::{set_video_overlay_window, sync_video_overlay_rectangle};
+use crate::api::player::cache_macos_overlay_handle;
+#[cfg(target_os = "ios")]
+use crate::api::player::notify_ios_overlay;
+#[cfg(target_os = "macos")]
+use crate::api::player::apply_macos_overlay_gstreamer;
+#[cfg(target_os = "ios")]
+use crate::api::player::apply_ios_overlay_gstreamer;
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
+use crate::api::player::sync_video_overlay_rectangle;
+#[cfg(all(
+    not(target_os = "macos"),
+    not(target_os = "android"),
+    not(target_os = "ios")
+))]
+use crate::api::player::set_video_overlay_window;
 
 #[cfg(target_os = "android")]
 use jni::errors::LogErrorAndDefault;
@@ -42,6 +54,16 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
         }
         return;
     }
+    #[cfg(target_os = "ios")]
+    {
+        if let Err(e) = notify_ios_overlay(player_id, window_handle, 0, 0) {
+            log::warn!(
+                "player_set_video_overlay_window(player_id={player_id}, \
+                 handle={window_handle}): {e:#}"
+            );
+        }
+        return;
+    }
     #[cfg(target_os = "android")]
     {
         if let Err(e) = notify_android_surface(player_id, window_handle, 0, 0) {
@@ -52,7 +74,11 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
         }
         return;
     }
-    #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
+    #[cfg(all(
+        not(target_os = "macos"),
+        not(target_os = "android"),
+        not(target_os = "ios")
+    ))]
     if let Err(e) = set_video_overlay_window(player_id, window_handle) {
         log::warn!(
             "player_set_video_overlay_window(player_id={player_id}, handle={window_handle}): {e:#}"
@@ -60,13 +86,12 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
     }
 }
 
-/// C ABI: sync VideoOverlay render rectangle after native view resize (iOS / desktop).
+/// C ABI: sync VideoOverlay render rectangle after native view resize (desktop).
 #[no_mangle]
 pub extern "C" fn player_sync_video_overlay_rectangle(player_id: i64, width: i32, height: i32) {
     #[cfg(target_os = "macos")]
     {
-        if let Err(e) = crate::api::player::apply_macos_overlay_gstreamer(player_id, width, height)
-        {
+        if let Err(e) = apply_macos_overlay_gstreamer(player_id, width, height) {
             log::warn!(
                 "player_sync_video_overlay_rectangle(player_id={player_id}, \
                  {width}x{height}): {e:#}"
@@ -79,7 +104,7 @@ pub extern "C" fn player_sync_video_overlay_rectangle(player_id: i64, width: i32
         let _ = (player_id, width, height);
         return;
     }
-    #[cfg(not(any(target_os = "macos", target_os = "android")))]
+    #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
     if let Err(e) = sync_video_overlay_rectangle(player_id, width, height) {
         log::warn!(
             "player_sync_video_overlay_rectangle(player_id={player_id}, \
@@ -111,6 +136,49 @@ pub extern "C" fn player_apply_macos_overlay_gstreamer(player_id: i64, width: i3
     if let Err(e) = apply_macos_overlay_gstreamer(player_id, width, height) {
         log::warn!(
             "player_apply_macos_overlay_gstreamer(player_id={player_id}, \
+             {width}x{height}): {e:#}"
+        );
+    }
+}
+
+/// iOS: attaches `avsamplebufferlayersink` CALayer and prerolls. Must run on the main thread.
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub extern "C" fn player_apply_ios_overlay_gstreamer(player_id: i64, width: i32, height: i32) {
+    if let Err(e) = apply_ios_overlay_gstreamer(player_id, width, height) {
+        log::warn!(
+            "player_apply_ios_overlay_gstreamer(player_id={player_id}, \
+             {width}x{height}): {e:#}"
+        );
+    }
+}
+
+/// iOS: records the Flutter assets directory before the first asset load.
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub extern "C" fn xhvp_set_flutter_assets_dir(path: *const std::ffi::c_char) {
+    if path.is_null() {
+        return;
+    }
+    // SAFETY: Swift passes a NUL-terminated UTF-8 path from Bundle.main.
+    let c_str = unsafe { std::ffi::CStr::from_ptr(path) };
+    if let Ok(dir) = c_str.to_str() {
+        crate::media::set_flutter_assets_dir(dir);
+    }
+}
+
+/// iOS: caches EaglUIView handle and schedules Gst-thread VideoOverlay bind (Tutorial 4).
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub extern "C" fn player_notify_ios_overlay(
+    player_id: i64,
+    window_handle: i64,
+    width: i32,
+    height: i32,
+) {
+    if let Err(e) = notify_ios_overlay(player_id, window_handle, width, height) {
+        log::warn!(
+            "player_notify_ios_overlay(player_id={player_id}, handle={window_handle}, \
              {width}x{height}): {e:#}"
         );
     }

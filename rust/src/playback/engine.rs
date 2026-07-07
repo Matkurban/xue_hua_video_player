@@ -73,6 +73,23 @@ impl PlaybackEngine {
 
         let metadata_init = video_metadata.clone();
         let track_cache_init = track_cache.clone();
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        let (shell, overlay_sink_slot) = spawn_on_gst_thread_and_wait(move || {
+            ensure_gst_init()?;
+            let shell = install_uri_shell(
+                &emitter_init,
+                &looping_init,
+                &desired_init,
+                &at_eos_init,
+                &running_init,
+                Some(metadata_init),
+                Some(track_cache_init),
+            )?;
+            let overlay_sink_slot = Arc::new(Mutex::new(shell.video_sink.clone()));
+            wire_overlay_sync(&shell, overlay_init, Some(overlay_sink_slot.clone()));
+            Ok((shell, overlay_sink_slot))
+        })?;
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         let shell = spawn_on_gst_thread_and_wait(move || {
             ensure_gst_init()?;
             let shell = install_uri_shell(
@@ -89,12 +106,9 @@ impl PlaybackEngine {
         })?;
 
         log::info!("xue_hua_video_player: PlaybackEngine ready");
-        #[cfg(target_os = "macos")]
-        let surface = VideoSurface::with_macos_overlay_sink(
-            native_window,
-            Arc::new(Mutex::new(shell.video_sink.clone())),
-        );
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        let surface = VideoSurface::with_overlay_sink_slot(native_window, overlay_sink_slot);
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         let surface = VideoSurface::new(native_window);
         Ok(Self {
             shell: Arc::new(Mutex::new(shell)),
@@ -162,7 +176,7 @@ impl PlaybackEngine {
         let at_eos = self.at_eos.clone();
         self.run_on_gst(move |shell| {
             switch_shell(shell, resolved, &ctx)?;
-            if auto_play && ctx.surface.has_cached_handle() {
+            if auto_play && ctx.surface.overlay_ready_for_preroll() {
                 pipeline_play(shell, &at_eos, &ctx.surface, &ctx)?;
             }
             Ok(())
@@ -346,11 +360,11 @@ impl PlaybackEngine {
             self.surface.cache_macos_handle(window_handle);
             return Ok(());
         }
-        #[cfg(target_os = "android")]
+        #[cfg(any(target_os = "android", target_os = "ios"))]
         {
-            return self.notify_android_surface(window_handle, 0, 0);
+            return self.notify_mobile_surface(window_handle, 0, 0);
         }
-        #[cfg(not(any(target_os = "macos", target_os = "android")))]
+        #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
         {
             let surface = self.surface.clone_for_switch();
             self.run_on_gst(move |shell| surface.set_window_handle_on_gst(shell, window_handle))
@@ -363,15 +377,15 @@ impl PlaybackEngine {
         {
             return self.surface.apply_macos_overlay_gstreamer(width, height);
         }
-        #[cfg(target_os = "android")]
+        #[cfg(any(target_os = "android", target_os = "ios"))]
         {
             self.surface.set_cached_dimensions(width, height);
             let shell = self.shell.clone();
             let surface = self.surface.clone_for_switch();
-            surface.schedule_android_overlay_rectangle_sync(shell, width, height);
+            surface.schedule_mobile_overlay_rectangle_sync(shell, width, height);
             return Ok(());
         }
-        #[cfg(not(any(target_os = "macos", target_os = "android")))]
+        #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
         {
             let shell = self.shell.clone();
             let surface = self.surface.clone_for_switch();
@@ -385,15 +399,46 @@ impl PlaybackEngine {
             .unwrap_or(crate::playback::capabilities::PipelineCapabilities::PLAYBIN)
     }
 
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn notify_mobile_surface(&self, handle: i64, width: i32, height: i32) -> Result<()> {
+        #[cfg(target_os = "android")]
+        {
+            let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
+                desired_playing: self.desired_playing.clone(),
+                at_eos: self.at_eos.clone(),
+                switch_ctx: self.switch_context(),
+            };
+            return self.surface.notify_android_surface(
+                self.shell.clone(),
+                handle,
+                width,
+                height,
+                play_intent,
+            );
+        }
+        #[cfg(target_os = "ios")]
+        return self.surface.notify_ios_overlay(handle, width, height);
+    }
+
     #[cfg(target_os = "android")]
     pub fn notify_android_surface(&self, handle: i64, width: i32, height: i32) -> Result<()> {
-        let play_intent = crate::playback::surface::AndroidOverlayPlayIntent {
+        self.notify_mobile_surface(handle, width, height)
+    }
+
+    #[cfg(target_os = "ios")]
+    pub fn notify_ios_overlay(&self, handle: i64, width: i32, height: i32) -> Result<()> {
+        self.surface.notify_ios_overlay(handle, width, height)
+    }
+
+    #[cfg(target_os = "ios")]
+    pub fn apply_ios_overlay_gstreamer(&self, width: i32, height: i32) -> Result<()> {
+        let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
             desired_playing: self.desired_playing.clone(),
             at_eos: self.at_eos.clone(),
             switch_ctx: self.switch_context(),
         };
         self.surface
-            .notify_android_surface(self.shell.clone(), handle, width, height, play_intent)
+            .apply_ios_overlay_gstreamer(self.shell.clone(), width, height, play_intent)
     }
 
     #[cfg(target_os = "macos")]
@@ -474,7 +519,7 @@ fn pipeline_play(
     #[cfg(target_os = "android")]
     if let Some(handle) = *surface.stored_handle().lock() {
         let (width, height) = surface.cached_dimensions();
-        crate::playback::surface::refresh_android_overlay_on_gst(
+        crate::playback::surface::refresh_mobile_overlay_on_gst(
             shell,
             handle,
             width,

@@ -41,6 +41,7 @@ extern "C" {
     fn gst_plugin_srtp_register();
     fn gst_plugin_dtls_register();
     fn gst_plugin_opengl_register();
+    fn gst_plugin_applemedia_register();
 }
 
 /// Registers the statically-linked GStreamer plugins bundled in the iOS framework.
@@ -84,5 +85,6 @@ pub fn register_ios_static_plugins() {
         gst_plugin_srtp_register();
         gst_plugin_dtls_register();
         gst_plugin_opengl_register();
+        gst_plugin_applemedia_register();
     }
 }

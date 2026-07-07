@@ -20,7 +20,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | Platform | Sink | Flutter integration |
 |----------|------|---------------------|
 | Android | `glimagesink` | `PlatformViewLink` + `SurfaceView` → `ANativeWindow` |
-| iOS | `glimagesink` | `UiKitView` → window handle |
+| iOS | `avsamplebufferlayersink` | `UiKitView` → host `UIView` + sink `CALayer` sublayer |
 | macOS | `osxvideosink` | `AppKitView` → child `NSView` via VideoOverlay subview |
 | Windows | `d3d11videosink` | Platform view → HWND |
 | Linux | `glimagesink` | Platform view → X11 window id |
@@ -48,6 +48,18 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - Flutter Android uses `PlatformViewLink` + `initSurfaceAndroidView` (hybrid composition) — not legacy virtual-display `AndroidView` — so `SurfaceView` gets a reliable surface.
 - `GStreamerInitProvider` loads `gstreamer_android` then `xue_hua_video_player` before Dart FRB `dlopen`.
 
+## iOS video sink requirements
+
+- iOS uses **`avsamplebufferlayersink`** (applemedia plugin): GStreamer exposes a `CALayer` via the sink `layer` property; Swift attaches it as a sublayer of the Flutter host `UIView` on the **main thread** (`xhvp_ios_attach_layer_to_host` / `player_apply_ios_overlay_gstreamer`).
+- **Do not** use `glimagesink` / `EaglUIView` / `VideoOverlay::set_window_handle` on iOS — GL draw callbacks access UIKit off the main thread during network preroll.
+- Swift caches the host `UIView*` via `player_notify_ios_overlay`, then `DispatchQueue.main.async { player_apply_ios_overlay_gstreamer }` after layout (same pattern as macOS `player_apply_macos_overlay_gstreamer`).
+- Rust attaches the sink layer and prerolls on **`xhvp-gst`** inside `apply_ios_overlay_gstreamer`; do not call `spawn_on_gst_thread_and_wait` from UIKit layout callbacks.
+- If no host view is cached when `load` runs, defer `PAUSED` preroll until `overlay_bound` is set after layer attach.
+- Overlay may bind before `load()`; when `PipelineShell::has_pending_media()` is `false` (empty playbin URI), attach only — no preroll until media is set.
+- Bus `prepare-window-handle` (glimagesink fallback): bind on main thread and return `Drop`.
+- Network buffering uses `set_state_sync` on non-Android platforms (Tutorial 4 `target_state` semantics).
+- iOS GStreamer plugins are statically linked in `GStreamer.framework`; register via `register_ios_static_plugins()` including `gst_plugin_applemedia_register()`. HTTPS uses OpenSSL + DarwinSSL GIO TLS backends (`register_gio_tls_backend()`).
+
 ## Android native library load order
 
 - `GStreamerInitProvider` and `XueHuaVideoPlayerPlugin` call `System.loadLibrary("xue_hua_video_player")` at process/plugin startup — **before** Dart `RustLib.init()` (`DynamicLibrary.open`).
@@ -57,6 +69,9 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 ## Asset playback (AppSrc)
 
 - Flutter assets are resolved in Rust (`media/resolver`): `flutter_assets/{key}` on desktop, `AssetManager` on Android.
+- **Darwin bundle roots:** iOS executable is `Runner.app/Runner` → bundle root is `exe.parent()`; macOS is `Contents/MacOS/Runner` → bundle root is `exe.parent().parent()` (`Contents`). Framework assets live at `Frameworks/App.framework/flutter_assets/{key}`.
+- **iOS init:** `XueHuaVideoPlayerPlugin.register` calls `xhvp_set_flutter_assets_dir` with `Bundle.main` `App.framework/flutter_assets` so resolution works even when `current_exe()` differs under the debugger.
+- When a bundle path resolves on iOS/macOS/desktop, `MediaSource::FlutterAsset` becomes `file://` + playbin3 (seekable). AppSrc fallback is used on Windows/Linux when path resolution fails; Darwin returns the error directly.
 - Bytes are pushed through `gstreamer-app` `AppSrc` into `decodebin`, sharing the same `VideoOverlay` video sink as URI mode.
 - AppSrc EOS replay reloads the asset shell (`teardown` + fresh `decodebin` pipeline) via `replay_asset_shell`; in-place rewind/state cycles break `pad_added` topology.
 - Prefer `playerLoadSource` / `PlaybackEngine::load(MediaSource)` — legacy `playerSetAssetSource` delegates to the same path.
@@ -65,7 +80,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 ## Source switching
 
 - `playback/switch.rs` exposes `switch_shell(resolved, ctx)` — the single Gst-thread entry for URI ↔ asset transitions.
-- `VideoSurface` (`playback/surface.rs`) owns cached overlay handles and platform bind scheduling (Android defer, macOS main-thread apply).
+- `VideoSurface` (`playback/surface.rs`) owns cached overlay handles and platform bind scheduling (Android/iOS Gst-thread defer, macOS main-thread apply).
 - `PipelineCapabilities` (`playback/capabilities.rs`) types playbin-only features (seek, tracks, orientation); AppSrc pipelines report reduced capability.
 - Playbin track lists are cached on bus `StreamCollection` / `StreamsSelected` and enriched from `GstStream::tags()` — playbin3 does not expose legacy `n-audio` properties.
 

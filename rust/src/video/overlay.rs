@@ -19,7 +19,15 @@ pub fn video_sink_factory_name() -> &'static str {
     {
         "osxvideosink"
     }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[cfg(target_os = "ios")]
+    {
+        "avsamplebufferlayersink"
+    }
+    #[cfg(all(
+        not(target_os = "windows"),
+        not(target_os = "macos"),
+        not(target_os = "ios")
+    ))]
     {
         "glimagesink"
     }
@@ -79,6 +87,9 @@ pub fn expose_overlay(video_sink: &gst::Element) {
 }
 
 /// Sets the embedded view rectangle and requests a redraw.
+///
+/// Do not call on iOS from the Gst thread — `glimagesink` layer updates must not
+/// race UIKit; iOS sizing is handled by `EaglUIView` layout on the main thread.
 pub fn set_overlay_render_rectangle(video_sink: &gst::Element, width: i32, height: i32) {
     if width <= 0 || height <= 0 {
         return;
@@ -104,26 +115,90 @@ pub fn bus_sync_reply_for_overlay_message(
         log::warn!("prepare-window-handle received but no overlay handle is cached yet");
         return gst::BusSyncReply::Pass;
     };
+    #[cfg(target_os = "ios")]
+    {
+        return bus_sync_reply_for_ios_overlay(msg, Some(handle), None);
+    }
+    #[cfg(not(target_os = "ios"))]
     if let Some(src) = msg.src() {
         if let Ok(overlay) = src.clone().dynamic_cast::<gst_video::VideoOverlay>() {
             log::info!("prepare-window-handle: binding overlay handle {handle:#x}");
             bind_overlay_element(&overlay, handle);
         }
     }
+    #[cfg(not(target_os = "ios"))]
     gst::BusSyncReply::Drop
+}
+
+/// iOS `prepare-window-handle` (glimagesink fallback): bind on main thread and drop the message.
+#[cfg(target_os = "ios")]
+pub fn bus_sync_reply_for_ios_overlay(
+    msg: &gst::MessageRef,
+    cached_handle: Option<usize>,
+    overlay_sink: Option<&Arc<Mutex<gst::Element>>>,
+) -> gst::BusSyncReply {
+    use gstreamer_video::is_video_overlay_prepare_window_handle_message;
+
+    if !is_video_overlay_prepare_window_handle_message(msg) {
+        return gst::BusSyncReply::Pass;
+    }
+    let Some(handle) = cached_handle else {
+        log::warn!("prepare-window-handle received but no overlay handle is cached yet");
+        return gst::BusSyncReply::Pass;
+    };
+    if let Some(slot) = overlay_sink {
+        let sink = slot.lock().clone();
+        if let Err(e) = crate::platform_view_ios::bind_overlay_on_main_thread(&sink, handle) {
+            log::warn!("prepare-window-handle main-thread bind: {e:#}");
+        } else {
+            log::info!("prepare-window-handle: main-thread bind handle {handle:#x}");
+        }
+        return gst::BusSyncReply::Drop;
+    }
+    if let Some(src) = msg.src() {
+        if let Ok(element) = src.clone().dynamic_cast::<gst::Element>() {
+            if element
+                .clone()
+                .dynamic_cast::<gst_video::VideoOverlay>()
+                .is_ok()
+            {
+                if let Err(e) =
+                    crate::platform_view_ios::bind_overlay_on_main_thread(&element, handle)
+                {
+                    log::warn!("prepare-window-handle main-thread bind: {e:#}");
+                } else {
+                    log::info!("prepare-window-handle: main-thread bind handle {handle:#x}");
+                }
+                return gst::BusSyncReply::Drop;
+            }
+        }
+    }
+    gst::BusSyncReply::Pass
 }
 
 /// Installs a bus sync handler that answers `prepare-window-handle` for VideoOverlay sinks.
 pub fn attach_overlay_bus_sync_handler(
     pipeline: &gst::Pipeline,
     overlay_handle: Arc<Mutex<Option<usize>>>,
+    #[cfg(any(target_os = "macos", target_os = "ios"))] overlay_sink: Option<
+        Arc<Mutex<gst::Element>>,
+    >,
 ) {
     let bus = match pipeline.bus() {
         Some(bus) => bus,
         None => return,
     };
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    let overlay_sink_bus = overlay_sink.clone();
     bus.set_sync_handler(move |_bus, msg| {
         let handle = *overlay_handle.lock();
-        bus_sync_reply_for_overlay_message(msg, handle)
+        #[cfg(target_os = "ios")]
+        {
+            return bus_sync_reply_for_ios_overlay(msg, handle, overlay_sink_bus.as_ref());
+        }
+        #[cfg(not(target_os = "ios"))]
+        {
+            bus_sync_reply_for_overlay_message(msg, handle)
+        }
     });
 }

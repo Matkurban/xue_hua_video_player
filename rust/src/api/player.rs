@@ -45,13 +45,15 @@ pub fn create_player() -> Result<PlayerHandle> {
         get_player(player_id)?.cache_macos_overlay_handle(handle);
         #[cfg(target_os = "android")]
         get_player(player_id)?.notify_android_surface(handle, 0, 0)?;
-        #[cfg(not(any(target_os = "macos", target_os = "android")))]
+        #[cfg(target_os = "ios")]
+        get_player(player_id)?.notify_ios_overlay(handle, 0, 0)?;
+        #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
         get_player(player_id)?.set_video_overlay_window(handle)?;
     }
     Ok(PlayerHandle { player_id })
 }
 
-/// macOS: synchronously records the NSView handle for bus sync / rebind.
+/// Darwin: synchronously records the native view handle for bus sync / rebind (macOS only).
 #[cfg(target_os = "macos")]
 pub fn cache_macos_overlay_handle(player_id: i64, view_ptr: i64) -> Result<()> {
     match get_player(player_id) {
@@ -76,6 +78,30 @@ pub fn cache_macos_overlay_handle(_player_id: i64, _view_ptr: i64) -> Result<()>
     Ok(())
 }
 
+/// iOS: caches EaglUIView handle and binds on xhvp-gst after pipeline READY (Tutorial 4).
+#[cfg(target_os = "ios")]
+pub fn notify_ios_overlay(player_id: i64, handle: i64, width: i32, height: i32) -> Result<()> {
+    match get_player(player_id) {
+        Ok(player) => {
+            PENDING_OVERLAYS.lock().remove(&player_id);
+            player.notify_ios_overlay(handle, width, height)
+        }
+        Err(_) if handle != 0 => {
+            PENDING_OVERLAYS.lock().insert(player_id, handle);
+            Ok(())
+        }
+        Err(_) => {
+            PENDING_OVERLAYS.lock().remove(&player_id);
+            Ok(())
+        }
+    }
+}
+
+#[cfg(not(target_os = "ios"))]
+pub fn notify_ios_overlay(_player_id: i64, _handle: i64, _width: i32, _height: i32) -> Result<()> {
+    Ok(())
+}
+
 /// macOS: applies the cached NSView handle to the GStreamer sink (main thread).
 #[cfg(target_os = "macos")]
 pub fn apply_macos_overlay_gstreamer(player_id: i64, width: i32, height: i32) -> Result<()> {
@@ -84,6 +110,17 @@ pub fn apply_macos_overlay_gstreamer(player_id: i64, width: i32, height: i32) ->
 
 #[cfg(not(target_os = "macos"))]
 pub fn apply_macos_overlay_gstreamer(_player_id: i64, _width: i32, _height: i32) -> Result<()> {
+    Ok(())
+}
+
+/// iOS: applies cached host view + attaches `avsamplebufferlayersink` layer (main thread).
+#[cfg(target_os = "ios")]
+pub fn apply_ios_overlay_gstreamer(player_id: i64, width: i32, height: i32) -> Result<()> {
+    get_player(player_id)?.apply_ios_overlay_gstreamer(width, height)
+}
+
+#[cfg(not(target_os = "ios"))]
+pub fn apply_ios_overlay_gstreamer(_player_id: i64, _width: i32, _height: i32) -> Result<()> {
     Ok(())
 }
 

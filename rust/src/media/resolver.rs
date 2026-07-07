@@ -1,9 +1,32 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::{anyhow, Result};
+
+static FLUTTER_ASSETS_DIR: OnceLock<String> = OnceLock::new();
+
+/// Records the Flutter assets directory from native init (iOS plugin register).
+pub fn set_flutter_assets_dir(dir: &str) {
+    if dir.is_empty() {
+        return;
+    }
+    let _ = FLUTTER_ASSETS_DIR.set(dir.to_string());
+    // SAFETY: called during plugin init before concurrent asset loads.
+    unsafe {
+        std::env::set_var("FLUTTER_ASSETS_DIR", dir);
+    }
+    log::info!("flutter assets dir set: {dir}");
+}
+
+fn flutter_assets_dir_override() -> Option<String> {
+    FLUTTER_ASSETS_DIR
+        .get()
+        .cloned()
+        .or_else(|| std::env::var("FLUTTER_ASSETS_DIR").ok())
+        .filter(|dir| !dir.is_empty())
+}
 
 /// Byte source for AppSrc `need-data` callbacks.
 pub enum AssetByteSource {
@@ -88,47 +111,27 @@ pub fn resolve_flutter_asset_path(asset_key: &str) -> Result<PathBuf> {
             return Ok(path.clone());
         }
     }
+    let searched: Vec<String> = candidates
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect();
     Err(anyhow!(
-        "flutter asset not found: {asset_key} (searched {} paths)",
-        candidates.len()
+        "flutter asset not found: {asset_key} (searched {} paths: {})",
+        searched.len(),
+        searched.join(", ")
     ))
 }
 
-fn flutter_asset_candidates(asset_key: &str) -> Vec<PathBuf> {
+/// Returns candidate paths for tests and diagnostics.
+pub fn flutter_asset_candidates(asset_key: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
 
-    if let Ok(dir) = std::env::var("FLUTTER_ASSETS_DIR") {
-        if !dir.is_empty() {
-            out.push(PathBuf::from(dir).join(asset_key));
-        }
+    if let Some(dir) = flutter_assets_dir_override() {
+        out.push(PathBuf::from(dir).join(asset_key));
     }
 
     if let Ok(exe) = std::env::current_exe() {
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            if let Some(contents) = exe.parent().and_then(|p| p.parent()) {
-                for framework in ["App.framework", "Flutter.framework"] {
-                    out.push(
-                        contents
-                            .join("Frameworks")
-                            .join(framework)
-                            .join("Resources")
-                            .join("flutter_assets")
-                            .join(asset_key),
-                    );
-                    out.push(
-                        contents
-                            .join("Frameworks")
-                            .join(framework)
-                            .join("Versions")
-                            .join("A")
-                            .join("Resources")
-                            .join("flutter_assets")
-                            .join(asset_key),
-                    );
-                }
-            }
-        }
+        out.extend(darwin_candidates_for_exe(&exe, asset_key));
         #[cfg(target_os = "windows")]
         {
             if let Some(dir) = exe.parent() {
@@ -145,6 +148,75 @@ fn flutter_asset_candidates(asset_key: &str) -> Vec<PathBuf> {
     }
 
     out
+}
+
+/// iOS: `Runner.app/Runner` → `Runner.app`.
+pub(crate) fn ios_bundle_root(exe: &Path) -> Option<PathBuf> {
+    exe.parent().map(|path| path.to_path_buf())
+}
+
+/// macOS: `…/Contents/MacOS/Runner` → `…/Contents`.
+pub(crate) fn macos_bundle_contents_root(exe: &Path) -> Option<PathBuf> {
+    exe.parent().and_then(|macos| macos.parent()).map(|path| path.to_path_buf())
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn darwin_bundle_root(exe: &Path) -> Option<PathBuf> {
+    #[cfg(target_os = "ios")]
+    {
+        ios_bundle_root(exe)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos_bundle_contents_root(exe)
+    }
+}
+
+/// Framework-relative `flutter_assets/` candidates under a Darwin bundle root.
+pub(crate) fn darwin_framework_asset_candidates(
+    bundle_root: &Path,
+    asset_key: &str,
+) -> Vec<PathBuf> {
+    let frameworks = bundle_root.join("Frameworks");
+    let mut out = vec![
+        frameworks
+            .join("App.framework")
+            .join("flutter_assets")
+            .join(asset_key),
+    ];
+    for framework in ["App.framework", "Flutter.framework"] {
+        out.push(
+            frameworks
+                .join(framework)
+                .join("Resources")
+                .join("flutter_assets")
+                .join(asset_key),
+        );
+        out.push(
+            frameworks
+                .join(framework)
+                .join("Versions")
+                .join("A")
+                .join("Resources")
+                .join("flutter_assets")
+                .join(asset_key),
+        );
+    }
+    out
+}
+
+fn darwin_candidates_for_exe(exe: &Path, asset_key: &str) -> Vec<PathBuf> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        if let Some(bundle_root) = darwin_bundle_root(exe) {
+            return darwin_framework_asset_candidates(&bundle_root, asset_key);
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        let _ = (exe, asset_key);
+    }
+    Vec::new()
 }
 
 /// Shared reader state for AppSrc callbacks.
@@ -194,5 +266,76 @@ mod tests {
         assert!(!eos3);
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn ios_bundle_root_from_runner_exe() {
+        let exe = PathBuf::from("/var/containers/Bundle/Application/ABC/Runner.app/Runner");
+        let root = ios_bundle_root(&exe).unwrap();
+        assert_eq!(
+            root,
+            PathBuf::from("/var/containers/Bundle/Application/ABC/Runner.app")
+        );
+    }
+
+    #[test]
+    fn macos_bundle_root_from_runner_exe() {
+        let exe = PathBuf::from("/Applications/MyApp.app/Contents/MacOS/Runner");
+        let root = macos_bundle_contents_root(&exe).unwrap();
+        assert_eq!(
+            root,
+            PathBuf::from("/Applications/MyApp.app/Contents")
+        );
+    }
+
+    #[test]
+    fn darwin_framework_candidates_ios_layout() {
+        let bundle = PathBuf::from("/var/containers/Bundle/Application/ABC/Runner.app");
+        let key = "assets/sample.mp4";
+        let candidates = darwin_framework_asset_candidates(&bundle, key);
+        assert_eq!(candidates.len(), 5);
+        assert_eq!(
+            candidates[0],
+            bundle
+                .join("Frameworks")
+                .join("App.framework")
+                .join("flutter_assets")
+                .join(key)
+        );
+    }
+
+    #[test]
+    fn darwin_framework_candidates_macos_layout() {
+        let bundle = PathBuf::from("/Applications/MyApp.app/Contents");
+        let key = "assets/sample.mp4";
+        let candidates = darwin_framework_asset_candidates(&bundle, key);
+        assert_eq!(candidates.len(), 5);
+        assert!(candidates[0].ends_with(
+            "Frameworks/App.framework/flutter_assets/assets/sample.mp4"
+        ));
+    }
+
+    #[test]
+    #[cfg(target_os = "ios")]
+    fn darwin_candidates_for_ios_exe_path() {
+        let exe = PathBuf::from("/var/containers/Bundle/Application/ABC/Runner.app/Runner");
+        let key = "assets/sample.mp4";
+        let candidates = darwin_candidates_for_exe(&exe, key);
+        assert_eq!(candidates.len(), 5);
+        assert!(candidates[0].ends_with(
+            "Runner.app/Frameworks/App.framework/flutter_assets/assets/sample.mp4"
+        ));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn darwin_candidates_for_macos_exe_path() {
+        let exe = PathBuf::from("/Applications/MyApp.app/Contents/MacOS/Runner");
+        let key = "assets/sample.mp4";
+        let candidates = darwin_candidates_for_exe(&exe, key);
+        assert_eq!(candidates.len(), 5);
+        assert!(candidates[0].ends_with(
+            "Contents/Frameworks/App.framework/flutter_assets/assets/sample.mp4"
+        ));
     }
 }
