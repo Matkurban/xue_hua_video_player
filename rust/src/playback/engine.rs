@@ -127,17 +127,8 @@ impl PlaybackEngine {
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         let surface = VideoSurface::new(native_window);
         let shell_arc = Arc::new(Mutex::new(shell));
-         #[cfg(target_os = "ios")]
+        #[cfg(target_os = "ios")]
         {
-            let sink = shell_arc.lock().video_sink.clone();
-            let stored = surface.stored_handle();
-            let overlay_bound = surface.ios_session().overlay_bound.clone();
-            crate::video::ios_layer::setup_ios_notify_layer_handler(
-                &sink,
-                stored,
-                overlay_bound,
-            );
-
             let switch_ctx = SwitchContext {
                 emitter: emitter.clone(),
                 looping: looping.clone(),
@@ -251,27 +242,16 @@ impl PlaybackEngine {
                 at_eos: self.at_eos.clone(),
                 switch_ctx: ctx.clone_for_async(),
             };
-            let has_layer = {
-                let guard = self.shell.lock();
-                guard.video_sink.find_property("layer").is_some()
-            };
-            if has_layer {
-                if ctx.surface.overlay_ready_for_preroll() {
-                    let surface = ctx.surface.clone_for_switch();
-                    spawn_on_gst_thread(move || {
-                        let _ = surface.schedule_ios_layer_attach(shell, play_intent);
-                    });
-                    if auto_play {
-                        log::info!("gst: deferring play until iOS layer is attached");
-                    }
-                } else if auto_play {
-                    log::info!("gst: deferring play until iOS host view is cached");
+            if ctx.surface.overlay_ready_for_preroll() {
+                let surface = ctx.surface.clone_for_switch();
+                spawn_on_gst_thread(move || {
+                    let _ = surface.schedule_ios_layer_attach(shell, play_intent);
+                });
+                if auto_play {
+                    log::info!("gst: deferring play until iOS layer is attached");
                 }
-            } else {
-                let at_eos = self.at_eos.clone();
-                if auto_play && ctx.surface.overlay_ready_for_preroll() {
-                    self.run_on_gst(move |shell| pipeline_play(shell, &at_eos, &ctx.surface, &ctx))?;
-                }
+            } else if auto_play {
+                log::info!("gst: deferring play until iOS host view is cached");
             }
         }
         #[cfg(not(target_os = "ios"))]
@@ -315,43 +295,30 @@ impl PlaybackEngine {
         let ctx = self.switch_context();
         #[cfg(target_os = "ios")]
         {
-            let has_layer = {
-                let guard = self.shell.lock();
-                guard.video_sink.find_property("layer").is_some()
-            };
-            if has_layer {
-                if self.surface.is_overlay_bound_on_gst() {
-                    let shell = self.shell.clone();
-                    let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
-                        desired_playing: self.desired_playing.clone(),
-                        at_eos: self.at_eos.clone(),
-                        switch_ctx: ctx.clone_for_async(),
-                    };
-                    return self.run_on_gst(move |_shell| {
-                        ctx.surface.resume_ios_play(shell, play_intent);
-                        Ok(())
-                    });
-                }
+            if self.surface.is_overlay_bound_on_gst() {
                 let shell = self.shell.clone();
-                let surface = self.surface.clone_for_switch();
                 let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
                     desired_playing: self.desired_playing.clone(),
                     at_eos: self.at_eos.clone(),
                     switch_ctx: ctx.clone_for_async(),
                 };
-                spawn_on_gst_thread(move || {
-                    let _ = surface.schedule_ios_layer_attach(shell, play_intent);
-                });
-                log::info!("gst: deferring play until iOS layer is attached");
-                return Ok(());
-            } else {
-                return self.run_on_gst(move |shell| {
-                    if !ctx.surface.is_overlay_bound_on_gst() {
-                        ctx.surface.rebind_cached_overlay(shell)?;
-                    }
-                    pipeline_play(shell, &at_eos, &ctx.surface, &ctx)
+                return self.run_on_gst(move |_shell| {
+                    ctx.surface.resume_ios_play(shell, play_intent);
+                    Ok(())
                 });
             }
+            let shell = self.shell.clone();
+            let surface = self.surface.clone_for_switch();
+            let play_intent = crate::playback::surface::MobileOverlayPlayIntent {
+                desired_playing: self.desired_playing.clone(),
+                at_eos: self.at_eos.clone(),
+                switch_ctx: ctx.clone_for_async(),
+            };
+            spawn_on_gst_thread(move || {
+                let _ = surface.schedule_ios_layer_attach(shell, play_intent);
+            });
+            log::info!("gst: deferring play until iOS layer is attached");
+            return Ok(());
         }
         #[cfg(not(target_os = "ios"))]
         self.run_on_gst(move |shell| {
@@ -577,13 +544,7 @@ impl PlaybackEngine {
     #[cfg(target_os = "ios")]
     pub fn notify_ios_overlay(&self, handle: i64, width: i32, height: i32) -> Result<()> {
         self.surface.notify_ios_overlay(handle, width, height)?;
-        if handle == 0 {
-            let shell_clone = self.shell.clone();
-            spawn_on_gst_thread(move || {
-                let guard = shell_clone.lock();
-                let _ = crate::platform_view_ios::bind_overlay_on_main_thread(&guard.video_sink, 0, 0, 0);
-            });
-        } else if width > 0 && height > 0 {
+        if handle != 0 && width > 0 && height > 0 {
             self.refresh_ios_bus_hook();
         }
         Ok(())
@@ -615,10 +576,7 @@ impl Drop for PlaybackEngine {
     fn drop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
         #[cfg(target_os = "ios")]
-        {
-            self.surface.cancel_ios_overlay_work();
-            self.surface.ios_session().clear_attach_in_flight();
-        }
+        self.surface.cancel_ios_overlay_work();
         let shell = self.shell.clone();
         let _ = spawn_on_gst_thread_and_wait(move || {
             let mut guard = shell.lock();

@@ -222,18 +222,8 @@ fn pipeline_set_uri(
         }
         #[cfg(target_os = "ios")]
         {
-            let has_layer = shell.video_sink.find_property("layer").is_some();
-            if !has_layer {
-                set_state_sync(pipeline, gst::State::Paused)?;
-                if let Some(handle) = *surface.stored_handle().lock() {
-                    let (width, height) = surface.cached_dimensions();
-                    let _ = crate::platform_view_ios::bind_overlay_on_main_thread(&shell.video_sink, handle, width, height);
-                    crate::video::expose_overlay(&shell.video_sink);
-                }
-            } else {
-                let _ = surface;
-                log::debug!("gst: ios layer attach deferred to IosOverlaySession after setUri");
-            }
+            let _ = surface;
+            log::debug!("gst: ios layer attach deferred to IosOverlaySession after setUri");
         }
         Ok(())
     } else {

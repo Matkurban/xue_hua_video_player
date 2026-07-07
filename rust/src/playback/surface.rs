@@ -14,8 +14,6 @@ use crate::playback::state::set_state_sync;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use crate::playback::state::resume_or_replay_from_eos;
 #[cfg(target_os = "ios")]
-use crate::platform_view_ios::detach_sink_layers_from_host;
-#[cfg(target_os = "ios")]
 use crate::playback::ios_overlay::{IosIdleWork, IosOverlayPlayIntent, IosOverlaySession};
 use crate::playback::switch::SwitchContext;
 use crate::video::{
@@ -75,14 +73,6 @@ impl IosLayerBusHook {
 
     pub fn set_buffering_active(&self, active: bool) {
         self.ios_session.set_buffering_active(active);
-    }
-
-    /// Marks video ready when sink caps are negotiated; schedules PLAYING if overlay is bound.
-    pub fn try_mark_video_ready(&self) {
-        let sink = self.overlay_sink.lock().clone();
-        if self.ios_session.try_mark_video_ready(&sink) {
-            self.schedule_apply();
-        }
     }
 
     fn idle_work(&self) -> IosIdleWork {
@@ -293,14 +283,6 @@ impl VideoSurface {
         shell: Arc<Mutex<PipelineShell>>,
         play_intent: MobileOverlayPlayIntent,
     ) -> Result<IosLayerAttachOutcome> {
-        let has_layer = {
-            let guard = shell.lock();
-            guard.video_sink.find_property("layer").is_some()
-        };
-        if !has_layer {
-            return Ok(IosLayerAttachOutcome::Skipped);
-        }
-
         let ios_intent = IosOverlayPlayIntent {
             desired_playing: play_intent.desired_playing.clone(),
             at_eos: play_intent.at_eos.clone(),
@@ -323,14 +305,6 @@ impl VideoSurface {
         shell: Arc<Mutex<PipelineShell>>,
         play_intent: MobileOverlayPlayIntent,
     ) -> Result<bool> {
-        let has_layer = {
-            let guard = shell.lock();
-            guard.video_sink.find_property("layer").is_some()
-        };
-        if !has_layer {
-            return Ok(self.overlay_bound.load(Ordering::SeqCst));
-        }
-
         match self.schedule_ios_layer_attach(shell, play_intent)? {
             IosLayerAttachOutcome::Scheduled => Ok(true),
             IosLayerAttachOutcome::LayerNotReady => Ok(false),
@@ -353,11 +327,6 @@ impl VideoSurface {
     /// Clears iOS overlay bind state on every `load` (URI→URI reload, not only shell rebuild).
     #[cfg(target_os = "ios")]
     pub fn mark_media_changed(&self) {
-        if let Some(host) = *self.stored.lock() {
-            if host != 0 {
-                detach_sink_layers_from_host(host);
-            }
-        }
         self.ios_session.bump_overlay_generation();
         self.ios_session.reset_for_media_change();
     }
@@ -488,12 +457,7 @@ impl VideoSurface {
                 }
                 #[cfg(target_os = "ios")]
                 {
-                    let has_layer = shell.video_sink.find_property("layer").is_some();
-                    if !has_layer {
-                        let _ = crate::platform_view_ios::bind_overlay_on_main_thread(&shell.video_sink, handle, width, height);
-                        self.overlay_bound.store(true, Ordering::SeqCst);
-                        log::info!("gst: ios glimagesink overlay rebound");
-                    }
+                    let _ = (self, shell);
                 }
             }
             return Ok(());
@@ -515,16 +479,12 @@ impl VideoSurface {
             return;
         }
         let new_handle = handle as usize;
-        let old_handle = *self.stored.lock();
-        let host_changed = match old_handle {
+        let host_changed = match *self.stored.lock() {
             Some(h) if h != 0 => h != new_handle,
             _ => false,
         };
         self.set_cached_dimensions(width, height);
         if host_changed {
-            if let Some(old) = old_handle {
-                detach_sink_layers_from_host(old);
-            }
             self.ios_session.reset_for_host_change();
         }
         self.cache_handle(new_handle);
@@ -534,7 +494,7 @@ impl VideoSurface {
     #[cfg(target_os = "ios")]
     pub fn apply_ios_overlay_gstreamer(
         &self,
-        shell_arc: std::sync::Arc<Mutex<PipelineShell>>,
+        shell: std::sync::Arc<Mutex<PipelineShell>>,
         width: i32,
         height: i32,
         play_intent: MobileOverlayPlayIntent,
@@ -542,31 +502,77 @@ impl VideoSurface {
         if width <= 0 || height <= 0 {
             return Ok(());
         }
-        let (_prev_w, _prev_h) = self.cached_dimensions();
+        let (prev_w, prev_h) = self.cached_dimensions();
         self.set_cached_dimensions(width, height);
         let host_view = *self.stored.lock();
         let Some(host_view) = host_view else {
             return Ok(());
         };
 
-        let running = play_intent.switch_ctx.running.clone();
-        let overlay_bound = self.overlay_bound.clone();
+        let last_applied = self.last_applied_handle.load(Ordering::SeqCst);
+        if last_applied != 0 && last_applied != host_view {
+            self.ios_session.reset_for_host_change();
+        }
 
+        if self.ios_session.is_bound()
+            && self.last_applied_handle.load(Ordering::SeqCst) == host_view
+        {
+            let dimensions_changed = prev_w != width || prev_h != height;
+            if dimensions_changed || play_intent.desired_playing.load(Ordering::SeqCst) {
+                let session = self.ios_session.clone();
+                let running = play_intent.switch_ctx.running.clone();
+                let work_generation = session.overlay_generation().load(Ordering::SeqCst);
+                let ios_intent = IosOverlayPlayIntent {
+                    desired_playing: play_intent.desired_playing.clone(),
+                    at_eos: play_intent.at_eos.clone(),
+                    switch_ctx: play_intent.switch_ctx.clone_for_async(),
+                };
+                spawn_on_gst_thread(move || {
+                    if !running.load(Ordering::SeqCst)
+                        || work_generation != session.overlay_generation().load(Ordering::SeqCst)
+                    {
+                        return;
+                    }
+                    if dimensions_changed {
+                        let sink = {
+                            let guard = shell.lock();
+                            guard.video_sink.clone()
+                        };
+                        if let Ok(layer) = crate::video::ios_layer::read_sink_layer(&sink) {
+                            if !crate::platform_view_ios::attach_layer_on_main_thread_sync(
+                                host_view, layer,
+                            ) {
+                                crate::video::ios_layer::release_sink_layer(layer);
+                            }
+                        }
+                    }
+                    if !running.load(Ordering::SeqCst)
+                        || work_generation != session.overlay_generation().load(Ordering::SeqCst)
+                    {
+                        return;
+                    }
+                    session.drain_pending_play(shell, &ios_intent, work_generation);
+                });
+            }
+            return Ok(());
+        }
+
+        let session = self.ios_session.clone();
+        let stored = self.stored.clone();
+        let running = play_intent.switch_ctx.running.clone();
+        let work_generation = session.overlay_generation().load(Ordering::SeqCst);
+        let ios_intent = IosOverlayPlayIntent {
+            desired_playing: play_intent.desired_playing,
+            at_eos: play_intent.at_eos,
+            switch_ctx: play_intent.switch_ctx.clone_for_async(),
+        };
         spawn_on_gst_thread(move || {
-            if !running.load(Ordering::SeqCst) {
+            if !running.load(Ordering::SeqCst)
+                || work_generation != session.overlay_generation().load(Ordering::SeqCst)
+            {
                 return;
             }
-            let mut shell = shell_arc.lock();
-            let bind_res = crate::platform_view_ios::bind_overlay_on_main_thread(&shell.video_sink, host_view, width, height);
-            if let Err(e) = bind_res {
-                log::warn!("gst: ios glimagesink overlay bind failed: {e:#}");
-            }
-
-            overlay_bound.store(true, Ordering::SeqCst);
-
-            if let Err(e) = maybe_preroll_and_resume_play(&mut shell, &play_intent, host_view, width, height) {
-                log::warn!("gst: ios preroll resume failed: {e:#}");
-            }
+            let _ = session.request_attach(shell, stored, ios_intent, "Swift apply", work_generation);
         });
         Ok(())
     }

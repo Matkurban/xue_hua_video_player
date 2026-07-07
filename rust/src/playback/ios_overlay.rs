@@ -13,10 +13,7 @@ use crate::playback::shell::{PipelineShell, SourceKind};
 use crate::playback::state::set_state_sync;
 use crate::playback::switch::replay_asset_shell;
 use crate::playback::switch::SwitchContext;
-use crate::video::ios_layer::{
-    attach_ios_video_layer_with_completion, video_sink_has_video_caps, IosAttachLifecycle,
-    IosLayerAttachOutcome,
-};
+use crate::video::ios_layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
 
 /// Play intent for iOS overlay attach completion (mirrors [`super::surface::MobileOverlayPlayIntent`]).
 pub struct IosOverlayPlayIntent {
@@ -56,7 +53,6 @@ pub struct IosOverlaySession {
     apply_scheduled: Arc<AtomicBool>,
     attach_scheduled: Arc<AtomicBool>,
     state_apply_in_flight: Arc<AtomicBool>,
-    video_ready: Arc<AtomicBool>,
     pub last_applied_handle: Arc<AtomicUsize>,
 }
 
@@ -77,7 +73,6 @@ impl IosOverlaySession {
             apply_scheduled: Arc::new(AtomicBool::new(false)),
             attach_scheduled: Arc::new(AtomicBool::new(false)),
             state_apply_in_flight: Arc::new(AtomicBool::new(false)),
-            video_ready: Arc::new(AtomicBool::new(false)),
             last_applied_handle,
         }
     }
@@ -103,24 +98,6 @@ impl IosOverlaySession {
         self.overlay_bound.load(Ordering::SeqCst)
     }
 
-    pub fn is_video_ready(&self) -> bool {
-        self.video_ready.load(Ordering::SeqCst)
-    }
-
-    /// Sets `video_ready` when the sink pad has negotiated video caps.
-    pub fn try_mark_video_ready(&self, sink: &gst::Element) -> bool {
-        if video_sink_has_video_caps(sink) {
-            self.video_ready.store(true, Ordering::SeqCst);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn running_handle(&self) -> Arc<AtomicBool> {
-        self.running.clone()
-    }
-
     pub fn set_pending_play_after_overlay(&self, pending: bool) {
         self.pending_play_after_overlay.store(pending, Ordering::SeqCst);
     }
@@ -137,7 +114,6 @@ impl IosOverlaySession {
         self.buffering_active.store(false, Ordering::SeqCst);
         self.apply_scheduled.store(false, Ordering::SeqCst);
         self.attach_scheduled.store(false, Ordering::SeqCst);
-        self.video_ready.store(false, Ordering::SeqCst);
         self.last_applied_handle.store(0, Ordering::SeqCst);
     }
 
@@ -152,13 +128,7 @@ impl IosOverlaySession {
             return;
         }
         self.overlay_bound.store(false, Ordering::SeqCst);
-        self.video_ready.store(false, Ordering::SeqCst);
         self.last_applied_handle.store(0, Ordering::SeqCst);
-    }
-
-    /// Clears in-flight attach flag on dispose (after generation bump invalidates callbacks).
-    pub fn clear_attach_in_flight(&self) {
-        self.attach_in_flight.store(false, Ordering::SeqCst);
     }
 
     /// Schedules idle attach retry (bus `READY→PAUSED` / `AsyncDone`).
@@ -236,7 +206,7 @@ impl IosOverlaySession {
         });
     }
 
-    /// Schedules at most one CALayer attach; coalesces concurrent callers.
+    /// Schedules at most one async CALayer attach; coalesces concurrent callers.
     pub fn request_attach(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
@@ -293,18 +263,11 @@ impl IosOverlaySession {
             return Ok(IosLayerAttachOutcome::Skipped);
         }
 
-        let lifecycle = IosAttachLifecycle::new(
-            self.running.clone(),
-            attach_generation,
-            self.overlay_generation.clone(),
-        );
-
         match attach_ios_video_layer_with_completion(
             &pipeline,
             has_pending_media,
             &sink,
             host_view,
-            lifecycle,
             move |attached| {
                 if !attached {
                     session.attach_in_flight.store(false, Ordering::SeqCst);
@@ -421,7 +384,7 @@ impl IosOverlaySession {
             return Ok(());
         }
 
-        let (pipeline, kind, current, pending, _has_pending_media) = snapshot;
+        let (pipeline, kind, current, pending, has_pending_media) = snapshot;
 
         if self.buffering_active.load(Ordering::SeqCst) && want_play {
             if current == gst::State::Playing {
@@ -447,7 +410,13 @@ impl IosOverlaySession {
             return Ok(());
         }
 
-        if current != gst::State::Ready && current != gst::State::Paused {
+        if current == gst::State::Ready && has_pending_media {
+            if !self.is_bound() {
+                return Ok(());
+            }
+            log::info!("gst: overlay bound — starting Paused preroll");
+            set_state_sync(&pipeline, gst::State::Paused)?;
+        } else if current != gst::State::Ready && current != gst::State::Paused {
             return Ok(());
         }
 

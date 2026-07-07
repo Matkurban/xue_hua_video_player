@@ -61,15 +61,6 @@ fn schedule_ios_attach(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>
     }
 }
 
-#[cfg(target_os = "ios")]
-fn try_mark_ios_video_ready(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBusHook>>>>) {
-    if let Some(slot) = ios_layer_bus.as_ref() {
-        if let Some(hook) = slot.lock().as_ref() {
-            hook.try_mark_video_ready();
-        }
-    }
-}
-
 /// Installs a bus watch and position polling timer on the Gst thread's MainContext.
 pub fn attach_gst_bus_handlers(
     pipeline: &gst::Pipeline,
@@ -238,10 +229,7 @@ pub fn attach_gst_bus_handlers(
                 }
                 MessageView::AsyncDone(..) => {
                     #[cfg(target_os = "ios")]
-                    {
-                        schedule_ios_attach(&ios_layer_bus);
-                        try_mark_ios_video_ready(&ios_layer_bus);
-                    }
+                    schedule_ios_attach(&ios_layer_bus);
                     if desired_playing.load(Ordering::SeqCst) {
                         if let Some(p) = pipeline_bus.query_position::<gst::ClockTime>() {
                             emit(PlayerEvent::position(p.mseconds() as i64));
@@ -254,7 +242,6 @@ pub fn attach_gst_bus_handlers(
                         #[cfg(target_os = "ios")]
                         if sc.old() == gst::State::Ready && current == gst::State::Paused {
                             schedule_ios_attach(&ios_layer_bus);
-                            try_mark_ios_video_ready(&ios_layer_bus);
                         }
                         if !(current == gst::State::Paused
                             && desired_playing.load(Ordering::SeqCst))
