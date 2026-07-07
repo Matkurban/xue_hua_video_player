@@ -10,7 +10,6 @@ use crate::playback::ios_overlay::{IosIdleWork, IosOverlayPlayIntent, IosOverlay
 use crate::playback::shell::PipelineShell;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use crate::playback::state::resume_or_replay_from_eos;
-use crate::playback::state::set_state_sync;
 #[cfg(target_os = "ios")]
 use crate::video::ios_layer::IosLayerAttachOutcome;
 use crate::video::{
