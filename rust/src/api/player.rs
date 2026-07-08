@@ -39,6 +39,7 @@ pub fn create_player() -> Result<PlayerHandle> {
 
     let player = PlaybackEngine::new()?;
     let player_id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
+    crate::playback::frame::register_frame_sink(player_id, player.frame_sink());
     PLAYERS.lock().insert(player_id, Arc::new(player));
     if let Some(handle) = PENDING_OVERLAYS.lock().remove(&player_id) {
         #[cfg(target_os = "macos")]
@@ -299,6 +300,7 @@ pub fn player_set_aspect_ratio_mode(player_id: i64, mode: AspectRatioMode) -> Re
 /// Tears down the player and stops the pipeline.
 pub fn dispose_player(player_id: i64) -> Result<()> {
     PENDING_OVERLAYS.lock().remove(&player_id);
+    crate::playback::frame::unregister_frame_sink(player_id);
     PLAYERS.lock().remove(&player_id);
     Ok(())
 }

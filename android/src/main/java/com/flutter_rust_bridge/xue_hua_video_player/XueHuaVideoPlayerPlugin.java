@@ -7,16 +7,24 @@ import androidx.annotation.NonNull;
 import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.plugin.common.MethodCall;
+import io.flutter.plugin.common.MethodChannel;
+import io.flutter.view.TextureRegistry;
 
-/** Registers the GStreamer video Platform View factory. */
-public class XueHuaVideoPlayerPlugin implements FlutterPlugin {
-    public static final String VIEW_TYPE = "xue_hua_video_player/view";
+import java.util.HashMap;
+import java.util.Map;
+
+/** Registers GStreamer video textures via Flutter {@link TextureRegistry.SurfaceProducer}. */
+public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
+    public static final String TEXTURE_CHANNEL_NAME = "xue_hua_video_player/texture";
 
     static {
-        // Must load before Dart FRB calls DynamicLibrary.open — otherwise JNI
-        // cannot resolve XueHuaVideoPlatformView native methods on Android.
         System.loadLibrary("xue_hua_video_player");
     }
+
+    private MethodChannel textureChannel;
+    private TextureRegistry textureRegistry;
+    private final Map<Long, XueHuaVideoTexture> videoTextures = new HashMap<>();
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
@@ -29,14 +37,63 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin {
             loader.startInitialization(context);
             loader.ensureInitializationComplete(context, null);
         }
-        binding
-            .getPlatformViewRegistry()
-            .registerViewFactory(
-                VIEW_TYPE,
-                new XueHuaVideoViewFactory(binding.getBinaryMessenger())
-            );
+
+        textureRegistry = binding.getTextureRegistry();
+        textureChannel = new MethodChannel(
+            binding.getBinaryMessenger(),
+            TEXTURE_CHANNEL_NAME
+        );
+        textureChannel.setMethodCallHandler(this);
     }
 
     @Override
-    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {}
+    public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
+        Long playerId = call.argument("playerId");
+        if (playerId == null || playerId == 0L) {
+            result.error("invalid_args", "playerId required", null);
+            return;
+        }
+        switch (call.method) {
+            case "createTexture":
+                synchronized (videoTextures) {
+                    XueHuaVideoTexture existing = videoTextures.get(playerId);
+                    if (existing != null) {
+                        result.success(existing.textureId());
+                        return;
+                    }
+                    XueHuaVideoTexture texture =
+                        new XueHuaVideoTexture(playerId, textureRegistry);
+                    videoTextures.put(playerId, texture);
+                    result.success(texture.textureId());
+                }
+                break;
+            case "disposeTexture":
+                synchronized (videoTextures) {
+                    XueHuaVideoTexture texture = videoTextures.remove(playerId);
+                    if (texture != null) {
+                        texture.dispose();
+                    }
+                }
+                result.success(null);
+                break;
+            default:
+                result.notImplemented();
+                break;
+        }
+    }
+
+    @Override
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        if (textureChannel != null) {
+            textureChannel.setMethodCallHandler(null);
+            textureChannel = null;
+        }
+        synchronized (videoTextures) {
+            for (XueHuaVideoTexture texture : videoTextures.values()) {
+                texture.dispose();
+            }
+            videoTextures.clear();
+        }
+        textureRegistry = null;
+    }
 }

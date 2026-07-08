@@ -3,8 +3,8 @@
 [English](README.md) | 简体中文
 
 一个跨平台的 Flutter **视频播放器**插件：底层通过 Rust（[`flutter_rust_bridge`]）驱动
-**GStreamer** 解码本地与网络视频，并通过 Flutter **Platform View** 与 GStreamer 推荐的
-**VideoOverlay** sink（`glimagesink` / `osxvideosink` / `d3d11videosink`）渲染画面。
+**GStreamer** 解码本地与网络视频，并通过 Flutter 外部 **`Texture`** 与自定义原生桥接渲染
+（Android：`glimagesink` + `SurfaceProducer`；Apple/桌面：`appsink` BGRA 帧）。
 
 - 仓库地址：<https://github.com/Matkurban/xue_hua_video_player>
 - 作者：Matkurban &lt;3496354336@qq.com&gt;
@@ -39,7 +39,7 @@
   缓冲百分比、音量、倍速、循环、静音、错误等。
 - 开箱即用的 `XueHuaVideoView` 组件，内置可自动隐藏、可主题化的控制条
   （Material / Cupertino / 自适应）。
-- 通过 GStreamer VideoOverlay 的 Platform View 渲染（无逐帧拷贝到 Dart）。
+- 通过 Flutter `Texture` 渲染（Android GL 写入 `SurfaceProducer`；Apple/桌面由 `appsink` 供帧）。
 
 ## 平台支持
 
@@ -203,7 +203,8 @@ GStreamer 运行时较大（每个 ABI 约 13–18 MB）。
 
 #### Release 构建（R8 / ProGuard）
 
-视频通过原生 `SurfaceView` Platform View 渲染；GStreamer 经 `VideoOverlay` 绑定。
+视频通过 Flutter **`Texture`**（`SurfaceProducer` 表面）渲染；GStreamer `glimagesink`
+经 `VideoOverlay` 绑定。
 插件 AAR 已内置 consumer ProGuard 规则（`android/proguard-rules.pro`）。请保留 GStreamer
 JNI 辅助类：
 
@@ -213,7 +214,8 @@ JNI 辅助类：
 
 在 `isMinifyEnabled = true` 时确保 `release` 构建类型引用了 `proguard-rules.pro`。
 
-**v1.1.0+** 从外部纹理（`irondash_texture`）迁移到 Platform View + `glimagesink`，遵循
+**v1.4.0+** 全平台使用 Flutter 外部 `Texture`（自定义桥接，无 `irondash_texture`）。
+Android 仍遵循
 [GStreamer Android 视频教程](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html)。
 
 **v1.0.19+** 采用 GStreamer Android 教程的线程模型：专用 `xhvp-gst` 线程与自有
@@ -308,7 +310,7 @@ issue）。
 
 ### `XueHuaVideoView`
 
-一个 `StatelessWidget`，为控制器嵌入 Platform View 视频画面，并默认叠加自适应控制条。
+一个 `StatelessWidget`，为控制器嵌入 `Texture` 视频画面，并默认叠加自适应控制条。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -510,14 +512,14 @@ done
 
 ```
 Dart:  XueHuaPlayerController ──FRB 调用──► Rust API (rust/src/api/player.rs)
-       XueHuaVideoView (Platform View) ◄──VideoOverlay── GStreamer sink
-Rust:  GstPlayer  playbin3 ─► glimagesink / osxvideosink / d3d11videosink
+       XueHuaVideoView (Texture) ◄──native texture── GStreamer sink
+Rust:  PlaybackEngine  playbin3 ─► appsink（Apple/桌面）或 glimagesink（Android）
                      │ 总线消息 ─► StreamSink<PlayerEvent> ─► Dart
 ```
 
-- 解码：`playbin3`，各平台使用推荐视频 sink（`glimagesink`、`osxvideosink`、`d3d11videosink`）。
-- 渲染：Platform View 提供窗口/表面句柄；GStreamer 通过 `gst_video_overlay_set_window_handle` 绑定。
-- 无 CPU 逐帧拷贝；不依赖 `irondash_texture`。
+- 解码：`playbin3` + 平台 sink（`appsink` 或 `glimagesink`）。
+- 渲染：Flutter `Texture`；Android 为 `SurfaceProducer` + VideoOverlay；Apple/桌面经 Rust C-ABI 拉取 BGRA 帧。
+- 不依赖 `irondash_texture`。
 
 ### 重新生成绑定
 
@@ -529,7 +531,7 @@ flutter_rust_bridge_codegen generate
 
 ### 内置依赖补丁
 
-已移除。视频渲染直接使用 GStreamer Platform View sink。
+已移除（`irondash_texture`）。视频渲染使用上文所述的自定义 Texture 桥接。
 
 ## 常见问题
 

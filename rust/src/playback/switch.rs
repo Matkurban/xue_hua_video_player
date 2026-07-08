@@ -28,6 +28,9 @@ pub struct PipelineSwapConfig {
     pub track_cache: Arc<Mutex<TrackCache>>,
     pub orientation: InternalVideoOrientationConfig,
     pub aspect: InternalAspectRatioMode,
+    /// Frame source reused across shell rebuilds so the Flutter texture keeps
+    /// receiving frames after a URI ↔ asset switch (appsink platforms).
+    pub frame_sink: Arc<crate::playback::frame::FrameSink>,
 }
 
 impl PipelineSwapConfig {
@@ -39,6 +42,7 @@ impl PipelineSwapConfig {
             track_cache: self.track_cache.clone(),
             orientation: self.orientation,
             aspect: self.aspect,
+            frame_sink: self.frame_sink.clone(),
         }
     }
 }
@@ -76,6 +80,7 @@ fn switch_uri_shell(
             Some(swap.metadata.clone()),
             Some(swap.track_cache.clone()),
             surface,
+            &swap.frame_sink,
         )?;
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
@@ -110,6 +115,7 @@ pub(crate) fn switch_asset_shell(
         replay,
         Some(swap.metadata.clone()),
         surface,
+        &swap.frame_sink,
     )?;
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {

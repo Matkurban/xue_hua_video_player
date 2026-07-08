@@ -1,3 +1,25 @@
+## 1.4.0
+
+### Breaking
+
+- **All platforms** now render through Flutter external **`Texture`** widgets
+  instead of Platform Views or desktop overlay windows.
+- Removed `VideoSurfaceKind.platformView` and `VideoSurfaceKind.desktopOverlay`.
+- Removed native Platform View factories (iOS/macOS/Android) and Windows/Linux
+  desktop overlay MethodChannel (`xue_hua_video_player/desktop_overlay`).
+- **`buildXueHuaVideoPlatformView`** still exists as a compatibility alias; it
+  now builds a `Texture` surface (name unchanged for README/custom layouts).
+
+### Added
+
+- Custom zero-dependency texture bridge: GStreamer **`appsink`** (BGRA) on
+  Apple/Windows/Linux; Android **`SurfaceProducer`** + **`glimagesink`**
+  VideoOverlay for zero-copy GL rendering.
+- Native `xue_hua_video_player/texture` MethodChannel on all platforms
+  (`createTexture` / `disposeTexture`).
+- Rust C-ABI frame pull API (`xhvp_texture_*`) for desktop/Apple pixel-buffer
+  textures.
+
 ## 1.3.0
 
 ### Breaking

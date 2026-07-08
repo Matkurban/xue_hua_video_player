@@ -5,6 +5,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use parking_lot::Mutex;
 
 use crate::playback::bus::Emitter;
+use crate::playback::frame::FrameSink;
 use crate::playback::gst::InternalVideoMetadata;
 use crate::playback::gst::{InternalAspectRatioMode, InternalVideoOrientationConfig};
 use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
@@ -24,6 +25,7 @@ pub struct PlaybackGstContext {
     track_cache: Arc<Mutex<TrackCache>>,
     orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
+    frame_sink: Arc<FrameSink>,
 }
 
 /// Async-safe snapshot passed into Gst thread closures.
@@ -56,6 +58,7 @@ impl PlaybackGstContext {
         track_cache: Arc<Mutex<TrackCache>>,
         orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
         aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
+        frame_sink: Arc<FrameSink>,
     ) -> Self {
         Self {
             shell,
@@ -67,6 +70,7 @@ impl PlaybackGstContext {
             track_cache,
             orientation,
             aspect_mode,
+            frame_sink,
         }
     }
 
@@ -78,6 +82,7 @@ impl PlaybackGstContext {
             track_cache: self.track_cache.clone(),
             orientation: *self.orientation.lock(),
             aspect: *self.aspect_mode.lock(),
+            frame_sink: self.frame_sink.clone(),
         }
     }
 
@@ -140,6 +145,7 @@ mod tests {
             Arc::new(Mutex::new(TrackCache::default())),
             Arc::new(Mutex::new(orientation)),
             Arc::new(Mutex::new(aspect)),
+            crate::playback::frame::FrameSink::new(),
         )
     }
 

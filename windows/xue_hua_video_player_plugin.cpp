@@ -5,9 +5,11 @@
 #include <memory>
 #include <string>
 
-#include "xue_hua_video_platform_view.h"
+#include "xue_hua_video_texture.h"
 
 namespace {
+
+constexpr char kTextureChannelName[] = "xue_hua_video_player/texture";
 
 int64_t Int64FromValue(const flutter::EncodableValue& value) {
   if (const auto* n = std::get_if<int32_t>(&value)) {
@@ -34,36 +36,18 @@ int64_t PlayerIdFromArgs(const flutter::EncodableValue& args) {
   return Int64FromValue(it->second);
 }
 
-double DoubleFromMap(const flutter::EncodableMap& map,
-                     const std::string& key) {
-  auto it = map.find(flutter::EncodableValue(key));
-  if (it == map.end()) {
-    return 0.0;
-  }
-  if (const auto* n = std::get_if<double>(&it->second)) {
-    return *n;
-  }
-  if (const auto* n = std::get_if<int32_t>(&it->second)) {
-    return static_cast<double>(*n);
-  }
-  if (const auto* n = std::get_if<int64_t>(&it->second)) {
-    return static_cast<double>(*n);
-  }
-  return 0.0;
-}
-
 class XueHuaVideoPlayerPlugin : public flutter::Plugin {
  public:
   XueHuaVideoPlayerPlugin(
-      flutter::PluginRegistrarWindows* registrar,
-      std::shared_ptr<DesktopVideoOverlay> overlay)
-      : overlay_(std::move(overlay)) {
+      flutter::BinaryMessenger* messenger,
+      std::shared_ptr<xue_hua_video::VideoTextureRegistry> textures)
+      : textures_(std::move(textures)) {
     channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-        registrar->messenger(), "xue_hua_video_player/desktop_overlay",
+        messenger, kTextureChannelName,
         &flutter::StandardMethodCodec::GetInstance());
 
     channel_->SetMethodCallHandler(
-        [overlay = overlay_](const auto& call, auto result) {
+        [textures = textures_](const auto& call, auto result) {
           const std::string& method = call.method_name();
           const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
           if (!args) {
@@ -71,23 +55,17 @@ class XueHuaVideoPlayerPlugin : public flutter::Plugin {
             return;
           }
           const int64_t player_id = PlayerIdFromArgs(*args);
-          if (method == "attach") {
-            overlay->Attach(player_id);
-            result->Success();
+          if (method == "createTexture") {
+            const int64_t texture_id = textures->Create(player_id);
+            if (texture_id < 0) {
+              result->Error("create_failed", "Failed to create texture");
+              return;
+            }
+            result->Success(flutter::EncodableValue(texture_id));
             return;
           }
-          if (method == "detach") {
-            overlay->Detach(player_id);
-            result->Success();
-            return;
-          }
-          if (method == "setBounds") {
-            overlay->SetBounds(
-                player_id,
-                DoubleFromMap(*args, "x"),
-                DoubleFromMap(*args, "y"),
-                DoubleFromMap(*args, "width"),
-                DoubleFromMap(*args, "height"));
+          if (method == "disposeTexture") {
+            textures->Dispose(player_id);
             result->Success();
             return;
           }
@@ -96,7 +74,7 @@ class XueHuaVideoPlayerPlugin : public flutter::Plugin {
   }
 
  private:
-  std::shared_ptr<DesktopVideoOverlay> overlay_;
+  std::shared_ptr<xue_hua_video::VideoTextureRegistry> textures_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 };
 
@@ -108,14 +86,10 @@ void XueHuaVideoPlayerPluginRegisterWithRegistrar(
       flutter::PluginRegistrarManager::GetInstance()
           ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar);
 
-  HWND parent = nullptr;
-  if (auto* view = windows_registrar->GetView()) {
-    parent = view->GetNativeWindow();
-  }
-  auto overlay = std::make_shared<DesktopVideoOverlay>(parent);
-
-  auto plugin =
-      std::make_unique<XueHuaVideoPlayerPlugin>(windows_registrar, overlay);
+  auto textures = std::make_shared<xue_hua_video::VideoTextureRegistry>(
+      windows_registrar->texture_registrar());
+  auto plugin = std::make_unique<XueHuaVideoPlayerPlugin>(
+      windows_registrar->messenger(), textures);
   windows_registrar->AddPlugin(std::move(plugin));
 }
 

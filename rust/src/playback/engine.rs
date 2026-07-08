@@ -11,12 +11,11 @@ use parking_lot::Mutex;
 #[cfg(target_os = "android")]
 use crate::gst::ensure_java_gstreamer_for_network;
 use crate::gst::{ensure_gst_init, spawn_on_gst_thread_and_wait};
-#[cfg(target_os = "ios")]
-use crate::gst::spawn_on_gst_thread;
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
+use crate::playback::frame::FrameSink;
 use crate::playback::gst::{
     InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
 };
@@ -45,6 +44,8 @@ pub struct PlaybackEngine {
     track_cache: Arc<Mutex<TrackCache>>,
     orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
+    /// Frame source for the Flutter external-texture bridge (Apple/Win/Linux).
+    frame_sink: Arc<FrameSink>,
 }
 
 pub type GstPlayer = PlaybackEngine;
@@ -65,6 +66,7 @@ impl PlaybackEngine {
         let track_cache = Arc::new(Mutex::new(TrackCache::default()));
         let orientation = Arc::new(Mutex::new(InternalVideoOrientationConfig::default()));
         let aspect_mode = Arc::new(Mutex::new(InternalAspectRatioMode::default()));
+        let frame_sink = FrameSink::new();
 
         let emitter_init = emitter.clone();
         let looping_init = looping.clone();
@@ -76,6 +78,7 @@ impl PlaybackEngine {
 
         let metadata_init = video_metadata.clone();
         let track_cache_init = track_cache.clone();
+        let frame_sink_init = frame_sink.clone();
 
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         let (shell, surface) = spawn_on_gst_thread_and_wait(move || {
@@ -96,6 +99,7 @@ impl PlaybackEngine {
                 Some(metadata_init),
                 Some(track_cache_init),
                 &surface,
+                &frame_sink_init,
             )?;
             let overlay_sink_slot = Arc::new(Mutex::new(shell.clone_video_sink()));
             surface.set_overlay_sink_slot(shell.clone_video_sink());
@@ -119,6 +123,7 @@ impl PlaybackEngine {
                 Some(metadata_init),
                 Some(track_cache_init),
                 &surface,
+                &frame_sink_init,
             )?;
             wire_overlay_sync(&shell, overlay_init);
             Ok((shell, surface))
@@ -141,6 +146,7 @@ impl PlaybackEngine {
             track_cache.clone(),
             orientation.clone(),
             aspect_mode.clone(),
+            frame_sink.clone(),
         ));
         let engine = Self {
             gst_context,
@@ -155,10 +161,17 @@ impl PlaybackEngine {
             track_cache,
             orientation,
             aspect_mode,
+            frame_sink,
         };
         #[cfg(target_os = "ios")]
         engine.register_ios_layer_backend();
         Ok(engine)
+    }
+
+    /// Frame source for the Flutter external-texture bridge. Registered by the
+    /// API layer under the player id so the native texture C-ABI can reach it.
+    pub fn frame_sink(&self) -> Arc<FrameSink> {
+        self.frame_sink.clone()
     }
 
     #[cfg(target_os = "ios")]
@@ -211,45 +224,27 @@ impl PlaybackEngine {
             )?;
             Ok(())
         })?;
-        #[cfg(target_os = "ios")]
+        #[cfg(any(
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        ))]
         {
-            let shell = self.gst_context.shell.clone();
-            let play_intent = self.gst_context.overlay_intent().clone_for_async();
-            if self.gst_context.surface.overlay_ready_for_preroll() {
-                let surface = self.gst_context.surface.clone_for_switch();
-                spawn_on_gst_thread(move || {
-                    let _ = surface.schedule_ios_layer_attach(shell, play_intent);
-                });
-                if auto_play {
-                    log::info!("gst: deferring play until iOS layer is attached");
-                }
-            } else if auto_play {
-                log::info!("gst: deferring play until iOS host view is cached");
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
+            // Texture rendering: frames flow to the Flutter external texture via
+            // the appsink; there is no native surface/overlay to wait for, so
+            // preroll + play immediately when requested.
             if auto_play {
-                if self.gst_context.surface.is_overlay_bound_on_gst() {
-                    let ctx = self.gst_context.clone_for_async();
-                    // pipeline_play -> resume_playing locks the shell internally,
-                    // so it must NOT run inside run_on_gst (which already holds the
-                    // shell lock) or it self-deadlocks (parking_lot is non-reentrant).
-                    spawn_on_gst_thread_and_wait(move || pipeline_play(&ctx))?;
-                } else if self.gst_context.surface.has_cached_handle() {
-                    let (width, height) = self.gst_context.surface.cached_dimensions();
-                    log::info!(
-                        "gst: load autoPlay — applying macOS overlay then resume ({width}x{height})"
-                    );
-                    self.apply_macos_overlay_gstreamer(width, height)?;
-                } else {
-                    log::info!(
-                        "gst: deferring autoPlay until macOS overlay handle is cached"
-                    );
-                }
+                let ctx = self.gst_context.clone_for_async();
+                spawn_on_gst_thread_and_wait(move || pipeline_play(&ctx))?;
             }
         }
-        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        #[cfg(not(any(
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        )))]
         {
             let ctx = self.gst_context.clone_for_async();
             if auto_play && self.gst_context.surface.overlay_ready_for_preroll() {
@@ -281,68 +276,44 @@ impl PlaybackEngine {
             crate::diag::logcat_info("gst: deferring play until Android overlay is bound");
             return Ok(());
         }
-        #[cfg(target_os = "ios")]
-        if !self.gst_context.surface.has_cached_handle() {
-            log::info!("gst: deferring play until iOS host view is cached");
-            return Ok(());
-        }
-        #[cfg(target_os = "macos")]
-        if !self.gst_context.surface.has_cached_handle() {
-            log::info!("gst: deferring play until macOS overlay handle is cached");
-            return Ok(());
-        }
 
-        #[cfg(target_os = "ios")]
+        #[cfg(any(
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        ))]
         {
-            if self.gst_context.surface.is_overlay_bound_on_gst() {
-                let shell = self.gst_context.shell.clone();
-                let play_intent = self.gst_context.overlay_intent().clone_for_async();
-                let surface = self.gst_context.surface.clone_for_switch();
-                return self.run_on_gst(move |_shell| {
-                    surface.resume_ios_play(shell, play_intent);
-                    Ok(())
-                });
-            }
-            let shell = self.gst_context.shell.clone();
-            let play_intent = self.gst_context.overlay_intent().clone_for_async();
-            let surface = self.gst_context.surface.clone_for_switch();
-            spawn_on_gst_thread(move || {
-                let _ = surface.schedule_ios_layer_attach(shell, play_intent);
-            });
-            log::info!("gst: deferring play until iOS layer is attached");
-            return Ok(());
+            // Texture rendering: no native surface to wait for — resume directly.
+            let ctx = self.gst_context.clone_for_async();
+            spawn_on_gst_thread_and_wait(move || pipeline_play(&ctx))
         }
 
-        #[cfg(target_os = "macos")]
+        #[cfg(not(any(
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        )))]
         {
-            if !self.gst_context.surface.is_overlay_bound_on_gst() {
-                // Handle cached but GStreamer not yet bound — apply on main thread;
-                // apply_and_maybe_resume schedules Playing on xhvp-gst afterward.
-                let (width, height) = self.gst_context.surface.cached_dimensions();
-                log::info!(
-                    "gst: deferring play until macOS overlay bind completes ({width}x{height})"
-                );
-                return self.apply_macos_overlay_gstreamer(width, height);
-            }
+            let ctx = self.gst_context.clone_for_async();
+            // pipeline_play -> resume_playing locks the shell internally, so it must
+            // run WITHOUT the shell lock held. Any rebind that needs the locked shell
+            // is done first in a scoped lock that is released before pipeline_play.
+            spawn_on_gst_thread_and_wait(move || {
+                #[cfg(target_os = "android")]
+                if !ctx.surface.is_overlay_bound_on_gst() {
+                    let guard = ctx.shell.lock();
+                    ctx.surface.rebind_cached_overlay(&guard)?;
+                }
+                #[cfg(not(target_os = "android"))]
+                {
+                    let guard = ctx.shell.lock();
+                    ctx.surface.rebind_cached_overlay(&guard)?;
+                }
+                pipeline_play(&ctx)
+            })
         }
-
-        let ctx = self.gst_context.clone_for_async();
-        // pipeline_play -> resume_playing locks the shell internally, so it must
-        // run WITHOUT the shell lock held. Any rebind that needs the locked shell
-        // is done first in a scoped lock that is released before pipeline_play.
-        spawn_on_gst_thread_and_wait(move || {
-            #[cfg(target_os = "android")]
-            if !ctx.surface.is_overlay_bound_on_gst() {
-                let guard = ctx.shell.lock();
-                ctx.surface.rebind_cached_overlay(&guard)?;
-            }
-            #[cfg(not(any(target_os = "android", target_os = "macos")))]
-            {
-                let guard = ctx.shell.lock();
-                ctx.surface.rebind_cached_overlay(&guard)?;
-            }
-            pipeline_play(&ctx)
-        })
     }
 
     pub fn pause(&self) -> Result<()> {

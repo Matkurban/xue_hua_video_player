@@ -2,16 +2,30 @@
 
 ## Goal
 
-Replace irondash external-texture bridge with GStreamer-recommended per-platform video sinks (`glimagesink`, `osxvideosink`, `d3d11videosink`) rendering into Flutter Platform Views via VideoOverlay.
+Replace Platform View + VideoOverlay desktop/mobile embedding with Flutter
+external **`Texture`** rendering on all five supported platforms, using a
+custom native bridge (no third-party texture plugins).
 
 ## Success criteria
 
-- No `irondash_texture` or `irondash_engine_context` dependencies
-- Video renders on Android, iOS, macOS, Windows, Linux via Platform Views
+- Video renders on Android, iOS, macOS, Windows, Linux via Flutter `Texture`
+- No Platform View factories or Win/Linux GTK/HWND overlay popups
 - Playback controls (seek, pause, volume, speed) continue to work
-- Hardware decode on Android via MediaCodec → glimagesink zero-copy path
+- Android keeps hardware decode via MediaCodec → `glimagesink` into
+  `SurfaceProducer` (zero-copy GL path)
+
+## Architecture (landed)
+
+| Platform | GStreamer sink | Flutter integration |
+|----------|----------------|---------------------|
+| Android | `glimagesink` | `TextureRegistry.SurfaceProducer` → `ANativeWindow` |
+| iOS / macOS | `appsink` (BGRA) | `FlutterTexture` + IOSurface `CVPixelBuffer` |
+| Windows / Linux | `appsink` (BGRA) | `PixelBufferTexture` / `FlPixelBufferTexture` (RGBA) |
+
+Rust `FrameSink` + C-ABI (`xhvp_texture_*`) feeds Apple/desktop textures.
+Android uses existing `AndroidOverlaySession` with JNI surface bind.
 
 ## References
 
-- GStreamer Basic tutorial 16 (platform-specific elements)
 - GStreamer Android tutorial 3 (VideoOverlay + Surface)
+- Flutter engine `TextureRegistry` / `SurfaceProducer` APIs

@@ -18,6 +18,7 @@ set(PLUGIN_NAME "xue_hua_video_player_plugin")
 
 add_library(${PLUGIN_NAME} SHARED
   "xue_hua_video_player_plugin.cc"
+  "xue_hua_video_texture.cc"
 )
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)

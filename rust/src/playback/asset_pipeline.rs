@@ -8,6 +8,7 @@ use parking_lot::Mutex;
 
 use crate::media::AppSrcFeedState;
 use crate::playback::bus::Emitter;
+use crate::playback::frame::FrameSink;
 use crate::playback::gst::{create_platform_video_sink, InternalVideoMetadata};
 use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
 
@@ -18,9 +19,10 @@ pub fn build_asset_pipeline(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
+    frame_sink: &Arc<FrameSink>,
 ) -> Result<(gst::Pipeline, gst::Element, Arc<AppSrcFeedState>)> {
     let pipeline = gst::Pipeline::new();
-    let video_sink = create_platform_video_sink()?;
+    let video_sink = create_platform_video_sink(frame_sink)?;
     attach_video_probe(&video_sink, emitter.clone(), metadata_cache);
     let audio_bin = build_audio_sink_bin()?;
 
@@ -127,41 +129,16 @@ fn link_video_branch(
     video_sink: &gst::Element,
 ) -> Result<()> {
     let queue = gst::ElementFactory::make("queue").build()?;
-    pipeline.add(&queue)?;
-
-    // iOS: link `queue -> avsamplebufferlayersink` directly so VideoToolbox
-    // (`vtdec`) CVPixelBuffers stay IOSurface-backed. A `videoconvert` here would
-    // download frames to system memory, which `AVSampleBufferDisplayLayer` refuses
-    // to render on real devices (black frame). vtdec (NV12) and software decoders
-    // (I420) both emit formats the sink accepts. If the direct link fails, fall
-    // back to inserting `videoconvert`.
-    #[cfg(target_os = "ios")]
-    let convert = if gst::Element::link_many([&queue, video_sink]).is_ok() {
-        None
-    } else {
-        let convert = gst::ElementFactory::make("videoconvert").build()?;
-        pipeline.add(&convert)?;
-        gst::Element::link_many([&queue, &convert, video_sink])?;
-        Some(convert)
-    };
-
-    #[cfg(not(target_os = "ios"))]
-    let convert = {
-        let convert = gst::ElementFactory::make("videoconvert").build()?;
-        pipeline.add(&convert)?;
-        gst::Element::link_many([&queue, &convert, video_sink])?;
-        Some(convert)
-    };
-
+    let convert = gst::ElementFactory::make("videoconvert").build()?;
+    pipeline.add_many([&queue, &convert])?;
+    gst::Element::link_many([&queue, &convert, video_sink])?;
     let sink_pad = queue
         .static_pad("sink")
         .ok_or_else(|| anyhow!("queue has no sink pad"))?;
     src_pad.link(&sink_pad)?;
-    queue.sync_state_with_parent()?;
-    if let Some(convert) = convert.as_ref() {
-        convert.sync_state_with_parent()?;
+    for el in [&queue, &convert, video_sink] {
+        el.sync_state_with_parent()?;
     }
-    video_sink.sync_state_with_parent()?;
     Ok(())
 }
 

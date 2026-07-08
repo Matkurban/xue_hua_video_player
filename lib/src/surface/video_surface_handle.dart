@@ -2,11 +2,8 @@ import 'package:flutter/foundation.dart';
 
 /// How the Flutter side embeds GStreamer video for the current platform.
 enum VideoSurfaceKind {
-  /// Android, iOS, or macOS PlatformView factory.
-  platformView,
-
-  /// Windows / Linux native overlay window positioned via MethodChannel.
-  desktopOverlay,
+  /// Flutter external texture (all supported platforms).
+  texture,
 
   /// Unsupported target platform.
   unsupported,
@@ -36,11 +33,11 @@ class VideoSurfaceHandle {
 
   static VideoSurfaceKind _kindForPlatform(TargetPlatform platform) {
     return switch (platform) {
-      TargetPlatform.android ||
       TargetPlatform.iOS ||
-      TargetPlatform.macOS => VideoSurfaceKind.platformView,
+      TargetPlatform.macOS ||
       TargetPlatform.windows ||
-      TargetPlatform.linux => VideoSurfaceKind.desktopOverlay,
+      TargetPlatform.linux ||
+      TargetPlatform.android => VideoSurfaceKind.texture,
       _ => VideoSurfaceKind.unsupported,
     };
   }

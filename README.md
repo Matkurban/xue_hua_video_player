@@ -4,7 +4,8 @@ English | [简体中文](README.zh-CN.md)
 
 A cross-platform Flutter **video player** plugin that decodes local and network
 video with **GStreamer** (through a Rust [`flutter_rust_bridge`] core) and renders
-into Flutter **Platform Views** via GStreamer-recommended VideoOverlay sinks.
+into Flutter external **`Texture`** widgets via a custom native bridge (GStreamer
+`appsink` on Apple/desktop; `glimagesink` + `SurfaceProducer` on Android).
 
 - Repository: <https://github.com/Matkurban/xue_hua_video_player>
 - Author: Matkurban &lt;3496354336@qq.com&gt;
@@ -40,7 +41,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
   size, aspect ratio, buffering %, volume, speed, looping, muted, and errors.
 - A drop-in `XueHuaVideoView` widget with a built-in, auto-hiding, themeable
   control bar (Material / Cupertino / adaptive).
-- GPU Platform View rendering via GStreamer VideoOverlay sinks (no per-frame copy to Dart).
+- GPU-friendly video via Flutter `Texture` (Android GL into `SurfaceProducer`; Apple/desktop pixel-buffer textures fed from GStreamer `appsink`).
 
 ## Platform support
 
@@ -218,8 +219,9 @@ Notes:
 
 #### Release builds (R8 / ProGuard)
 
-Video renders into a native `SurfaceView` Platform View; GStreamer binds via
-`VideoOverlay`. The plugin ships consumer ProGuard rules in its AAR
+Video renders into a Flutter **`Texture`** backed by `SurfaceProducer`; GStreamer
+`glimagesink` binds via `VideoOverlay` to the producer's `Surface`. The plugin
+ships consumer ProGuard rules in its AAR
 (`android/proguard-rules.pro`). Keep GStreamer JNI helpers:
 
 ```proguard
@@ -229,9 +231,10 @@ Video renders into a native `SurfaceView` Platform View; GStreamer binds via
 Ensure your `release` build type references `proguard-rules.pro` when
 `isMinifyEnabled = true`.
 
-**v1.1.0+** migrates from external textures (`irondash_texture`) to Platform
-Views with `glimagesink` per the
-[GStreamer Android video tutorial](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html).
+**v1.4.0+** uses Flutter external textures on all platforms (custom bridge, no
+`irondash_texture`). Android keeps the
+[GStreamer Android video tutorial](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html)
+`glimagesink` + `ANativeWindow` path via `SurfaceProducer`.
 
 **v1.0.19+** fixes Android SIGABRT by adopting the GStreamer Android tutorial
 thread model: a dedicated `xhvp-gst` thread with an **owned** `GMainContext`
@@ -262,13 +265,13 @@ build with a clean tree and symbolicate with
 
 ### Consumer integration checklist (e.g. chat / IM apps)
 
-1. **Plugin version** — use **1.1.0+** for Platform View rendering; run
+1. **Plugin version** — use **1.4.0+** for Texture rendering; run
    `flutter clean` / full reinstall after upgrading.
 2. **Initialization order** — `XueHuaVideoPlayer.initialize()` →
    `controller.initialize()` → wait until media is on disk → `open(...)`.
-3. **Platform View** — embed `XueHuaVideoView` (or `buildXueHuaVideoPlatformView`)
-   with the same `playerId` as the controller. Overlay binding is buffered if
-   the view is created before `initialize()` completes.
+3. **Video surface** — embed `XueHuaVideoView` (or `buildXueHuaVideoPlatformView`)
+   with the same `playerId` as the controller. The widget registers a native
+   texture automatically.
 4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR.
 5. **Diagnosis** — filter logcat for `xue_hua_video_player` and `android overlay:`.
 
@@ -371,7 +374,7 @@ Reactive state (all `ReadonlySignal`s; read `.value` in a `SignalBuilder`):
 
 ### `XueHuaVideoView`
 
-A `StatelessWidget` that embeds a Platform View for the controller's video and,
+A `StatelessWidget` that embeds a Flutter `Texture` for the controller's video and,
 by default, an adaptive control bar.
 
 | Parameter | Default | Description |
@@ -471,8 +474,8 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libgtk-3-dev
 ```
 
-Runtime uses the system GStreamer libraries. `libgtk-3-dev` is required for the
-Linux desktop overlay (GTK popup window for `glimagesink` VideoOverlay).
+Runtime uses the system GStreamer libraries. `libgtk-3-dev` is required for
+Flutter Linux texture registration (GTK/GL interop in the engine).
 
 ### Windows
 
@@ -599,14 +602,16 @@ done
 
 ```
 Dart:  XueHuaPlayerController ──FRB calls──► Rust API (rust/src/api/player.rs)
-       XueHuaVideoView (Platform View) ◄──VideoOverlay── GStreamer sink
-Rust:  GstPlayer  playbin3 ─► glimagesink / osxvideosink / d3d11videosink
+       XueHuaVideoView (Texture) ◄──native texture── GStreamer sink
+Rust:  PlaybackEngine  playbin3 ─► appsink (Apple/desktop) or glimagesink (Android)
                      │ bus messages ─► StreamSink<PlayerEvent> ─► Dart
 ```
 
-- Decoding: `playbin3` with platform video sink (`glimagesink`, `osxvideosink`, or `d3d11videosink`).
-- Rendering: native Platform View provides window/surface handle; GStreamer binds via `gst_video_overlay_set_window_handle`.
-- No CPU frame copy; no `irondash_texture` dependency.
+- Decoding: `playbin3` with platform video sink (`appsink` or `glimagesink`).
+- Rendering: Flutter `Texture` + native `TextureRegistry`; Android uses
+  `SurfaceProducer` + VideoOverlay; Apple/desktop pull BGRA frames via Rust
+  C-ABI (`xhvp_texture_*`).
+- No `irondash_texture` dependency.
 
 ### Regenerating bindings
 
@@ -618,7 +623,7 @@ flutter_rust_bridge_codegen generate
 
 ### Vendored dependency patch
 
-Removed. Video rendering uses GStreamer Platform View sinks directly.
+Removed (`irondash_texture`). Video rendering uses the custom texture bridge described above.
 
 ## Troubleshooting
 

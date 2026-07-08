@@ -3,8 +3,6 @@ import 'package:flutter/widgets.dart';
 import 'surface/build_video_surface.dart';
 import 'surface/video_surface_handle.dart';
 
-export 'surface/mobile_platform_view.dart' show kXueHuaVideoViewType;
-
 /// Builds the platform-appropriate video surface for [playerId].
 ///
 /// Prefer [XueHuaVideoView] for full playback UI. This entry point remains for

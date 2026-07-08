@@ -86,6 +86,7 @@ mod tests {
                 track_cache: Arc::new(Mutex::new(TrackCache::default())),
                 orientation: InternalVideoOrientationConfig::default(),
                 aspect: InternalAspectRatioMode::default(),
+                frame_sink: crate::playback::frame::FrameSink::new(),
             },
         }
     }

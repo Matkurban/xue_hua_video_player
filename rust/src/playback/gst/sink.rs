@@ -10,6 +10,15 @@ use gstreamer_video::{
 use parking_lot::Mutex;
 
 /// GStreamer-recommended video sink element name per platform.
+#[cfg_attr(
+    any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ),
+    allow(dead_code)
+)]
 pub fn video_sink_factory_name() -> &'static str {
     #[cfg(target_os = "windows")]
     {
@@ -33,20 +42,59 @@ pub fn video_sink_factory_name() -> &'static str {
     }
 }
 
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "linux"
+)))]
 fn configure_video_sink(element: &gst::Element) {
     if element.find_property("force-aspect-ratio").is_some() {
         element.set_property("force-aspect-ratio", true);
     }
 }
 
-/// Creates the platform-recommended video sink (`glimagesink` or `d3d11videosink`).
-pub fn create_platform_video_sink() -> Result<gst::Element> {
-    let name = video_sink_factory_name();
-    let sink = gst::ElementFactory::make(name)
-        .build()
-        .map_err(|e| anyhow!("failed to create {name}: {e}"))?;
-    configure_video_sink(&sink);
-    Ok(sink)
+/// Creates the video sink for the current platform.
+///
+/// Apple (iOS/macOS) and desktop (Windows/Linux) render through a Flutter
+/// external texture, so they terminate the pipeline in an `appsink` (BGRA)
+/// feeding `frame_sink`. Android still uses its VideoOverlay sink
+/// (`glimagesink`).
+#[cfg_attr(
+    not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )),
+    allow(unused_variables)
+)]
+pub fn create_platform_video_sink(
+    frame_sink: &std::sync::Arc<crate::playback::frame::FrameSink>,
+) -> Result<gst::Element> {
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
+    {
+        return crate::playback::frame::build_frame_appsink(frame_sink.clone());
+    }
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )))]
+    {
+        let name = video_sink_factory_name();
+        let sink = gst::ElementFactory::make(name)
+            .build()
+            .map_err(|e| anyhow!("failed to create {name}: {e}"))?;
+        configure_video_sink(&sink);
+        Ok(sink)
+    }
 }
 
 /// Binds a native window/surface handle to a VideoOverlay-capable sink.

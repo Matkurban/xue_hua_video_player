@@ -161,8 +161,30 @@ pub(crate) fn should_resume_after_overlay_bind(desired_playing: bool) -> bool {
 }
 
 /// Computes whether the surface is ready for play resume on the active platform.
+///
+/// Apple (iOS/macOS) and desktop (Windows/Linux) render through a Flutter
+/// external texture (appsink), so there is no native overlay to bind — it is
+/// always ready.
 pub fn overlay_ready_for_play(surface: &VideoSurface) -> bool {
-    surface.is_overlay_bound_on_gst()
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
+    {
+        let _ = surface;
+        true
+    }
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )))]
+    {
+        surface.is_overlay_bound_on_gst()
+    }
 }
 
 #[cfg(test)]
@@ -215,6 +237,14 @@ mod tests {
         assert!(should_resume_after_overlay_bind(true));
     }
 
+    // Android binds a native VideoOverlay, so readiness requires a real
+    // GStreamer bind (a cached handle alone is not enough).
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )))]
     #[test]
     fn overlay_ready_for_play_requires_bound_handle() {
         use parking_lot::Mutex;
@@ -224,6 +254,21 @@ mod tests {
         surface.cache_handle(0x1000);
         // Cache alone is not a GStreamer bind on any platform; bind flags stay false.
         assert!(!overlay_ready_for_play(&surface));
+    }
+
+    // Texture platforms render through a Flutter external texture (appsink).
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))]
+    #[test]
+    fn overlay_ready_for_play_texture_always_ready() {
+        use parking_lot::Mutex;
+
+        let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
+        assert!(overlay_ready_for_play(&surface));
     }
 
     // Regression: `PlaybackEngine::run_on_gst` pre-locks the shell, and calling
@@ -264,6 +309,7 @@ mod tests {
             track_cache: Arc::new(Mutex::new(TrackCache::default())),
             orientation: InternalVideoOrientationConfig::default(),
             aspect: InternalAspectRatioMode::default(),
+            frame_sink: crate::playback::frame::FrameSink::new(),
         };
         let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
 
@@ -332,6 +378,7 @@ mod tests {
             track_cache: Arc::new(Mutex::new(TrackCache::default())),
             orientation: InternalVideoOrientationConfig::default(),
             aspect: InternalAspectRatioMode::default(),
+            frame_sink: crate::playback::frame::FrameSink::new(),
         };
         let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
 

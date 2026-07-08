@@ -7,6 +7,7 @@ pub mod ios;
 pub mod jni;
 #[cfg(target_os = "macos")]
 pub mod macos;
+pub mod texture;
 
 #[cfg(target_os = "android")]
 pub use android::{

@@ -186,7 +186,7 @@ pub extern "C" fn player_notify_ios_overlay(
 
 #[cfg(target_os = "android")]
 #[jni_mangle(
-    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlatformView",
+    "com.flutter_rust_bridge.xue_hua_video_player.AndroidSurfaceBridge",
     "nativeOnSurfaceCreated",
     "(JLandroid/view/Surface;)V"
 )]
@@ -207,7 +207,7 @@ pub extern "system" fn native_on_surface_created<'caller>(
 
 #[cfg(target_os = "android")]
 #[jni_mangle(
-    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlatformView",
+    "com.flutter_rust_bridge.xue_hua_video_player.AndroidSurfaceBridge",
     "nativeOnSurfaceChanged",
     "(JLandroid/view/Surface;II)V"
 )]
@@ -230,7 +230,7 @@ pub extern "system" fn native_on_surface_changed<'caller>(
 
 #[cfg(target_os = "android")]
 #[jni_mangle(
-    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlatformView",
+    "com.flutter_rust_bridge.xue_hua_video_player.AndroidSurfaceBridge",
     "nativeOnSurfaceDestroyed",
     "(J)V"
 )]

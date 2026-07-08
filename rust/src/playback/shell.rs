@@ -290,8 +290,9 @@ pub fn install_uri_shell(
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
     surface: &VideoSurface,
+    frame_sink: &Arc<crate::playback::frame::FrameSink>,
 ) -> Result<PipelineShell> {
-    let (pipeline, video_sink) = build_uri_playbin(emitter, metadata_cache)?;
+    let (pipeline, video_sink) = build_uri_playbin(emitter, metadata_cache, frame_sink)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
         &pipeline,
         emitter,
@@ -324,8 +325,10 @@ pub fn install_asset_shell(
     replay: &PlayReplayContext,
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     surface: &VideoSurface,
+    frame_sink: &Arc<crate::playback::frame::FrameSink>,
 ) -> Result<PipelineShell> {
-    let (pipeline, video_sink, feed) = build_asset_pipeline(asset_key, emitter, metadata_cache)?;
+    let (pipeline, video_sink, feed) =
+        build_asset_pipeline(asset_key, emitter, metadata_cache, frame_sink)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
         &pipeline,
         emitter,

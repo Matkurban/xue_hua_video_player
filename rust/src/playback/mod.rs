@@ -2,6 +2,7 @@ mod asset_pipeline;
 mod bus;
 pub mod capabilities;
 pub mod engine;
+pub(crate) mod frame;
 pub(crate) mod gst;
 mod gst_context;
 mod overlay;

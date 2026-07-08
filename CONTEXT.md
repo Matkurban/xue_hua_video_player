@@ -1,6 +1,6 @@
 # xue_hua_video_player — Domain Context
 
-Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutter_rust_bridge` core); rendering via GStreamer platform video sinks bound to Flutter Platform Views.
+Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutter_rust_bridge` core); rendering via Flutter external **`Texture`** widgets backed by a custom native bridge (no third-party texture plugins).
 
 ## Core components
 
@@ -27,7 +27,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | `OverlaySession` | Unified Rust trait (`playback/overlay/overlay_session.rs`): load preroll + `cache_notify` + `apply_gstreamer` + lifecycle; **`apply_load_preroll`** calls **`gate_ready_for_load(surface.overlay_ready_for_preroll())`** internally |
 | `resume_playing` | Unified play/EOS resume (`playback/play_resume.rs`): `resume_playing(shell, replay, swap, surface, overlay_ready)` — engine, Android/iOS bind preroll, macOS/desktop `pipeline_play` |
 | `maybe_resume_after_overlay_bind` | Bind-complete resume (`playback/play_resume.rs`): if `desired_playing`, Ready→Paused preroll when needed then `resume_playing(..., true)` — macOS `apply_gstreamer`, Win/Linux `set_window_handle_on_gst` |
-| `overlay_ready_for_play` | Platform gate for `resume_playing`: all platforms use `surface.is_overlay_bound_on_gst()` (real bind flag, not handle cache alone) |
+| `overlay_ready_for_play` | Platform gate for `resume_playing`: texture platforms (iOS/macOS/Win/Linux appsink) always ready; Android uses `surface.is_overlay_bound_on_gst()` |
 | `VideoOverlayBackend` | Desktop-only stored-handle trait for tests; mobile/desktop sessions implement **`OverlaySession`** |
 | `AndroidOverlaySession` | Android overlay attach phase (`playback/overlay/platform/android/session.rs`): JNI `notify_surface_with_shell`, `schedule_apply_after_bind`, `overlay_generation`, bind-path **`PrerollExecutor`** |
 | `IosOverlaySession` | iOS CALayer attach + idle `apply_target_state` (`playback/overlay/platform/ios/session.rs`); owns `ios_layer_bus_slot`, dimensions, `apply_gstreamer` (Swift layout apply) |
@@ -58,19 +58,19 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | `playback/overlay/` | `overlay_session.rs`, `preroll/{gate,executor}`, `platform/{android,ios,window}/` |
 | `playback/bus/` | `parse`, `reducer`, `effects`, `mod` (bus watch entry) |
 
-## Platform video sinks (GStreamer recommended)
+## Platform video sinks (current)
 
 | Platform | Sink | Flutter integration |
 |----------|------|---------------------|
-| Android | `glimagesink` | `PlatformViewLink` + `SurfaceView` → `ANativeWindow` |
-| iOS | `avsamplebufferlayersink` | `UiKitView` → host `UIView` + sink `CALayer` sublayer |
-| macOS | `osxvideosink` | `AppKitView` → child `NSView` via VideoOverlay; `MacosOverlaySession.overlay_bound` after main-thread `apply_gstreamer` + `maybe_resume_after_overlay_bind` |
-| Windows | `d3d11videosink` | Platform view → HWND; `DesktopOverlaySession.overlay_bound` after `set_window_handle` + resume |
-| Linux | `glimagesink` | Platform view → X11 window id; same desktop bind + resume |
+| Android | `glimagesink` | `TextureRegistry.SurfaceProducer` → `Surface` → `ANativeWindow` (VideoOverlay) |
+| iOS / macOS | `appsink` (BGRA) | `FlutterTexture` + IOSurface-backed `CVPixelBuffer` |
+| Windows / Linux | `appsink` (BGRA) | `PixelBufferTexture` / `FlPixelBufferTexture` (RGBA upload) |
 
 ## Rendering model
 
-GStreamer renders directly into the Platform View's native surface via `gst_video_overlay_set_window_handle`. No CPU frame copy, no external Flutter `Texture` widget, no irondash bridge.
+- **Apple + desktop:** GStreamer terminates in `appsink`; Rust `FrameSink` double-buffers BGRA frames and exposes a C-ABI (`xhvp_texture_*`) for native texture plugins to pull pixels and call `textureFrameAvailable` / `MarkTextureFrameAvailable`.
+- **Android:** GStreamer `glimagesink` renders with OpenGL into the `SurfaceProducer` surface (zero-copy); JNI `AndroidSurfaceBridge` forwards surface lifecycle to `AndroidOverlaySession`.
+- Dart embeds video with the Flutter `Texture` widget (`TextureVideoSurface`); native plugins register textures via MethodChannel `xue_hua_video_player/texture` (`createTexture` / `disposeTexture`).
 
 ## GStreamer runtime (all platforms)
 
@@ -90,12 +90,21 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - After `PipelineShell` rebuild (URI ↔ asset switch), `mark_shell_rebuilt()` clears `overlay_bound`; `rebind_cached_overlay()` on the same Gst-thread stack must re-apply VideoOverlay to the new `video_sink` and set `overlay_bound` before preroll/play.
 - **`PipelineShell`:** all GStreamer field access goes through shell methods; `PipelineSnapshot::from_shell` removed — use **`shell.snapshot()`**; `state.rs` deleted (`set_state_sync` → **`PipelineShell::set_state_sync`**; bus uses **`set_element_state_sync`** for cloned pipelines).
 - Answer `prepare-window-handle` in the pipeline bus sync handler; proactive `set_window_handle` before preroll is preferred.
-- Flutter Android uses `PlatformViewLink` + `initSurfaceAndroidView` (hybrid composition) — not legacy virtual-display `AndroidView` — so `SurfaceView` gets a reliable surface.
+- Flutter Android uses `TextureRegistry.createSurfaceProducer()`; `XueHuaVideoTexture` implements `SurfaceProducer.Callback` and forwards surfaces through **`AndroidSurfaceBridge`** JNI to Rust (never `spawn_on_gst_thread_and_wait` from JNI).
 - `GStreamerInitProvider` loads `gstreamer_android` then `xue_hua_video_player` before Dart FRB `dlopen`.
 - **`AndroidOverlaySession`** (`playback/overlay/platform/android/session.rs`): single seam for Android overlay bind phase — mirrors `IosOverlaySession` shape. **`VideoSurface::notify_android_surface`** keeps one FRB/JNI entry; internally **cache** handle/dimensions on the JNI thread, then **`schedule_apply_after_bind`** on **`xhvp-gst`** via **`GstTaskScheduler`** (never `spawn_on_gst_thread_and_wait` from JNI). **`overlay_generation`** invalidates queued apply on `load`, shell rebuild, and surface destroy. **`PrerollExecutor`** + Android **`PrerollEffects`** run bind-path preroll (bind ops in `platform/android/ops.rs`).
 
-## iOS video sink requirements
+## iOS / macOS texture requirements
 
+- Pipeline video sink is **`appsink`** (BGRA caps), not `avsamplebufferlayersink` / `osxvideosink`.
+- Native `XueHuaVideoTexture` (`FlutterTexture`) pulls frames via `xhvp_texture_*`, wraps them in IOSurface-backed `CVPixelBuffer`, and notifies `textureFrameAvailable`.
+- `load` / `play` do not wait for Platform View layout — texture platforms are always overlay-ready (`overlay_ready_for_play` returns true).
+- iOS `xhvp_set_flutter_assets_dir` is still set from `XueHuaVideoPlayerPlugin.register` for bundle asset resolution.
+
+## iOS video sink requirements (removed — historical)
+
+<details>
+<summary>Legacy Platform View + avsamplebufferlayersink notes (pre-1.4)</summary>
 - iOS uses **`avsamplebufferlayersink`** (applemedia plugin): GStreamer exposes a `CALayer` via the sink `layer` property; Swift attaches it as a sublayer of the Flutter host `UIView` on the **main thread** (`xhvp_ios_attach_layer_to_host` / `player_apply_ios_overlay_gstreamer`).
 - **Do not** use `glimagesink` / `EaglUIView` / `VideoOverlay::set_window_handle` on iOS — GL draw callbacks access UIKit off the main thread during network preroll.
 - Swift caches the host `UIView*` via `player_notify_ios_overlay` (**cache only** — does not trigger Gst attach), then `DispatchQueue.main.async { player_apply_ios_overlay_gstreamer }` after layout (same pattern as macOS `player_apply_macos_overlay_gstreamer`).
@@ -113,6 +122,8 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - **xhvp-gst threading:** `spawn_on_gst_thread_and_wait` / `run_on_gst_thread` runs inline when `MainContext::is_owner()` — never nest invoke+recv on the same Gst thread. `gst::init()` runs once in `gst/runtime.rs` thread main; `ensure_gst_init` (`gst/init.rs`) only registers iOS plugins/TLS on xhvp-gst. Process bootstrap lives under **`rust/src/gst/`** (init, runtime, android, tls).
 - iOS bus `prepare-window-handle`: **Pass** (ignored) — `avsamplebufferlayersink` uses `IosOverlaySession` sync CALayer attach, not VideoOverlay `dispatch_sync` bind.
 - iOS GStreamer plugins are statically linked in `GStreamer.framework`; register via `register_ios_static_plugins()` including `gst_plugin_applemedia_register()`. HTTPS uses OpenSSL + DarwinSSL GIO TLS backends (`register_gio_tls_backend()`).
+
+</details>
 
 ## Android native library load order
 
@@ -134,10 +145,9 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 ## Dart rendering surface
 
 - **`lib/src/presentation/`** (partial export): **`PlaybackPresentation`** deep widget + **`PlaybackPresentationModel`** seam; owns surface embed, aspect sync, loading chrome.
-- **`lib/src/surface/`** (not exported): platform IO primitives — **`VideoSurfaceHandle`** routing, mobile PlatformView, desktop overlay bounds sync.
-- **`buildXueHuaVideoPlatformView(playerId:)`** remains surface-only for README/custom layouts (no aspect sync / loading chrome); full UI prefers **`XueHuaVideoView`** or **`PlaybackPresentation`** + custom chrome.
-- Win/Linux overlay IO goes through injectable **`DesktopOverlayClient`**; bounds come from **`DesktopOverlayBounds.fromRenderBox`**.
-- **`PlaybackPresentation.aspectRatioMode`** (and **`XueHuaVideoView.aspectRatioMode`**) sync **`AspectRatioMode`** to the Rust pipeline; letterbox/crop/stretch is on the GStreamer sink, not Flutter `BoxFit`.
+- **`lib/src/surface/`** (not exported): **`VideoSurfaceHandle`** routing + **`TextureVideoSurface`** (`Texture` widget + native texture MethodChannel).
+- **`buildXueHuaVideoPlatformView(playerId:)`** compatibility alias → **`buildVideoSurface`** → **`TextureVideoSurface`**; full UI prefers **`XueHuaVideoView`** or **`PlaybackPresentation`**.
+- **`PlaybackPresentation.aspectRatioMode`** syncs **`AspectRatioMode`** to the Rust pipeline where the sink supports it; letterbox/crop/stretch is applied in GStreamer, not Flutter `BoxFit`.
 
 ## Dart playback presentation (workstream C)
 
@@ -178,7 +188,10 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - `PipelineCapabilities` (`playback/capabilities.rs`) types playbin-only features (seek, tracks, orientation); AppSrc pipelines report reduced capability.
 - Playbin track lists are cached on bus `StreamCollection` / `StreamsSelected` and enriched from `GstStream::tags()` — playbin3 does not expose legacy `n-audio` properties.
 
-## macOS VideoOverlay requirements
+## macOS VideoOverlay requirements (removed — historical)
+
+<details>
+<summary>Legacy Platform View + osxvideosink notes (pre-1.4)</summary>
 
 - `FlutterPlatformViewFactory` must implement `createArgsCodec()` so `creationParams.playerId` is decoded (otherwise `playerId` stays 0 and overlay never binds).
 - Bind the `NSView*` handle before the pipeline reaches `PAUSED` (proactive `set_window_handle`); `set_uri` triggers `READY → PAUSED` immediately.
@@ -192,11 +205,14 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - HTTPS requires the GIO OpenSSL TLS backend (`register_gio_tls_backend()` after `gst::init()`); without it `souphttpsrc` delivers zero bytes.
 - Use a child `NSView` (`wantsLayer = false`) as the VideoOverlay target inside the Flutter platform view.
 
+</details>
+
 ## Deprecated / removed
 
-- `irondash_texture`, `irondash_engine_context` — replaced by Platform View + VideoOverlay
-- `appsink` RGBA frame buffer path — replaced by platform sinks
-- `textureId` on controller — replaced by Platform View lifecycle tied to `player_id`
+- Platform View factories (iOS/macOS/Android) and Windows/Linux desktop overlay HWND/GTK popups — replaced by Flutter **`Texture`**
+- `VideoSurfaceKind.platformView`, `VideoSurfaceKind.desktopOverlay`, `DesktopVideoOverlay`, `DesktopOverlayClient`
+- `d3d11videosink`, `osxvideosink`, `avsamplebufferlayersink` as primary sinks on desktop/Apple
+- `irondash_texture`, `irondash_engine_context`
 
 ## References
 

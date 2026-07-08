@@ -4,27 +4,19 @@ import 'package:xue_hua_video_player/src/surface/video_surface_handle.dart';
 
 void main() {
   group('VideoSurfaceHandle', () {
-    test('kindForPlatform maps mobile and desktop targets', () {
-      expect(
-        VideoSurfaceHandle.kindForPlatform(TargetPlatform.android),
-        VideoSurfaceKind.platformView,
-      );
-      expect(
-        VideoSurfaceHandle.kindForPlatform(TargetPlatform.iOS),
-        VideoSurfaceKind.platformView,
-      );
-      expect(
-        VideoSurfaceHandle.kindForPlatform(TargetPlatform.macOS),
-        VideoSurfaceKind.platformView,
-      );
-      expect(
-        VideoSurfaceHandle.kindForPlatform(TargetPlatform.windows),
-        VideoSurfaceKind.desktopOverlay,
-      );
-      expect(
-        VideoSurfaceHandle.kindForPlatform(TargetPlatform.linux),
-        VideoSurfaceKind.desktopOverlay,
-      );
+    test('kindForPlatform maps supported targets to texture', () {
+      for (final platform in [
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      ]) {
+        expect(
+          VideoSurfaceHandle.kindForPlatform(platform),
+          VideoSurfaceKind.texture,
+        );
+      }
       expect(
         VideoSurfaceHandle.kindForPlatform(TargetPlatform.fuchsia),
         VideoSurfaceKind.unsupported,
