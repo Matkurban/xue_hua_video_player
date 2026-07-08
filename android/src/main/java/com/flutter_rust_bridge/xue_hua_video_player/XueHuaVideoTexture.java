@@ -22,6 +22,9 @@ final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callba
         this.playerId = playerId;
         this.surfaceProducer = textureRegistry.createSurfaceProducer();
         this.surfaceProducer.setCallback(this);
+        // TextureVideoPlayer pattern: bind immediately after setCallback.
+        // onSurfaceAvailable() only fires after lifecycle destroy/resume, not on first create.
+        bindSurfaceIfAvailable();
     }
 
     long textureId() {
