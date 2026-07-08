@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
 use crate::playback::gst::InternalVideoMetadata;
-use crate::playback::gst::{InternalAspectRatioMode, InternalVideoOrientationConfig};
+use crate::playback::gst::InternalAspectRatioMode;
 use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::PipelineShell;
 #[cfg(target_os = "android")]
@@ -37,7 +37,7 @@ pub struct PlaybackGstContext {
     looping: Arc<AtomicBool>,
     metadata: Arc<Mutex<InternalVideoMetadata>>,
     track_cache: Arc<Mutex<TrackCache>>,
-    orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
+    rotate_degrees: Arc<Mutex<i32>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
     frame_sink: Arc<FrameSink>,
     #[cfg(target_os = "android")]
@@ -78,7 +78,7 @@ impl PlaybackGstContext {
     /// - `looping` — 循环播放标志 / looping flag
     /// - `metadata` — 视频元数据缓存 / video metadata cache
     /// - `track_cache` — 多轨缓存 / multi-track cache
-    /// - `orientation` — 画面旋转配置 / orientation config
+    /// - `rotate_degrees` — 顺时针旋转角度（0/90/180/270）/ clockwise rotation degrees
     /// - `aspect_mode` — 宽高比模式 / aspect ratio mode
     /// - `frame_sink` — Flutter 外部纹理帧源 / Flutter external texture frame source
     /// - `overlay_size_sync`（Android）— 解码尺寸变更回调 / decoded dimension change callback
@@ -102,7 +102,7 @@ impl PlaybackGstContext {
         looping: Arc<AtomicBool>,
         metadata: Arc<Mutex<InternalVideoMetadata>>,
         track_cache: Arc<Mutex<TrackCache>>,
-        orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
+        rotate_degrees: Arc<Mutex<i32>>,
         aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
         frame_sink: Arc<FrameSink>,
         #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
@@ -115,7 +115,7 @@ impl PlaybackGstContext {
             looping,
             metadata,
             track_cache,
-            orientation,
+            rotate_degrees,
             aspect_mode,
             frame_sink,
             #[cfg(target_os = "android")]
@@ -129,13 +129,13 @@ impl PlaybackGstContext {
     /// - 无（读取 `self` 内部锁与克隆 Arc）/ None (reads internal locks and clones Arcs)
     ///
     /// # 返回值 / Returns
-    /// - [`PipelineSwapConfig`]，含当前 orientation/aspect 快照 / with current orientation/aspect snapshot
+    /// - [`PipelineSwapConfig`]，含当前 rotate_degrees/aspect 快照 / with current rotate_degrees/aspect snapshot
     ///
     /// # 错误 / Errors
     /// - 无 / None
     ///
     /// # 线程 / Threading
-    /// - 短暂持有 `orientation`/`aspect_mode` 锁 / briefly holds orientation/aspect locks
+    /// - 短暂持有 `rotate_degrees`/`aspect_mode` 锁 / briefly holds rotate_degrees/aspect locks
     ///
     /// # 平台 / Platform
     /// - Android 包含 `overlay_size_sync` / includes `overlay_size_sync` on Android
@@ -145,7 +145,7 @@ impl PlaybackGstContext {
             looping: self.looping.clone(),
             metadata: self.metadata.clone(),
             track_cache: self.track_cache.clone(),
-            orientation: *self.orientation.lock(),
+            rotate_degrees: *self.rotate_degrees.lock(),
             aspect: *self.aspect_mode.lock(),
             frame_sink: self.frame_sink.clone(),
             #[cfg(target_os = "android")]
@@ -211,8 +211,8 @@ mod tests {
 
     use crate::playback::shell::SourceKind;
 
-    fn sample_context_with_swap(
-        orientation: InternalVideoOrientationConfig,
+    fn sample_context_with_rotate_arc(
+        rotate_degrees: Arc<Mutex<i32>>,
         aspect: InternalAspectRatioMode,
     ) -> PlaybackGstContext {
         let _ = gst::init();
@@ -242,7 +242,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             Arc::new(Mutex::new(InternalVideoMetadata::default())),
             Arc::new(Mutex::new(TrackCache::default())),
-            Arc::new(Mutex::new(orientation)),
+            rotate_degrees,
             Arc::new(Mutex::new(aspect)),
             crate::playback::frame::FrameSink::new(),
             #[cfg(target_os = "android")]
@@ -250,25 +250,35 @@ mod tests {
         )
     }
 
+    fn sample_context_with_swap(
+        rotate_degrees: i32,
+        aspect: InternalAspectRatioMode,
+    ) -> PlaybackGstContext {
+        sample_context_with_rotate_arc(Arc::new(Mutex::new(rotate_degrees)), aspect)
+    }
+
     fn sample_context() -> PlaybackGstContext {
-        sample_context_with_swap(
-            InternalVideoOrientationConfig::default(),
-            InternalAspectRatioMode::default(),
-        )
+        sample_context_with_swap(0, InternalAspectRatioMode::default())
     }
 
     #[test]
-    fn clone_for_async_snapshots_orientation_and_aspect_from_locks() {
-        let ctx = sample_context_with_swap(
-            InternalVideoOrientationConfig {
-                rotate_degrees: 90,
-                ..Default::default()
-            },
-            InternalAspectRatioMode::Fill,
+    fn swap_config_reflects_zero_after_rotate_degrees_reset() {
+        let rotate_degrees = Arc::new(Mutex::new(90i32));
+        let ctx = sample_context_with_rotate_arc(
+            rotate_degrees.clone(),
+            InternalAspectRatioMode::default(),
         );
+        assert_eq!(ctx.swap_config().rotate_degrees, 90);
+        *rotate_degrees.lock() = 0;
+        assert_eq!(ctx.swap_config().rotate_degrees, 0);
+    }
+
+    #[test]
+    fn clone_for_async_snapshots_rotation_and_aspect_from_locks() {
+        let ctx = sample_context_with_swap(90, InternalAspectRatioMode::Fill);
 
         let snap = ctx.clone_for_async();
-        assert_eq!(snap.swap.orientation.rotate_degrees, 90);
+        assert_eq!(snap.swap.rotate_degrees, 90);
         assert_eq!(snap.swap.aspect, InternalAspectRatioMode::Fill);
     }
 
@@ -284,10 +294,7 @@ mod tests {
 
     #[test]
     fn overlay_intent_uses_live_swap_snapshot() {
-        let ctx = sample_context_with_swap(
-            InternalVideoOrientationConfig::default(),
-            InternalAspectRatioMode::Fit,
-        );
+        let ctx = sample_context_with_swap(0, InternalAspectRatioMode::Fit);
         ctx.replay.desired_playing.store(false, Ordering::SeqCst);
 
         let intent = ctx.overlay_intent();

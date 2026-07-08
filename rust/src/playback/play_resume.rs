@@ -347,7 +347,7 @@ mod tests {
     fn resume_playing_rejects_caller_held_shell_lock() {
         use crate::playback::bus::Emitter;
         use crate::playback::gst::{
-            InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+            InternalAspectRatioMode, InternalVideoMetadata,
         };
         use crate::playback::shell::new_test_shell;
         use crate::playback::tracks::TrackCache;
@@ -374,7 +374,7 @@ mod tests {
             looping: Arc::new(AtomicBool::new(false)),
             metadata: Arc::new(Mutex::new(InternalVideoMetadata::default())),
             track_cache: Arc::new(Mutex::new(TrackCache::default())),
-            orientation: InternalVideoOrientationConfig::default(),
+            rotate_degrees: 0,
             aspect: InternalAspectRatioMode::default(),
             frame_sink: crate::playback::frame::FrameSink::new(),
         };
@@ -399,7 +399,7 @@ mod tests {
     fn manual_eos_replay_resets_rate_to_one() {
         use crate::playback::bus::Emitter;
         use crate::playback::gst::{
-            InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+            InternalAspectRatioMode, InternalVideoMetadata,
         };
         use crate::playback::shell::new_test_shell;
         use crate::playback::tracks::TrackCache;
@@ -443,7 +443,7 @@ mod tests {
             looping: Arc::new(AtomicBool::new(false)),
             metadata: Arc::new(Mutex::new(InternalVideoMetadata::default())),
             track_cache: Arc::new(Mutex::new(TrackCache::default())),
-            orientation: InternalVideoOrientationConfig::default(),
+            rotate_degrees: 0,
             aspect: InternalAspectRatioMode::default(),
             frame_sink: crate::playback::frame::FrameSink::new(),
         };

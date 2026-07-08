@@ -23,11 +23,12 @@ use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
-use crate::playback::gst::apply_orientation_to_playbin;
+use crate::playback::gst::apply_rotation_to_playbin;
 use crate::playback::gst::attach_overlay_bus_sync_handler;
 use crate::playback::gst::{
-    expose_overlay, set_overlay_render_rectangle, set_overlay_window_handle,
-    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+    apply_rotation_to_element, expose_overlay, flush_videoflip_element,
+    set_overlay_render_rectangle, set_overlay_window_handle, InternalAspectRatioMode,
+    InternalVideoMetadata,
 };
 use crate::playback::overlay::PipelineSnapshot;
 use crate::playback::replay::PlayReplayContext;
@@ -61,6 +62,8 @@ pub struct PipelineShell {
     appsrc_feed: Option<Arc<AppSrcFeedState>>,
     bus_watch: Option<gst::bus::BusWatchGuard>,
     position_source: Option<gst::glib::SourceId>,
+    /// 缓存的 `videoflip`（playbin video-filter 或 AppSrc 支路）/ Cached `videoflip` for playbin or AppSrc.
+    orientation_filter: Option<gst::Element>,
 }
 
 impl PipelineShell {
@@ -223,8 +226,29 @@ impl PipelineShell {
         mode.apply_to_sink(&self.video_sink);
     }
 
-    pub fn apply_orientation(&self, config: InternalVideoOrientationConfig) -> Result<()> {
-        apply_orientation_to_playbin(self.pipeline.upcast_ref::<gst::Element>(), config)
+    pub fn apply_rotation(&mut self, rotate_degrees: i32) -> Result<()> {
+        let was_playing = self.pipeline.current_state() == gst::State::Playing;
+        if was_playing && self.is_playbin {
+            self.set_state_sync(gst::State::Paused)?;
+        }
+
+        if self.is_playbin {
+            apply_rotation_to_playbin(
+                self.pipeline.upcast_ref::<gst::Element>(),
+                rotate_degrees,
+                &mut self.orientation_filter,
+            )?;
+        } else if let Some(ref flip) = self.orientation_filter {
+            apply_rotation_to_element(flip, rotate_degrees)?;
+            if rotate_degrees == 0 {
+                flush_videoflip_element(flip)?;
+            }
+        }
+
+        if was_playing && self.is_playbin {
+            self.set_state_sync(gst::State::Playing)?;
+        }
+        Ok(())
     }
 
     pub fn apply_overlay_window_handle(&self, handle: usize) -> Result<()> {
@@ -298,6 +322,7 @@ pub(crate) fn new_test_shell(
         appsrc_feed: None,
         bus_watch: None,
         position_source: None,
+        orientation_filter: None,
     }
 }
 
@@ -404,6 +429,7 @@ pub fn install_uri_shell(
         appsrc_feed: None,
         bus_watch: Some(bus_watch),
         position_source: Some(position_source),
+        orientation_filter: None,
     })
 }
 
@@ -434,7 +460,7 @@ pub fn install_asset_shell(
     frame_sink: &Arc<crate::playback::frame::FrameSink>,
     #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
 ) -> Result<PipelineShell> {
-    let (pipeline, video_sink, feed) = build_asset_pipeline(
+    let (pipeline, video_sink, feed, orientation_filter) = build_asset_pipeline(
         asset_key,
         emitter,
         metadata_cache,
@@ -464,9 +490,9 @@ pub fn install_asset_shell(
         appsrc_feed: Some(feed),
         bus_watch: Some(bus_watch),
         position_source: Some(position_source),
+        orientation_filter: Some(orientation_filter),
     })
 }
-
 /// 拆除 shell：释放总线监听与 AppSrc feed，置 Null / Tears down shell: releases bus watch and AppSrc feed, sets Null.
 pub fn teardown_shell(shell: &mut PipelineShell) {
     shell.bus_watch = None;
@@ -526,6 +552,7 @@ mod tests {
             appsrc_feed: None,
             bus_watch: None,
             position_source: None,
+            orientation_filter: None,
         }
     }
 
@@ -551,6 +578,7 @@ mod tests {
             appsrc_feed: None,
             bus_watch: None,
             position_source: None,
+            orientation_filter: None,
         }
     }
 
@@ -627,6 +655,7 @@ mod tests {
             appsrc_feed: None,
             bus_watch: None,
             position_source: None,
+            orientation_filter: None,
         };
         shell
             .set_state_sync(gst::State::Playing)

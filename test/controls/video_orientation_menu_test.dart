@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xue_hua_video_player/src/controls/fullscreen_config.dart';
 import 'package:xue_hua_video_player/src/controls/immersive_controls_state.dart';
 import 'package:xue_hua_video_player/src/controls/video_controls.dart';
+import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
 import 'package:xue_hua_video_player/src/rust/player_events.dart';
 
 import '../support/fake_playback_controls_model.dart';
@@ -104,9 +105,7 @@ void main() {
       }
     });
 
-    testWidgets('orientation panel uses three SegmentedButtons', (
-      tester,
-    ) async {
+    testWidgets('rotation panel uses one SegmentedButton', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
@@ -114,14 +113,13 @@ void main() {
         await tester.tap(find.byIcon(Icons.screen_rotation));
         await tester.pumpAndSettle();
 
-        expect(find.byType(SegmentedButton<bool>), findsNWidgets(2));
-        expect(find.byType(SegmentedButton<int>), findsOneWidget);
+        expect(find.byType(SegmentedButton<VideoRotation>), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
     });
 
-    testWidgets('orientation panel updates flip and rotation', (tester) async {
+    testWidgets('rotation panel updates rotation', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
@@ -129,15 +127,10 @@ void main() {
         await tester.tap(find.byIcon(Icons.screen_rotation));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('开').first);
-        await tester.pumpAndSettle();
-
-        expect(model.lastVideoOrientation?.flipHorizontal, isTrue);
-
         await tester.tap(find.text('90°'));
         await tester.pumpAndSettle();
 
-        expect(model.lastVideoOrientation?.rotateDegrees, 90);
+        expect(model.lastVideoRotation, VideoRotation.deg90);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

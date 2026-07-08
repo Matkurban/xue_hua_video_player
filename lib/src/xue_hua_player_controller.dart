@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
+import 'enum/video_rotation.dart';
 import 'controls/immersive_controls_state.dart';
 import 'controls/playback_controls_model.dart';
 import 'presentation/playback_presentation_model.dart';
@@ -11,6 +12,7 @@ import 'player/playback_session.dart';
 import 'rust/player_events.dart';
 import 'utils/platform_util.dart';
 
+export 'enum/video_rotation.dart';
 export 'rust/player_events.dart'
     show
         AspectRatioMode,
@@ -20,8 +22,7 @@ export 'rust/player_events.dart'
         PlayerEvent,
         PlayerEventKind,
         TrackType,
-        VideoMetadata,
-        VideoOrientationConfig;
+        VideoMetadata;
 export 'model/video_source.dart';
 
 /// 单个 GStreamer 播放器的公开门面 / Public facade for a single GStreamer-backed player.
@@ -120,10 +121,9 @@ class XueHuaPlayerController
   @override
   ReadonlySignal<bool> get supportsOrientation => _session.supportsOrientation;
 
-  /// 当前视频方向配置 / Current video flip/rotate configuration.
+  /// 当前视频顺时针旋转角度 / Current clockwise video rotation.
   @override
-  ReadonlySignal<VideoOrientationConfig> get videoOrientation =>
-      _session.videoOrientation;
+  ReadonlySignal<VideoRotation> get videoRotation => _session.videoRotation;
 
   /// 是否处于移动端全屏（横屏锁定）/ Whether mobile landscape fullscreen is active.
   ///
@@ -225,10 +225,10 @@ class XueHuaPlayerController
   Future<void> selectTrack(MediaTrack track, {bool enable = true}) =>
       _session.selectTrack(track, enable: enable);
 
-  /// 设置视频方向/旋转（需 [supportsOrientation]）/ Sets video orientation when [supportsOrientation].
+  /// 设置视频顺时针旋转（需 [supportsOrientation]）/ Sets video rotation when [supportsOrientation].
   @override
-  Future<void> setVideoOrientation(VideoOrientationConfig config) =>
-      _session.setVideoOrientation(config);
+  Future<void> setVideoRotation(VideoRotation rotation) =>
+      _session.setVideoRotation(rotation);
 
   /// 设置宽高比缩放模式并同步至 GStreamer / Sets aspect ratio mode and syncs to GStreamer.
   @override

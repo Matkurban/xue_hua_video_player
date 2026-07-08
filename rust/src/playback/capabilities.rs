@@ -27,11 +27,11 @@ impl PipelineCapabilities {
         orientation: true,
     };
 
-    /// AppSrc 资产管线的受限能力（无 seek/多轨/旋转）/ Limited capabilities for AppSrc asset pipelines.
+    /// AppSrc 资产管线的受限能力（无 seek/多轨；支持旋转）/ Limited capabilities for AppSrc asset pipelines.
     pub const APPSRC: Self = Self {
         seek: false,
         tracks: false,
-        orientation: false,
+        orientation: true,
     };
 
     /// 由 [`SourceKind`] 推导能力 / Derives capabilities from [`SourceKind`].

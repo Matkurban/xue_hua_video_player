@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
 import 'package:xue_hua_video_player/src/model/video_source.dart';
 import 'package:xue_hua_video_player/src/player/playback_session.dart';
 import 'package:xue_hua_video_player/src/rust/player_events.dart';
@@ -62,6 +63,10 @@ void main() {
       expect(session.playerId.value, 42);
     });
 
+    test('supportsOrientation defaults false before open', () {
+      expect(session.supportsOrientation.value, isFalse);
+    });
+
     test('open resolves source and updates capabilities', () async {
       await session.initialize();
       await session.open(VideoSource.network('https://example.com/a.mp4'));
@@ -74,6 +79,7 @@ void main() {
       expect(session.isSeekable.value, isTrue);
       expect(session.supportsTracks.value, isFalse);
       expect(session.supportsOrientation.value, isTrue);
+      expect(session.videoRotation.value, VideoRotation.deg0);
     });
 
     test('mediaGeneration increments on each open', () async {
@@ -315,18 +321,24 @@ void main() {
       expect(session.state.value, PlayerState.buffering);
     });
 
-    test('setVideoOrientation updates videoOrientation signal', () async {
+    test('open resets video rotation after prior rotation', () async {
       await session.initialize();
-      const config = VideoOrientationConfig(
-        flipHorizontal: true,
-        flipVertical: false,
-        rotateDegrees: 90,
-      );
+      await session.setVideoRotation(VideoRotation.deg90);
+      expect(port.lastVideoRotationDegrees, 90);
 
-      await session.setVideoOrientation(config);
+      await session.open(VideoSource.network('https://example.com/b.mp4'));
 
-      expect(session.videoOrientation.value, config);
-      expect(port.lastVideoOrientation, config);
+      expect(session.videoRotation.value, VideoRotation.deg0);
+    });
+
+    test('setVideoRotation updates videoRotation signal', () async {
+      await session.initialize();
+      const rotation = VideoRotation.deg90;
+
+      await session.setVideoRotation(rotation);
+
+      expect(session.videoRotation.value, rotation);
+      expect(port.lastVideoRotationDegrees, 90);
     });
 
     // Regression: a macOS overlay-apply deadlock (overlay_sink locked on a

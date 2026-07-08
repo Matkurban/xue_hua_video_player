@@ -8,2004 +8,1312 @@ import 'api/types.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
-import 'frb_generated.io.dart'
-    if (dart.library.js_interop) 'frb_generated.web.dart';
+import 'frb_generated.io.dart' if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Main entrypoint of the Rust API
-class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
-  @internal
-  static final instance = RustLib._();
 
-  RustLib._();
+                /// Main entrypoint of the Rust API
+                class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
+                  @internal
+                  static final instance = RustLib._();
 
-  /// Initialize flutter_rust_bridge
-  static Future<void> init({
-    RustLibApi? api,
-    BaseHandler? handler,
-    ExternalLibrary? externalLibrary,
-    bool forceSameCodegenVersion = true,
-  }) async {
-    await instance.initImpl(
-      api: api,
-      handler: handler,
-      externalLibrary: externalLibrary,
-      forceSameCodegenVersion: forceSameCodegenVersion,
-    );
-  }
+                  RustLib._();
 
-  /// Initialize flutter_rust_bridge in mock mode.
-  /// No libraries for FFI are loaded.
-  static void initMock({required RustLibApi api}) {
-    instance.initMockImpl(api: api);
-  }
+                  /// Initialize flutter_rust_bridge
+                  static Future<void> init({
+                    RustLibApi? api,
+                    BaseHandler? handler,
+                    ExternalLibrary? externalLibrary,
+                    bool forceSameCodegenVersion = true,
+                  }) async {
+                    await instance.initImpl(
+                      api: api,
+                      handler: handler,
+                      externalLibrary: externalLibrary,
+                      forceSameCodegenVersion: forceSameCodegenVersion,
+                    );
+                  }
 
-  /// Dispose flutter_rust_bridge
-  ///
-  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
-  /// is automatically disposed when the app stops.
-  static void dispose() => instance.disposeImpl();
+                  /// Initialize flutter_rust_bridge in mock mode.
+                  /// No libraries for FFI are loaded.
+                  static void initMock({
+                    required RustLibApi api,
+                  }) {
+                    instance.initMockImpl(
+                      api: api,
+                    );
+                  }
 
-  @override
-  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor =>
-      RustLibApiImpl.new;
+                  /// Dispose flutter_rust_bridge
+                  ///
+                  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
+                  /// is automatically disposed when the app stops.
+                  static void dispose() => instance.disposeImpl();
 
-  @override
-  WireConstructor<RustLibWire> get wireConstructor =>
-      RustLibWire.fromExternalLibrary;
+                  @override
+                  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor => RustLibApiImpl.new;
 
-  @override
-  Future<void> executeRustInitializers() async {
-    await api.crateApiSimpleInitApp();
-  }
+                  @override
+                  WireConstructor<RustLibWire> get wireConstructor => RustLibWire.fromExternalLibrary;
 
-  @override
-  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig =>
-      kDefaultExternalLibraryLoaderConfig;
+                  @override
+                  Future<void> executeRustInitializers() async {
+                    await api.crateApiSimpleInitApp();
 
-  @override
-  String get codegenVersion => '2.12.0';
+                  }
 
-  @override
-  int get rustContentHash => -1020581967;
+                  @override
+                  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig => kDefaultExternalLibraryLoaderConfig;
 
-  static const kDefaultExternalLibraryLoaderConfig =
-      ExternalLibraryLoaderConfig(
-        stem: 'xue_hua_video_player',
-        ioDirectory: 'rust/target/release/',
-        webPrefix: 'pkg/',
-        wasmBindgenName: 'wasm_bindgen',
-      );
-}
+                  @override
+                  String get codegenVersion => '2.12.0';
 
-abstract class RustLibApi extends BaseApi {
-  Future<void> crateApiPlayerApplyIosOverlayGstreamer({
-    required PlatformInt64 playerId,
-    required int width,
-    required int height,
-  });
+                  @override
+                  int get rustContentHash => -1942071209;
 
-  Future<AspectRatioMode> crateApiTypesAspectRatioModeDefault();
+                  static const kDefaultExternalLibraryLoaderConfig = ExternalLibraryLoaderConfig(
+                    stem: 'xue_hua_video_player',
+                    ioDirectory: 'rust/target/release/',
+                    webPrefix: 'pkg/',
+                    wasmBindgenName: 'wasm_bindgen',
+                  );
+                }
+                
 
-  Future<PlayerHandle> crateApiPlayerCreatePlayer();
+                abstract class RustLibApi extends BaseApi {
+                  Future<void> crateApiPlayerApplyIosOverlayGstreamer({required PlatformInt64 playerId , required int width , required int height });
 
-  Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId});
+Future<AspectRatioMode> crateApiTypesAspectRatioModeDefault();
 
-  Future<void> crateApiSimpleInitApp();
+Future<PlayerHandle> crateApiPlayerCreatePlayer();
 
-  Future<void> crateApiPlayerNotifyAndroidSurface({
-    required PlatformInt64 playerId,
-    required PlatformInt64 handle,
-    required int width,
-    required int height,
-  });
+Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerNotifyIosOverlay({
-    required PlatformInt64 playerId,
-    required PlatformInt64 handle,
-    required int width,
-    required int height,
-  });
+Future<void> crateApiSimpleInitApp();
 
-  Future<PlatformInt64> crateApiPlayerPlayerDuration({
-    required PlatformInt64 playerId,
-  });
+Future<void> crateApiPlayerNotifyAndroidSurface({required PlatformInt64 playerId , required PlatformInt64 handle , required int width , required int height });
 
-  Stream<PlayerEvent> crateApiPlayerPlayerEventStream({
-    required PlatformInt64 playerId,
-  });
+Future<void> crateApiPlayerNotifyIosOverlay({required PlatformInt64 playerId , required PlatformInt64 handle , required int width , required int height });
 
-  Future<PipelineCapabilitiesDto> crateApiPlayerPlayerGetPipelineCapabilities({
-    required PlatformInt64 playerId,
-  });
+Future<PlatformInt64> crateApiPlayerPlayerDuration({required PlatformInt64 playerId });
 
-  Future<List<MediaTrack>> crateApiPlayerPlayerGetTracks({
-    required PlatformInt64 playerId,
-  });
+Stream<PlayerEvent> crateApiPlayerPlayerEventStream({required PlatformInt64 playerId });
 
-  Future<VideoMetadata> crateApiPlayerPlayerGetVideoMetadata({
-    required PlatformInt64 playerId,
-  });
+Future<PipelineCapabilitiesDto> crateApiPlayerPlayerGetPipelineCapabilities({required PlatformInt64 playerId });
 
-  Future<bool> crateApiPlayerPlayerIsSeekable({
-    required PlatformInt64 playerId,
-  });
+Future<List<MediaTrack>> crateApiPlayerPlayerGetTracks({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerPlayerLoadSource({
-    required PlatformInt64 playerId,
-    required MediaSourceDto source,
-    required bool autoPlay,
-  });
+Future<VideoMetadata> crateApiPlayerPlayerGetVideoMetadata({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId});
+Future<bool> crateApiPlayerPlayerIsSeekable({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerPlayerPlay({required PlatformInt64 playerId});
+Future<void> crateApiPlayerPlayerLoadSource({required PlatformInt64 playerId , required MediaSourceDto source , required bool autoPlay });
 
-  Future<PlatformInt64> crateApiPlayerPlayerPosition({
-    required PlatformInt64 playerId,
-  });
+Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerPlayerSeek({
-    required PlatformInt64 playerId,
-    required PlatformInt64 positionMs,
-  });
+Future<void> crateApiPlayerPlayerPlay({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerPlayerSelectTrack({
-    required PlatformInt64 playerId,
-    required int trackId,
-    required TrackType trackType,
-    required bool enable,
-  });
+Future<PlatformInt64> crateApiPlayerPlayerPosition({required PlatformInt64 playerId });
 
-  Future<void> crateApiPlayerPlayerSetAspectRatioMode({
-    required PlatformInt64 playerId,
-    required AspectRatioMode mode,
-  });
+Future<void> crateApiPlayerPlayerSeek({required PlatformInt64 playerId , required PlatformInt64 positionMs });
 
-  Future<void> crateApiPlayerPlayerSetAssetSource({
-    required PlatformInt64 playerId,
-    required String assetKey,
-  });
+Future<void> crateApiPlayerPlayerSelectTrack({required PlatformInt64 playerId , required int trackId , required TrackType trackType , required bool enable });
 
-  Future<void> crateApiPlayerPlayerSetLooping({
-    required PlatformInt64 playerId,
-    required bool looping,
-  });
+Future<void> crateApiPlayerPlayerSetAspectRatioMode({required PlatformInt64 playerId , required AspectRatioMode mode });
 
-  Future<void> crateApiPlayerPlayerSetMute({
-    required PlatformInt64 playerId,
-    required bool mute,
-  });
+Future<void> crateApiPlayerPlayerSetAssetSource({required PlatformInt64 playerId , required String assetKey });
 
-  Future<void> crateApiPlayerPlayerSetSource({
-    required PlatformInt64 playerId,
-    required String uri,
-  });
+Future<void> crateApiPlayerPlayerSetLooping({required PlatformInt64 playerId , required bool looping });
 
-  Future<void> crateApiPlayerPlayerSetSpeed({
-    required PlatformInt64 playerId,
-    required double speed,
-  });
+Future<void> crateApiPlayerPlayerSetMute({required PlatformInt64 playerId , required bool mute });
 
-  Future<void> crateApiPlayerPlayerSetVideoOrientation({
-    required PlatformInt64 playerId,
-    required VideoOrientationConfig config,
-  });
+Future<void> crateApiPlayerPlayerSetSource({required PlatformInt64 playerId , required String uri });
 
-  Future<void> crateApiPlayerPlayerSetVolume({
-    required PlatformInt64 playerId,
-    required double volume,
-  });
+Future<void> crateApiPlayerPlayerSetSpeed({required PlatformInt64 playerId , required double speed });
 
-  Future<void> crateApiPlayerPlayerStop({required PlatformInt64 playerId});
+Future<void> crateApiPlayerPlayerSetVideoRotation({required PlatformInt64 playerId , required int rotateDegrees });
 
-  Future<void> crateApiPlayerSetVideoOverlayWindow({
-    required PlatformInt64 playerId,
-    required PlatformInt64 windowHandle,
-  });
+Future<void> crateApiPlayerPlayerSetVolume({required PlatformInt64 playerId , required double volume });
 
-  Future<void> crateApiPlayerSyncVideoOverlayRectangle({
-    required PlatformInt64 playerId,
-    required int width,
-    required int height,
-  });
+Future<void> crateApiPlayerPlayerStop({required PlatformInt64 playerId });
 
-  Future<VideoMetadata> crateApiTypesVideoMetadataDefault();
+Future<void> crateApiPlayerSetVideoOverlayWindow({required PlatformInt64 playerId , required PlatformInt64 windowHandle });
 
-  Future<VideoOrientationConfig> crateApiTypesVideoOrientationConfigDefault();
-}
+Future<void> crateApiPlayerSyncVideoOverlayRectangle({required PlatformInt64 playerId , required int width , required int height });
 
-class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
-  RustLibApiImpl({
-    required super.handler,
-    required super.wire,
-    required super.generalizedFrbRustBinding,
-    required super.portManager,
-  });
+Future<VideoMetadata> crateApiTypesVideoMetadataDefault();
 
-  @override
-  Future<void> crateApiPlayerApplyIosOverlayGstreamer({
-    required PlatformInt64 playerId,
-    required int width,
-    required int height,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_i_32(width, serializer);
-          sse_encode_i_32(height, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 1,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+
+                }
+                
+
+                class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
+                  RustLibApiImpl({
+                    required super.handler,
+                    required super.wire,
+                    required super.generalizedFrbRustBinding,
+                    required super.portManager,
+                  });
+
+                  @override Future<void> crateApiPlayerApplyIosOverlayGstreamer({required PlatformInt64 playerId , required int width , required int height })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_32(width, serializer);
+sse_encode_i_32(height, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerApplyIosOverlayGstreamerConstMeta,
-        argValues: [playerId, width, height],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerApplyIosOverlayGstreamerConstMeta,
+            argValues: [playerId, width, height],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerApplyIosOverlayGstreamerConstMeta =>
-      const TaskConstMeta(
-        debugName: "apply_ios_overlay_gstreamer",
-        argNames: ["playerId", "width", "height"],
-      );
 
-  @override
-  Future<AspectRatioMode> crateApiTypesAspectRatioModeDefault() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 2,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerApplyIosOverlayGstreamerConstMeta => const TaskConstMeta(
+            debugName: "apply_ios_overlay_gstreamer",
+            argNames: ["playerId", "width", "height"],
+        );
+        
+
+@override Future<AspectRatioMode> crateApiTypesAspectRatioModeDefault()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_aspect_ratio_mode,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiTypesAspectRatioModeDefaultConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiTypesAspectRatioModeDefaultConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiTypesAspectRatioModeDefaultConstMeta =>
-      const TaskConstMeta(debugName: "aspect_ratio_mode_default", argNames: []);
 
-  @override
-  Future<PlayerHandle> crateApiPlayerCreatePlayer() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 3,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiTypesAspectRatioModeDefaultConstMeta => const TaskConstMeta(
+            debugName: "aspect_ratio_mode_default",
+            argNames: [],
+        );
+        
+
+@override Future<PlayerHandle> crateApiPlayerCreatePlayer()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_player_handle,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerCreatePlayerConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerCreatePlayerConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerCreatePlayerConstMeta =>
-      const TaskConstMeta(debugName: "create_player", argNames: []);
 
-  @override
-  Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 4,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerCreatePlayerConstMeta => const TaskConstMeta(
+            debugName: "create_player",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiPlayerDisposePlayer({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerDisposePlayerConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerDisposePlayerConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerDisposePlayerConstMeta =>
-      const TaskConstMeta(debugName: "dispose_player", argNames: ["playerId"]);
 
-  @override
-  Future<void> crateApiSimpleInitApp() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 5,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerDisposePlayerConstMeta => const TaskConstMeta(
+            debugName: "dispose_player",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<void> crateApiSimpleInitApp()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiSimpleInitAppConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiSimpleInitAppConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiSimpleInitAppConstMeta =>
-      const TaskConstMeta(debugName: "init_app", argNames: []);
 
-  @override
-  Future<void> crateApiPlayerNotifyAndroidSurface({
-    required PlatformInt64 playerId,
-    required PlatformInt64 handle,
-    required int width,
-    required int height,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_i_64(handle, serializer);
-          sse_encode_i_32(width, serializer);
-          sse_encode_i_32(height, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 6,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiSimpleInitAppConstMeta => const TaskConstMeta(
+            debugName: "init_app",
+            argNames: [],
+        );
+        
+
+@override Future<void> crateApiPlayerNotifyAndroidSurface({required PlatformInt64 playerId , required PlatformInt64 handle , required int width , required int height })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_64(handle, serializer);
+sse_encode_i_32(width, serializer);
+sse_encode_i_32(height, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerNotifyAndroidSurfaceConstMeta,
-        argValues: [playerId, handle, width, height],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerNotifyAndroidSurfaceConstMeta,
+            argValues: [playerId, handle, width, height],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerNotifyAndroidSurfaceConstMeta =>
-      const TaskConstMeta(
-        debugName: "notify_android_surface",
-        argNames: ["playerId", "handle", "width", "height"],
-      );
 
-  @override
-  Future<void> crateApiPlayerNotifyIosOverlay({
-    required PlatformInt64 playerId,
-    required PlatformInt64 handle,
-    required int width,
-    required int height,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_i_64(handle, serializer);
-          sse_encode_i_32(width, serializer);
-          sse_encode_i_32(height, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 7,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerNotifyAndroidSurfaceConstMeta => const TaskConstMeta(
+            debugName: "notify_android_surface",
+            argNames: ["playerId", "handle", "width", "height"],
+        );
+        
+
+@override Future<void> crateApiPlayerNotifyIosOverlay({required PlatformInt64 playerId , required PlatformInt64 handle , required int width , required int height })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_64(handle, serializer);
+sse_encode_i_32(width, serializer);
+sse_encode_i_32(height, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerNotifyIosOverlayConstMeta,
-        argValues: [playerId, handle, width, height],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerNotifyIosOverlayConstMeta,
+            argValues: [playerId, handle, width, height],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerNotifyIosOverlayConstMeta =>
-      const TaskConstMeta(
-        debugName: "notify_ios_overlay",
-        argNames: ["playerId", "handle", "width", "height"],
-      );
 
-  @override
-  Future<PlatformInt64> crateApiPlayerPlayerDuration({
-    required PlatformInt64 playerId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 8,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerNotifyIosOverlayConstMeta => const TaskConstMeta(
+            debugName: "notify_ios_overlay",
+            argNames: ["playerId", "handle", "width", "height"],
+        );
+        
+
+@override Future<PlatformInt64> crateApiPlayerPlayerDuration({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerDurationConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerDurationConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerDurationConstMeta =>
-      const TaskConstMeta(debugName: "player_duration", argNames: ["playerId"]);
 
-  @override
-  Stream<PlayerEvent> crateApiPlayerPlayerEventStream({
-    required PlatformInt64 playerId,
-  }) {
-    final sink = RustStreamSink<PlayerEvent>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_i_64(playerId, serializer);
-            sse_encode_StreamSink_player_event_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 9,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_AnyhowException,
-          ),
-          constMeta: kCrateApiPlayerPlayerEventStreamConstMeta,
-          argValues: [playerId, sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
+        TaskConstMeta get kCrateApiPlayerPlayerDurationConstMeta => const TaskConstMeta(
+            debugName: "player_duration",
+            argNames: ["playerId"],
+        );
+        
 
-  TaskConstMeta get kCrateApiPlayerPlayerEventStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_event_stream",
-        argNames: ["playerId", "sink"],
-      );
+@override Stream<PlayerEvent> crateApiPlayerPlayerEventStream({required PlatformInt64 playerId })  { 
+            final sink = RustStreamSink<PlayerEvent>();
+            unawaited(handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_StreamSink_player_event_Sse(sink, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerEventStreamConstMeta,
+            argValues: [playerId, sink],
+            apiImpl: this,
+        )));
+            return sink.stream;
+             }
 
-  @override
-  Future<PipelineCapabilitiesDto> crateApiPlayerPlayerGetPipelineCapabilities({
-    required PlatformInt64 playerId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 10,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+
+        TaskConstMeta get kCrateApiPlayerPlayerEventStreamConstMeta => const TaskConstMeta(
+            debugName: "player_event_stream",
+            argNames: ["playerId", "sink"],
+        );
+        
+
+@override Future<PipelineCapabilitiesDto> crateApiPlayerPlayerGetPipelineCapabilities({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_pipeline_capabilities_dto,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerGetPipelineCapabilitiesConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerGetPipelineCapabilitiesConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerGetPipelineCapabilitiesConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_get_pipeline_capabilities",
-        argNames: ["playerId"],
-      );
 
-  @override
-  Future<List<MediaTrack>> crateApiPlayerPlayerGetTracks({
-    required PlatformInt64 playerId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 11,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerGetPipelineCapabilitiesConstMeta => const TaskConstMeta(
+            debugName: "player_get_pipeline_capabilities",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<List<MediaTrack>> crateApiPlayerPlayerGetTracks({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_list_media_track,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerGetTracksConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerGetTracksConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerGetTracksConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_get_tracks",
-        argNames: ["playerId"],
-      );
 
-  @override
-  Future<VideoMetadata> crateApiPlayerPlayerGetVideoMetadata({
-    required PlatformInt64 playerId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 12,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerGetTracksConstMeta => const TaskConstMeta(
+            debugName: "player_get_tracks",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<VideoMetadata> crateApiPlayerPlayerGetVideoMetadata({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_video_metadata,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerGetVideoMetadataConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerGetVideoMetadataConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerGetVideoMetadataConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_get_video_metadata",
-        argNames: ["playerId"],
-      );
 
-  @override
-  Future<bool> crateApiPlayerPlayerIsSeekable({
-    required PlatformInt64 playerId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 13,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerGetVideoMetadataConstMeta => const TaskConstMeta(
+            debugName: "player_get_video_metadata",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<bool> crateApiPlayerPlayerIsSeekable({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerIsSeekableConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerIsSeekableConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerIsSeekableConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_is_seekable",
-        argNames: ["playerId"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerLoadSource({
-    required PlatformInt64 playerId,
-    required MediaSourceDto source,
-    required bool autoPlay,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_box_autoadd_media_source_dto(source, serializer);
-          sse_encode_bool(autoPlay, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 14,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerIsSeekableConstMeta => const TaskConstMeta(
+            debugName: "player_is_seekable",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerLoadSource({required PlatformInt64 playerId , required MediaSourceDto source , required bool autoPlay })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_box_autoadd_media_source_dto(source, serializer);
+sse_encode_bool(autoPlay, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerLoadSourceConstMeta,
-        argValues: [playerId, source, autoPlay],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerLoadSourceConstMeta,
+            argValues: [playerId, source, autoPlay],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerLoadSourceConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_load_source",
-        argNames: ["playerId", "source", "autoPlay"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 15,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerLoadSourceConstMeta => const TaskConstMeta(
+            debugName: "player_load_source",
+            argNames: ["playerId", "source", "autoPlay"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerPause({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerPauseConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerPauseConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerPauseConstMeta =>
-      const TaskConstMeta(debugName: "player_pause", argNames: ["playerId"]);
 
-  @override
-  Future<void> crateApiPlayerPlayerPlay({required PlatformInt64 playerId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 16,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerPauseConstMeta => const TaskConstMeta(
+            debugName: "player_pause",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerPlay({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerPlayConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerPlayConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerPlayConstMeta =>
-      const TaskConstMeta(debugName: "player_play", argNames: ["playerId"]);
 
-  @override
-  Future<PlatformInt64> crateApiPlayerPlayerPosition({
-    required PlatformInt64 playerId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 17,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerPlayConstMeta => const TaskConstMeta(
+            debugName: "player_play",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<PlatformInt64> crateApiPlayerPlayerPosition({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerPositionConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerPositionConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerPositionConstMeta =>
-      const TaskConstMeta(debugName: "player_position", argNames: ["playerId"]);
 
-  @override
-  Future<void> crateApiPlayerPlayerSeek({
-    required PlatformInt64 playerId,
-    required PlatformInt64 positionMs,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_i_64(positionMs, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 18,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerPositionConstMeta => const TaskConstMeta(
+            debugName: "player_position",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSeek({required PlatformInt64 playerId , required PlatformInt64 positionMs })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_64(positionMs, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSeekConstMeta,
-        argValues: [playerId, positionMs],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSeekConstMeta,
+            argValues: [playerId, positionMs],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSeekConstMeta => const TaskConstMeta(
-    debugName: "player_seek",
-    argNames: ["playerId", "positionMs"],
-  );
 
-  @override
-  Future<void> crateApiPlayerPlayerSelectTrack({
-    required PlatformInt64 playerId,
-    required int trackId,
-    required TrackType trackType,
-    required bool enable,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_u_32(trackId, serializer);
-          sse_encode_track_type(trackType, serializer);
-          sse_encode_bool(enable, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 19,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSeekConstMeta => const TaskConstMeta(
+            debugName: "player_seek",
+            argNames: ["playerId", "positionMs"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSelectTrack({required PlatformInt64 playerId , required int trackId , required TrackType trackType , required bool enable })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_u_32(trackId, serializer);
+sse_encode_track_type(trackType, serializer);
+sse_encode_bool(enable, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSelectTrackConstMeta,
-        argValues: [playerId, trackId, trackType, enable],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSelectTrackConstMeta,
+            argValues: [playerId, trackId, trackType, enable],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSelectTrackConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_select_track",
-        argNames: ["playerId", "trackId", "trackType", "enable"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetAspectRatioMode({
-    required PlatformInt64 playerId,
-    required AspectRatioMode mode,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_aspect_ratio_mode(mode, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 20,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSelectTrackConstMeta => const TaskConstMeta(
+            debugName: "player_select_track",
+            argNames: ["playerId", "trackId", "trackType", "enable"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetAspectRatioMode({required PlatformInt64 playerId , required AspectRatioMode mode })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_aspect_ratio_mode(mode, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetAspectRatioModeConstMeta,
-        argValues: [playerId, mode],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetAspectRatioModeConstMeta,
+            argValues: [playerId, mode],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetAspectRatioModeConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_aspect_ratio_mode",
-        argNames: ["playerId", "mode"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetAssetSource({
-    required PlatformInt64 playerId,
-    required String assetKey,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_String(assetKey, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 21,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetAspectRatioModeConstMeta => const TaskConstMeta(
+            debugName: "player_set_aspect_ratio_mode",
+            argNames: ["playerId", "mode"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetAssetSource({required PlatformInt64 playerId , required String assetKey })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_String(assetKey, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetAssetSourceConstMeta,
-        argValues: [playerId, assetKey],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetAssetSourceConstMeta,
+            argValues: [playerId, assetKey],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetAssetSourceConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_asset_source",
-        argNames: ["playerId", "assetKey"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetLooping({
-    required PlatformInt64 playerId,
-    required bool looping,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_bool(looping, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 22,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetAssetSourceConstMeta => const TaskConstMeta(
+            debugName: "player_set_asset_source",
+            argNames: ["playerId", "assetKey"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetLooping({required PlatformInt64 playerId , required bool looping })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_bool(looping, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetLoopingConstMeta,
-        argValues: [playerId, looping],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetLoopingConstMeta,
+            argValues: [playerId, looping],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetLoopingConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_looping",
-        argNames: ["playerId", "looping"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetMute({
-    required PlatformInt64 playerId,
-    required bool mute,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_bool(mute, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 23,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetLoopingConstMeta => const TaskConstMeta(
+            debugName: "player_set_looping",
+            argNames: ["playerId", "looping"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetMute({required PlatformInt64 playerId , required bool mute })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_bool(mute, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetMuteConstMeta,
-        argValues: [playerId, mute],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetMuteConstMeta,
+            argValues: [playerId, mute],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetMuteConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_mute",
-        argNames: ["playerId", "mute"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetSource({
-    required PlatformInt64 playerId,
-    required String uri,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_String(uri, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 24,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetMuteConstMeta => const TaskConstMeta(
+            debugName: "player_set_mute",
+            argNames: ["playerId", "mute"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetSource({required PlatformInt64 playerId , required String uri })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_String(uri, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetSourceConstMeta,
-        argValues: [playerId, uri],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetSourceConstMeta,
+            argValues: [playerId, uri],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetSourceConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_source",
-        argNames: ["playerId", "uri"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetSpeed({
-    required PlatformInt64 playerId,
-    required double speed,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_f_64(speed, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 25,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetSourceConstMeta => const TaskConstMeta(
+            debugName: "player_set_source",
+            argNames: ["playerId", "uri"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetSpeed({required PlatformInt64 playerId , required double speed })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_f_64(speed, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetSpeedConstMeta,
-        argValues: [playerId, speed],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetSpeedConstMeta,
+            argValues: [playerId, speed],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetSpeedConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_speed",
-        argNames: ["playerId", "speed"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetVideoOrientation({
-    required PlatformInt64 playerId,
-    required VideoOrientationConfig config,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_box_autoadd_video_orientation_config(config, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 26,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetSpeedConstMeta => const TaskConstMeta(
+            debugName: "player_set_speed",
+            argNames: ["playerId", "speed"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetVideoRotation({required PlatformInt64 playerId , required int rotateDegrees })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_32(rotateDegrees, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetVideoOrientationConstMeta,
-        argValues: [playerId, config],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetVideoRotationConstMeta,
+            argValues: [playerId, rotateDegrees],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetVideoOrientationConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_video_orientation",
-        argNames: ["playerId", "config"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerSetVolume({
-    required PlatformInt64 playerId,
-    required double volume,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_f_64(volume, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 27,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetVideoRotationConstMeta => const TaskConstMeta(
+            debugName: "player_set_video_rotation",
+            argNames: ["playerId", "rotateDegrees"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerSetVolume({required PlatformInt64 playerId , required double volume })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_f_64(volume, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerSetVolumeConstMeta,
-        argValues: [playerId, volume],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerSetVolumeConstMeta,
+            argValues: [playerId, volume],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerSetVolumeConstMeta =>
-      const TaskConstMeta(
-        debugName: "player_set_volume",
-        argNames: ["playerId", "volume"],
-      );
 
-  @override
-  Future<void> crateApiPlayerPlayerStop({required PlatformInt64 playerId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 28,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerSetVolumeConstMeta => const TaskConstMeta(
+            debugName: "player_set_volume",
+            argNames: ["playerId", "volume"],
+        );
+        
+
+@override Future<void> crateApiPlayerPlayerStop({required PlatformInt64 playerId })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerPlayerStopConstMeta,
-        argValues: [playerId],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerPlayerStopConstMeta,
+            argValues: [playerId],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerPlayerStopConstMeta =>
-      const TaskConstMeta(debugName: "player_stop", argNames: ["playerId"]);
 
-  @override
-  Future<void> crateApiPlayerSetVideoOverlayWindow({
-    required PlatformInt64 playerId,
-    required PlatformInt64 windowHandle,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_i_64(windowHandle, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 29,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerPlayerStopConstMeta => const TaskConstMeta(
+            debugName: "player_stop",
+            argNames: ["playerId"],
+        );
+        
+
+@override Future<void> crateApiPlayerSetVideoOverlayWindow({required PlatformInt64 playerId , required PlatformInt64 windowHandle })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_64(windowHandle, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerSetVideoOverlayWindowConstMeta,
-        argValues: [playerId, windowHandle],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerSetVideoOverlayWindowConstMeta,
+            argValues: [playerId, windowHandle],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerSetVideoOverlayWindowConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_video_overlay_window",
-        argNames: ["playerId", "windowHandle"],
-      );
 
-  @override
-  Future<void> crateApiPlayerSyncVideoOverlayRectangle({
-    required PlatformInt64 playerId,
-    required int width,
-    required int height,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(playerId, serializer);
-          sse_encode_i_32(width, serializer);
-          sse_encode_i_32(height, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 30,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerSetVideoOverlayWindowConstMeta => const TaskConstMeta(
+            debugName: "set_video_overlay_window",
+            argNames: ["playerId", "windowHandle"],
+        );
+        
+
+@override Future<void> crateApiPlayerSyncVideoOverlayRectangle({required PlatformInt64 playerId , required int width , required int height })  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_i_64(playerId, serializer);
+sse_encode_i_32(width, serializer);
+sse_encode_i_32(height, serializer);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiPlayerSyncVideoOverlayRectangleConstMeta,
-        argValues: [playerId, width, height],
-        apiImpl: this,
-      ),
-    );
-  }
+        )
+        ,
+            constMeta: kCrateApiPlayerSyncVideoOverlayRectangleConstMeta,
+            argValues: [playerId, width, height],
+            apiImpl: this,
+        )); }
 
-  TaskConstMeta get kCrateApiPlayerSyncVideoOverlayRectangleConstMeta =>
-      const TaskConstMeta(
-        debugName: "sync_video_overlay_rectangle",
-        argNames: ["playerId", "width", "height"],
-      );
 
-  @override
-  Future<VideoMetadata> crateApiTypesVideoMetadataDefault() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 31,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
+        TaskConstMeta get kCrateApiPlayerSyncVideoOverlayRectangleConstMeta => const TaskConstMeta(
+            debugName: "sync_video_overlay_rectangle",
+            argNames: ["playerId", "width", "height"],
+        );
+        
+
+@override Future<VideoMetadata> crateApiTypesVideoMetadataDefault()  { return handler.executeNormal(NormalTask(
+            callFfi: (port_) {
+              
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31, port: port_);
+            
+            },
+            codec: 
+        SseCodec(
           decodeSuccessData: sse_decode_video_metadata,
           decodeErrorData: null,
-        ),
-        constMeta: kCrateApiTypesVideoMetadataDefaultConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiTypesVideoMetadataDefaultConstMeta =>
-      const TaskConstMeta(debugName: "video_metadata_default", argNames: []);
-
-  @override
-  Future<VideoOrientationConfig> crateApiTypesVideoOrientationConfigDefault() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 32,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_video_orientation_config,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiTypesVideoOrientationConfigDefaultConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiTypesVideoOrientationConfigDefaultConstMeta =>
-      const TaskConstMeta(
-        debugName: "video_orientation_config_default",
-        argNames: [],
-      );
-
-  @protected
-  AnyhowException dco_decode_AnyhowException(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return AnyhowException(raw as String);
-  }
-
-  @protected
-  RustStreamSink<PlayerEvent> dco_decode_StreamSink_player_event_Sse(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    throw UnimplementedError();
-  }
-
-  @protected
-  String dco_decode_String(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as String;
-  }
-
-  @protected
-  AspectRatioMode dco_decode_aspect_ratio_mode(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return AspectRatioMode.values[raw as int];
-  }
-
-  @protected
-  bool dco_decode_bool(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as bool;
-  }
-
-  @protected
-  MediaSourceDto dco_decode_box_autoadd_media_source_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_media_source_dto(raw);
-  }
-
-  @protected
-  VideoOrientationConfig dco_decode_box_autoadd_video_orientation_config(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_video_orientation_config(raw);
-  }
-
-  @protected
-  double dco_decode_f_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as double;
-  }
-
-  @protected
-  int dco_decode_i_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  PlatformInt64 dco_decode_i_64(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeI64(raw);
-  }
-
-  @protected
-  List<MediaTrack> dco_decode_list_media_track(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_media_track).toList();
-  }
-
-  @protected
-  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as Uint8List;
-  }
-
-  @protected
-  MediaSourceDto dco_decode_media_source_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    switch (raw[0]) {
-      case 0:
-        return MediaSourceDto_Uri(dco_decode_String(raw[1]));
-      case 1:
-        return MediaSourceDto_FlutterAsset(dco_decode_String(raw[1]));
-      default:
-        throw Exception("unreachable");
-    }
-  }
-
-  @protected
-  MediaTrack dco_decode_media_track(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return MediaTrack(
-      id: dco_decode_u_32(arr[0]),
-      trackType: dco_decode_track_type(arr[1]),
-      language: dco_decode_String(arr[2]),
-      label: dco_decode_String(arr[3]),
-      selected: dco_decode_bool(arr[4]),
-    );
-  }
-
-  @protected
-  PipelineCapabilitiesDto dco_decode_pipeline_capabilities_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return PipelineCapabilitiesDto(
-      seek: dco_decode_bool(arr[0]),
-      tracks: dco_decode_bool(arr[1]),
-      orientation: dco_decode_bool(arr[2]),
-    );
-  }
-
-  @protected
-  PlayerEvent dco_decode_player_event(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
-    return PlayerEvent(
-      kind: dco_decode_player_event_kind(arr[0]),
-      positionMs: dco_decode_i_64(arr[1]),
-      durationMs: dco_decode_i_64(arr[2]),
-      width: dco_decode_i_32(arr[3]),
-      height: dco_decode_i_32(arr[4]),
-      bufferingPercent: dco_decode_i_32(arr[5]),
-      state: dco_decode_player_state(arr[6]),
-      message: dco_decode_String(arr[7]),
-      fps: dco_decode_f_64(arr[8]),
-      pixelAspectWidth: dco_decode_i_32(arr[9]),
-      pixelAspectHeight: dco_decode_i_32(arr[10]),
-      displayAspectWidth: dco_decode_i_32(arr[11]),
-      displayAspectHeight: dco_decode_i_32(arr[12]),
-      interlaced: dco_decode_bool(arr[13]),
-      colorMatrix: dco_decode_String(arr[14]),
-      colorRange: dco_decode_String(arr[15]),
-      hdrFormat: dco_decode_String(arr[16]),
-      isSeekable: dco_decode_bool(arr[17]),
-    );
-  }
-
-  @protected
-  PlayerEventKind dco_decode_player_event_kind(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return PlayerEventKind.values[raw as int];
-  }
-
-  @protected
-  PlayerHandle dco_decode_player_handle(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
-    return PlayerHandle(playerId: dco_decode_i_64(arr[0]));
-  }
-
-  @protected
-  PlayerState dco_decode_player_state(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return PlayerState.values[raw as int];
-  }
-
-  @protected
-  TrackType dco_decode_track_type(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return TrackType.values[raw as int];
-  }
-
-  @protected
-  int dco_decode_u_32(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  int dco_decode_u_8(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
-  void dco_decode_unit(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return;
-  }
-
-  @protected
-  VideoMetadata dco_decode_video_metadata(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
-    return VideoMetadata(
-      width: dco_decode_i_32(arr[0]),
-      height: dco_decode_i_32(arr[1]),
-      fps: dco_decode_f_64(arr[2]),
-      pixelAspectWidth: dco_decode_i_32(arr[3]),
-      pixelAspectHeight: dco_decode_i_32(arr[4]),
-      displayAspectWidth: dco_decode_i_32(arr[5]),
-      displayAspectHeight: dco_decode_i_32(arr[6]),
-      interlaced: dco_decode_bool(arr[7]),
-      colorMatrix: dco_decode_String(arr[8]),
-      colorRange: dco_decode_String(arr[9]),
-      hdrFormat: dco_decode_String(arr[10]),
-    );
-  }
-
-  @protected
-  VideoOrientationConfig dco_decode_video_orientation_config(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return VideoOrientationConfig(
-      flipHorizontal: dco_decode_bool(arr[0]),
-      flipVertical: dco_decode_bool(arr[1]),
-      rotateDegrees: dco_decode_i_32(arr[2]),
-    );
-  }
-
-  @protected
-  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_String(deserializer);
-    return AnyhowException(inner);
-  }
-
-  @protected
-  RustStreamSink<PlayerEvent> sse_decode_StreamSink_player_event_Sse(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    throw UnimplementedError('Unreachable ()');
-  }
-
-  @protected
-  String sse_decode_String(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_prim_u_8_strict(deserializer);
-    return utf8.decoder.convert(inner);
-  }
-
-  @protected
-  AspectRatioMode sse_decode_aspect_ratio_mode(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return AspectRatioMode.values[inner];
-  }
-
-  @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
-  }
-
-  @protected
-  MediaSourceDto sse_decode_box_autoadd_media_source_dto(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_media_source_dto(deserializer));
-  }
-
-  @protected
-  VideoOrientationConfig sse_decode_box_autoadd_video_orientation_config(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_video_orientation_config(deserializer));
-  }
-
-  @protected
-  double sse_decode_f_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getFloat64();
-  }
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
-  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getPlatformInt64();
-  }
-
-  @protected
-  List<MediaTrack> sse_decode_list_media_track(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <MediaTrack>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_media_track(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getUint8List(len_);
-  }
-
-  @protected
-  MediaSourceDto sse_decode_media_source_dto(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var tag_ = sse_decode_i_32(deserializer);
-    switch (tag_) {
-      case 0:
-        var var_field0 = sse_decode_String(deserializer);
-        return MediaSourceDto_Uri(var_field0);
-      case 1:
-        var var_field0 = sse_decode_String(deserializer);
-        return MediaSourceDto_FlutterAsset(var_field0);
-      default:
-        throw UnimplementedError('');
-    }
-  }
-
-  @protected
-  MediaTrack sse_decode_media_track(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_u_32(deserializer);
-    var var_trackType = sse_decode_track_type(deserializer);
-    var var_language = sse_decode_String(deserializer);
-    var var_label = sse_decode_String(deserializer);
-    var var_selected = sse_decode_bool(deserializer);
-    return MediaTrack(
-      id: var_id,
-      trackType: var_trackType,
-      language: var_language,
-      label: var_label,
-      selected: var_selected,
-    );
-  }
-
-  @protected
-  PipelineCapabilitiesDto sse_decode_pipeline_capabilities_dto(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_seek = sse_decode_bool(deserializer);
-    var var_tracks = sse_decode_bool(deserializer);
-    var var_orientation = sse_decode_bool(deserializer);
-    return PipelineCapabilitiesDto(
-      seek: var_seek,
-      tracks: var_tracks,
-      orientation: var_orientation,
-    );
-  }
-
-  @protected
-  PlayerEvent sse_decode_player_event(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_kind = sse_decode_player_event_kind(deserializer);
-    var var_positionMs = sse_decode_i_64(deserializer);
-    var var_durationMs = sse_decode_i_64(deserializer);
-    var var_width = sse_decode_i_32(deserializer);
-    var var_height = sse_decode_i_32(deserializer);
-    var var_bufferingPercent = sse_decode_i_32(deserializer);
-    var var_state = sse_decode_player_state(deserializer);
-    var var_message = sse_decode_String(deserializer);
-    var var_fps = sse_decode_f_64(deserializer);
-    var var_pixelAspectWidth = sse_decode_i_32(deserializer);
-    var var_pixelAspectHeight = sse_decode_i_32(deserializer);
-    var var_displayAspectWidth = sse_decode_i_32(deserializer);
-    var var_displayAspectHeight = sse_decode_i_32(deserializer);
-    var var_interlaced = sse_decode_bool(deserializer);
-    var var_colorMatrix = sse_decode_String(deserializer);
-    var var_colorRange = sse_decode_String(deserializer);
-    var var_hdrFormat = sse_decode_String(deserializer);
-    var var_isSeekable = sse_decode_bool(deserializer);
-    return PlayerEvent(
-      kind: var_kind,
-      positionMs: var_positionMs,
-      durationMs: var_durationMs,
-      width: var_width,
-      height: var_height,
-      bufferingPercent: var_bufferingPercent,
-      state: var_state,
-      message: var_message,
-      fps: var_fps,
-      pixelAspectWidth: var_pixelAspectWidth,
-      pixelAspectHeight: var_pixelAspectHeight,
-      displayAspectWidth: var_displayAspectWidth,
-      displayAspectHeight: var_displayAspectHeight,
-      interlaced: var_interlaced,
-      colorMatrix: var_colorMatrix,
-      colorRange: var_colorRange,
-      hdrFormat: var_hdrFormat,
-      isSeekable: var_isSeekable,
-    );
-  }
-
-  @protected
-  PlayerEventKind sse_decode_player_event_kind(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return PlayerEventKind.values[inner];
-  }
-
-  @protected
-  PlayerHandle sse_decode_player_handle(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_playerId = sse_decode_i_64(deserializer);
-    return PlayerHandle(playerId: var_playerId);
-  }
-
-  @protected
-  PlayerState sse_decode_player_state(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return PlayerState.values[inner];
-  }
-
-  @protected
-  TrackType sse_decode_track_type(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return TrackType.values[inner];
-  }
-
-  @protected
-  int sse_decode_u_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint32();
-  }
-
-  @protected
-  int sse_decode_u_8(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8();
-  }
-
-  @protected
-  void sse_decode_unit(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  VideoMetadata sse_decode_video_metadata(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_width = sse_decode_i_32(deserializer);
-    var var_height = sse_decode_i_32(deserializer);
-    var var_fps = sse_decode_f_64(deserializer);
-    var var_pixelAspectWidth = sse_decode_i_32(deserializer);
-    var var_pixelAspectHeight = sse_decode_i_32(deserializer);
-    var var_displayAspectWidth = sse_decode_i_32(deserializer);
-    var var_displayAspectHeight = sse_decode_i_32(deserializer);
-    var var_interlaced = sse_decode_bool(deserializer);
-    var var_colorMatrix = sse_decode_String(deserializer);
-    var var_colorRange = sse_decode_String(deserializer);
-    var var_hdrFormat = sse_decode_String(deserializer);
-    return VideoMetadata(
-      width: var_width,
-      height: var_height,
-      fps: var_fps,
-      pixelAspectWidth: var_pixelAspectWidth,
-      pixelAspectHeight: var_pixelAspectHeight,
-      displayAspectWidth: var_displayAspectWidth,
-      displayAspectHeight: var_displayAspectHeight,
-      interlaced: var_interlaced,
-      colorMatrix: var_colorMatrix,
-      colorRange: var_colorRange,
-      hdrFormat: var_hdrFormat,
-    );
-  }
-
-  @protected
-  VideoOrientationConfig sse_decode_video_orientation_config(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_flipHorizontal = sse_decode_bool(deserializer);
-    var var_flipVertical = sse_decode_bool(deserializer);
-    var var_rotateDegrees = sse_decode_i_32(deserializer);
-    return VideoOrientationConfig(
-      flipHorizontal: var_flipHorizontal,
-      flipVertical: var_flipVertical,
-      rotateDegrees: var_rotateDegrees,
-    );
-  }
-
-  @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.message, serializer);
-  }
-
-  @protected
-  void sse_encode_StreamSink_player_event_Sse(
-    RustStreamSink<PlayerEvent> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(
-      self.setupAndSerialize(
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_player_event,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-      ),
-      serializer,
-    );
-  }
-
-  @protected
-  void sse_encode_String(String self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
-  }
-
-  @protected
-  void sse_encode_aspect_ratio_mode(
-    AspectRatioMode self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
-  }
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_media_source_dto(
-    MediaSourceDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_media_source_dto(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_video_orientation_config(
-    VideoOrientationConfig self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_video_orientation_config(self, serializer);
-  }
-
-  @protected
-  void sse_encode_f_64(double self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putFloat64(self);
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
-
-  @protected
-  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putPlatformInt64(self);
-  }
-
-  @protected
-  void sse_encode_list_media_track(
-    List<MediaTrack> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_media_track(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_prim_u_8_strict(
-    Uint8List self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putUint8List(self);
-  }
-
-  @protected
-  void sse_encode_media_source_dto(
-    MediaSourceDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    switch (self) {
-      case MediaSourceDto_Uri(field0: final field0):
-        sse_encode_i_32(0, serializer);
-        sse_encode_String(field0, serializer);
-      case MediaSourceDto_FlutterAsset(field0: final field0):
-        sse_encode_i_32(1, serializer);
-        sse_encode_String(field0, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_media_track(MediaTrack self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.id, serializer);
-    sse_encode_track_type(self.trackType, serializer);
-    sse_encode_String(self.language, serializer);
-    sse_encode_String(self.label, serializer);
-    sse_encode_bool(self.selected, serializer);
-  }
-
-  @protected
-  void sse_encode_pipeline_capabilities_dto(
-    PipelineCapabilitiesDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self.seek, serializer);
-    sse_encode_bool(self.tracks, serializer);
-    sse_encode_bool(self.orientation, serializer);
-  }
-
-  @protected
-  void sse_encode_player_event(PlayerEvent self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_player_event_kind(self.kind, serializer);
-    sse_encode_i_64(self.positionMs, serializer);
-    sse_encode_i_64(self.durationMs, serializer);
-    sse_encode_i_32(self.width, serializer);
-    sse_encode_i_32(self.height, serializer);
-    sse_encode_i_32(self.bufferingPercent, serializer);
-    sse_encode_player_state(self.state, serializer);
-    sse_encode_String(self.message, serializer);
-    sse_encode_f_64(self.fps, serializer);
-    sse_encode_i_32(self.pixelAspectWidth, serializer);
-    sse_encode_i_32(self.pixelAspectHeight, serializer);
-    sse_encode_i_32(self.displayAspectWidth, serializer);
-    sse_encode_i_32(self.displayAspectHeight, serializer);
-    sse_encode_bool(self.interlaced, serializer);
-    sse_encode_String(self.colorMatrix, serializer);
-    sse_encode_String(self.colorRange, serializer);
-    sse_encode_String(self.hdrFormat, serializer);
-    sse_encode_bool(self.isSeekable, serializer);
-  }
-
-  @protected
-  void sse_encode_player_event_kind(
-    PlayerEventKind self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
-  }
-
-  @protected
-  void sse_encode_player_handle(PlayerHandle self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.playerId, serializer);
-  }
-
-  @protected
-  void sse_encode_player_state(PlayerState self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
-  }
-
-  @protected
-  void sse_encode_track_type(TrackType self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
-  }
-
-  @protected
-  void sse_encode_u_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint32(self);
-  }
-
-  @protected
-  void sse_encode_u_8(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self);
-  }
-
-  @protected
-  void sse_encode_unit(void self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  void sse_encode_video_metadata(VideoMetadata self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.width, serializer);
-    sse_encode_i_32(self.height, serializer);
-    sse_encode_f_64(self.fps, serializer);
-    sse_encode_i_32(self.pixelAspectWidth, serializer);
-    sse_encode_i_32(self.pixelAspectHeight, serializer);
-    sse_encode_i_32(self.displayAspectWidth, serializer);
-    sse_encode_i_32(self.displayAspectHeight, serializer);
-    sse_encode_bool(self.interlaced, serializer);
-    sse_encode_String(self.colorMatrix, serializer);
-    sse_encode_String(self.colorRange, serializer);
-    sse_encode_String(self.hdrFormat, serializer);
-  }
-
-  @protected
-  void sse_encode_video_orientation_config(
-    VideoOrientationConfig self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self.flipHorizontal, serializer);
-    sse_encode_bool(self.flipVertical, serializer);
-    sse_encode_i_32(self.rotateDegrees, serializer);
-  }
-}
+        )
+        ,
+            constMeta: kCrateApiTypesVideoMetadataDefaultConstMeta,
+            argValues: [],
+            apiImpl: this,
+        )); }
+
+
+        TaskConstMeta get kCrateApiTypesVideoMetadataDefaultConstMeta => const TaskConstMeta(
+            debugName: "video_metadata_default",
+            argNames: [],
+        );
+        
+
+
+
+                  @protected AnyhowException dco_decode_AnyhowException(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return AnyhowException(raw as String); }
+
+@protected RustStreamSink<PlayerEvent> dco_decode_StreamSink_player_event_Sse(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+throw UnimplementedError(); }
+
+@protected String dco_decode_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as String; }
+
+@protected AspectRatioMode dco_decode_aspect_ratio_mode(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return AspectRatioMode.values[raw as int]; }
+
+@protected bool dco_decode_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as bool; }
+
+@protected MediaSourceDto dco_decode_box_autoadd_media_source_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dco_decode_media_source_dto(raw); }
+
+@protected double dco_decode_f_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as double; }
+
+@protected int dco_decode_i_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected PlatformInt64 dco_decode_i_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return dcoDecodeI64(raw); }
+
+@protected List<MediaTrack> dco_decode_list_media_track(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return (raw as List<dynamic>).map(dco_decode_media_track).toList(); }
+
+@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as Uint8List; }
+
+@protected MediaSourceDto dco_decode_media_source_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+switch (raw[0]) {
+                case 0: return MediaSourceDto_Uri(dco_decode_String(raw[1]),);
+case 1: return MediaSourceDto_FlutterAsset(dco_decode_String(raw[1]),);
+                default: throw Exception("unreachable");
+            } }
+
+@protected MediaTrack dco_decode_media_track(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+                return MediaTrack(id: dco_decode_u_32(arr[0]),
+trackType: dco_decode_track_type(arr[1]),
+language: dco_decode_String(arr[2]),
+label: dco_decode_String(arr[3]),
+selected: dco_decode_bool(arr[4]),); }
+
+@protected PipelineCapabilitiesDto dco_decode_pipeline_capabilities_dto(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+                return PipelineCapabilitiesDto(seek: dco_decode_bool(arr[0]),
+tracks: dco_decode_bool(arr[1]),
+orientation: dco_decode_bool(arr[2]),); }
+
+@protected PlayerEvent dco_decode_player_event(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 18) throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+                return PlayerEvent(kind: dco_decode_player_event_kind(arr[0]),
+positionMs: dco_decode_i_64(arr[1]),
+durationMs: dco_decode_i_64(arr[2]),
+width: dco_decode_i_32(arr[3]),
+height: dco_decode_i_32(arr[4]),
+bufferingPercent: dco_decode_i_32(arr[5]),
+state: dco_decode_player_state(arr[6]),
+message: dco_decode_String(arr[7]),
+fps: dco_decode_f_64(arr[8]),
+pixelAspectWidth: dco_decode_i_32(arr[9]),
+pixelAspectHeight: dco_decode_i_32(arr[10]),
+displayAspectWidth: dco_decode_i_32(arr[11]),
+displayAspectHeight: dco_decode_i_32(arr[12]),
+interlaced: dco_decode_bool(arr[13]),
+colorMatrix: dco_decode_String(arr[14]),
+colorRange: dco_decode_String(arr[15]),
+hdrFormat: dco_decode_String(arr[16]),
+isSeekable: dco_decode_bool(arr[17]),); }
+
+@protected PlayerEventKind dco_decode_player_event_kind(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return PlayerEventKind.values[raw as int]; }
+
+@protected PlayerHandle dco_decode_player_handle(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 1) throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+                return PlayerHandle(playerId: dco_decode_i_64(arr[0]),); }
+
+@protected PlayerState dco_decode_player_state(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return PlayerState.values[raw as int]; }
+
+@protected TrackType dco_decode_track_type(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return TrackType.values[raw as int]; }
+
+@protected int dco_decode_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected int dco_decode_u_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return raw as int; }
+
+@protected void dco_decode_unit(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+return; }
+
+@protected VideoMetadata dco_decode_video_metadata(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
+final arr = raw as List<dynamic>;
+                if (arr.length != 11) throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+                return VideoMetadata(width: dco_decode_i_32(arr[0]),
+height: dco_decode_i_32(arr[1]),
+fps: dco_decode_f_64(arr[2]),
+pixelAspectWidth: dco_decode_i_32(arr[3]),
+pixelAspectHeight: dco_decode_i_32(arr[4]),
+displayAspectWidth: dco_decode_i_32(arr[5]),
+displayAspectHeight: dco_decode_i_32(arr[6]),
+interlaced: dco_decode_bool(arr[7]),
+colorMatrix: dco_decode_String(arr[8]),
+colorRange: dco_decode_String(arr[9]),
+hdrFormat: dco_decode_String(arr[10]),); }
+
+@protected AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_String(deserializer);
+        return AnyhowException(inner); }
+
+@protected RustStreamSink<PlayerEvent> sse_decode_StreamSink_player_event_Sse(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+throw UnimplementedError('Unreachable ()'); }
+
+@protected String sse_decode_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_list_prim_u_8_strict(deserializer);
+        return utf8.decoder.convert(inner); }
+
+@protected AspectRatioMode sse_decode_aspect_ratio_mode(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_i_32(deserializer);
+        return AspectRatioMode.values[inner]; }
+
+@protected bool sse_decode_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getUint8() != 0; }
+
+@protected MediaSourceDto sse_decode_box_autoadd_media_source_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return (sse_decode_media_source_dto(deserializer)); }
+
+@protected double sse_decode_f_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getFloat64(); }
+
+@protected int sse_decode_i_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getInt32(); }
+
+@protected PlatformInt64 sse_decode_i_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getPlatformInt64(); }
+
+@protected List<MediaTrack> sse_decode_list_media_track(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+        var len_ = sse_decode_i_32(deserializer);
+        var ans_ = <MediaTrack>[];
+        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_media_track(deserializer)); }
+        return ans_;
+         }
+
+@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var len_ = sse_decode_i_32(deserializer);
+                return deserializer.buffer.getUint8List(len_); }
+
+@protected MediaSourceDto sse_decode_media_source_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+
+            var tag_ = sse_decode_i_32(deserializer);
+            switch (tag_) { case 0: var var_field0 = sse_decode_String(deserializer);
+return MediaSourceDto_Uri(var_field0);case 1: var var_field0 = sse_decode_String(deserializer);
+return MediaSourceDto_FlutterAsset(var_field0); default: throw UnimplementedError(''); }
+             }
+
+@protected MediaTrack sse_decode_media_track(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_id = sse_decode_u_32(deserializer);
+var var_trackType = sse_decode_track_type(deserializer);
+var var_language = sse_decode_String(deserializer);
+var var_label = sse_decode_String(deserializer);
+var var_selected = sse_decode_bool(deserializer);
+return MediaTrack(id: var_id, trackType: var_trackType, language: var_language, label: var_label, selected: var_selected); }
+
+@protected PipelineCapabilitiesDto sse_decode_pipeline_capabilities_dto(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_seek = sse_decode_bool(deserializer);
+var var_tracks = sse_decode_bool(deserializer);
+var var_orientation = sse_decode_bool(deserializer);
+return PipelineCapabilitiesDto(seek: var_seek, tracks: var_tracks, orientation: var_orientation); }
+
+@protected PlayerEvent sse_decode_player_event(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_kind = sse_decode_player_event_kind(deserializer);
+var var_positionMs = sse_decode_i_64(deserializer);
+var var_durationMs = sse_decode_i_64(deserializer);
+var var_width = sse_decode_i_32(deserializer);
+var var_height = sse_decode_i_32(deserializer);
+var var_bufferingPercent = sse_decode_i_32(deserializer);
+var var_state = sse_decode_player_state(deserializer);
+var var_message = sse_decode_String(deserializer);
+var var_fps = sse_decode_f_64(deserializer);
+var var_pixelAspectWidth = sse_decode_i_32(deserializer);
+var var_pixelAspectHeight = sse_decode_i_32(deserializer);
+var var_displayAspectWidth = sse_decode_i_32(deserializer);
+var var_displayAspectHeight = sse_decode_i_32(deserializer);
+var var_interlaced = sse_decode_bool(deserializer);
+var var_colorMatrix = sse_decode_String(deserializer);
+var var_colorRange = sse_decode_String(deserializer);
+var var_hdrFormat = sse_decode_String(deserializer);
+var var_isSeekable = sse_decode_bool(deserializer);
+return PlayerEvent(kind: var_kind, positionMs: var_positionMs, durationMs: var_durationMs, width: var_width, height: var_height, bufferingPercent: var_bufferingPercent, state: var_state, message: var_message, fps: var_fps, pixelAspectWidth: var_pixelAspectWidth, pixelAspectHeight: var_pixelAspectHeight, displayAspectWidth: var_displayAspectWidth, displayAspectHeight: var_displayAspectHeight, interlaced: var_interlaced, colorMatrix: var_colorMatrix, colorRange: var_colorRange, hdrFormat: var_hdrFormat, isSeekable: var_isSeekable); }
+
+@protected PlayerEventKind sse_decode_player_event_kind(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_i_32(deserializer);
+        return PlayerEventKind.values[inner]; }
+
+@protected PlayerHandle sse_decode_player_handle(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_playerId = sse_decode_i_64(deserializer);
+return PlayerHandle(playerId: var_playerId); }
+
+@protected PlayerState sse_decode_player_state(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_i_32(deserializer);
+        return PlayerState.values[inner]; }
+
+@protected TrackType sse_decode_track_type(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var inner = sse_decode_i_32(deserializer);
+        return TrackType.values[inner]; }
+
+@protected int sse_decode_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getUint32(); }
+
+@protected int sse_decode_u_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+return deserializer.buffer.getUint8(); }
+
+@protected void sse_decode_unit(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+ }
+
+@protected VideoMetadata sse_decode_video_metadata(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+var var_width = sse_decode_i_32(deserializer);
+var var_height = sse_decode_i_32(deserializer);
+var var_fps = sse_decode_f_64(deserializer);
+var var_pixelAspectWidth = sse_decode_i_32(deserializer);
+var var_pixelAspectHeight = sse_decode_i_32(deserializer);
+var var_displayAspectWidth = sse_decode_i_32(deserializer);
+var var_displayAspectHeight = sse_decode_i_32(deserializer);
+var var_interlaced = sse_decode_bool(deserializer);
+var var_colorMatrix = sse_decode_String(deserializer);
+var var_colorRange = sse_decode_String(deserializer);
+var var_hdrFormat = sse_decode_String(deserializer);
+return VideoMetadata(width: var_width, height: var_height, fps: var_fps, pixelAspectWidth: var_pixelAspectWidth, pixelAspectHeight: var_pixelAspectHeight, displayAspectWidth: var_displayAspectWidth, displayAspectHeight: var_displayAspectHeight, interlaced: var_interlaced, colorMatrix: var_colorMatrix, colorRange: var_colorRange, hdrFormat: var_hdrFormat); }
+
+@protected void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.message, serializer); }
+
+@protected void sse_encode_StreamSink_player_event_Sse(RustStreamSink<PlayerEvent> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_String(self.setupAndSerialize(codec: SseCodec(
+            decodeSuccessData: sse_decode_player_event,
+            decodeErrorData: sse_decode_AnyhowException,
+        )), serializer); }
+
+@protected void sse_encode_String(String self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer); }
+
+@protected void sse_encode_aspect_ratio_mode(AspectRatioMode self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.index, serializer); }
+
+@protected void sse_encode_bool(bool self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putUint8(self ? 1 : 0); }
+
+@protected void sse_encode_box_autoadd_media_source_dto(MediaSourceDto self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_media_source_dto(self, serializer); }
+
+@protected void sse_encode_f_64(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putFloat64(self); }
+
+@protected void sse_encode_i_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putInt32(self); }
+
+@protected void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putPlatformInt64(self); }
+
+@protected void sse_encode_list_media_track(List<MediaTrack> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+        for (final item in self) { sse_encode_media_track(item, serializer); } }
+
+@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.length, serializer);
+                    serializer.buffer.putUint8List(self); }
+
+@protected void sse_encode_media_source_dto(MediaSourceDto self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+switch (self) { case MediaSourceDto_Uri(field0: final field0): sse_encode_i_32(0, serializer); sse_encode_String(field0, serializer);
+case MediaSourceDto_FlutterAsset(field0: final field0): sse_encode_i_32(1, serializer); sse_encode_String(field0, serializer);
+  } }
+
+@protected void sse_encode_media_track(MediaTrack self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_u_32(self.id, serializer);
+sse_encode_track_type(self.trackType, serializer);
+sse_encode_String(self.language, serializer);
+sse_encode_String(self.label, serializer);
+sse_encode_bool(self.selected, serializer);
+ }
+
+@protected void sse_encode_pipeline_capabilities_dto(PipelineCapabilitiesDto self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_bool(self.seek, serializer);
+sse_encode_bool(self.tracks, serializer);
+sse_encode_bool(self.orientation, serializer);
+ }
+
+@protected void sse_encode_player_event(PlayerEvent self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_player_event_kind(self.kind, serializer);
+sse_encode_i_64(self.positionMs, serializer);
+sse_encode_i_64(self.durationMs, serializer);
+sse_encode_i_32(self.width, serializer);
+sse_encode_i_32(self.height, serializer);
+sse_encode_i_32(self.bufferingPercent, serializer);
+sse_encode_player_state(self.state, serializer);
+sse_encode_String(self.message, serializer);
+sse_encode_f_64(self.fps, serializer);
+sse_encode_i_32(self.pixelAspectWidth, serializer);
+sse_encode_i_32(self.pixelAspectHeight, serializer);
+sse_encode_i_32(self.displayAspectWidth, serializer);
+sse_encode_i_32(self.displayAspectHeight, serializer);
+sse_encode_bool(self.interlaced, serializer);
+sse_encode_String(self.colorMatrix, serializer);
+sse_encode_String(self.colorRange, serializer);
+sse_encode_String(self.hdrFormat, serializer);
+sse_encode_bool(self.isSeekable, serializer);
+ }
+
+@protected void sse_encode_player_event_kind(PlayerEventKind self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.index, serializer); }
+
+@protected void sse_encode_player_handle(PlayerHandle self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_64(self.playerId, serializer);
+ }
+
+@protected void sse_encode_player_state(PlayerState self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.index, serializer); }
+
+@protected void sse_encode_track_type(TrackType self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.index, serializer); }
+
+@protected void sse_encode_u_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putUint32(self); }
+
+@protected void sse_encode_u_8(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+serializer.buffer.putUint8(self); }
+
+@protected void sse_encode_unit(void self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+ }
+
+@protected void sse_encode_video_metadata(VideoMetadata self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
+sse_encode_i_32(self.width, serializer);
+sse_encode_i_32(self.height, serializer);
+sse_encode_f_64(self.fps, serializer);
+sse_encode_i_32(self.pixelAspectWidth, serializer);
+sse_encode_i_32(self.pixelAspectHeight, serializer);
+sse_encode_i_32(self.displayAspectWidth, serializer);
+sse_encode_i_32(self.displayAspectHeight, serializer);
+sse_encode_bool(self.interlaced, serializer);
+sse_encode_String(self.colorMatrix, serializer);
+sse_encode_String(self.colorRange, serializer);
+sse_encode_String(self.hdrFormat, serializer);
+ }
+                }
+                

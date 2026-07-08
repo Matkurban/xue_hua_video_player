@@ -39,8 +39,8 @@ class VideoControlsTopBar extends StatelessWidget {
   /// 铺满模式文案 / Aspect ratio mode labels.
   final AspectRatioModeLabels labels;
 
-  /// 方向面板文案 / Video orientation panel labels.
-  final VideoOrientationLabels orientationLabels;
+  /// 旋转面板文案 / Video rotation panel labels.
+  final VideoRotationLabels orientationLabels;
 
   /// 是否在顶栏显示方向设置按钮 / Whether to show orientation button in the top bar.
   final bool showOrientationMenu;

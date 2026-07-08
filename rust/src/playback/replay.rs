@@ -111,7 +111,7 @@ mod tests {
     use super::*;
     use crate::playback::bus::Emitter;
     use crate::playback::gst::{
-        InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+        InternalAspectRatioMode, InternalVideoMetadata,
     };
     use crate::playback::surface::VideoSurface;
     use crate::playback::tracks::TrackCache;
@@ -132,7 +132,7 @@ mod tests {
                 looping: Arc::new(AtomicBool::new(false)),
                 metadata: Arc::new(Mutex::new(InternalVideoMetadata::default())),
                 track_cache: Arc::new(Mutex::new(TrackCache::default())),
-                orientation: InternalVideoOrientationConfig::default(),
+                rotate_degrees: 0,
                 aspect: InternalAspectRatioMode::default(),
                 frame_sink: crate::playback::frame::FrameSink::new(),
             },

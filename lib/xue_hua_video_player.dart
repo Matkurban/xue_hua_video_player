@@ -17,7 +17,8 @@ export 'src/controls/fullscreen_config.dart'
     show
         AspectRatioModeLabels,
         VideoControlsFullscreenConfig,
-        VideoOrientationLabels;
+        VideoRotationLabels;
+export 'src/enum/video_rotation.dart';
 export 'src/controls/playback_controls_model.dart' show PlaybackControlsModel;
 export 'src/presentation/playback_presentation_model.dart'
     show PlaybackPresentationModel;

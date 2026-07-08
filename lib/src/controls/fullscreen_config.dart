@@ -38,32 +38,16 @@ class AspectRatioModeLabels {
   int get hashCode => Object.hash(fit, fill, stretch);
 }
 
-/// 视频方向面板的显示文案 / Display labels for the video orientation panel.
-class VideoOrientationLabels {
-  /// 创建方向面板文案 / Creates orientation panel labels.
-  const VideoOrientationLabels({
-    this.flipHorizontal = '水平翻转',
-    this.flipVertical = '垂直翻转',
-    this.flipOff = '关',
-    this.flipOn = '开',
+/// 视频旋转面板的显示文案 / Display labels for the video rotation panel.
+class VideoRotationLabels {
+  /// 创建旋转面板文案 / Creates rotation panel labels.
+  const VideoRotationLabels({
     this.rotateAngle = '旋转角度',
     this.rotate0 = '0°',
     this.rotate90 = '90°',
     this.rotate180 = '180°',
     this.rotate270 = '270°',
   });
-
-  /// 水平翻转 / Horizontal flip.
-  final String flipHorizontal;
-
-  /// 垂直翻转 / Vertical flip.
-  final String flipVertical;
-
-  /// 翻转关闭 / Flip off label.
-  final String flipOff;
-
-  /// 翻转开启 / Flip on label.
-  final String flipOn;
 
   /// 旋转角度区标题 / Rotation section label.
   final String rotateAngle;
@@ -92,11 +76,7 @@ class VideoOrientationLabels {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VideoOrientationLabels &&
-          flipHorizontal == other.flipHorizontal &&
-          flipVertical == other.flipVertical &&
-          flipOff == other.flipOff &&
-          flipOn == other.flipOn &&
+      other is VideoRotationLabels &&
           rotateAngle == other.rotateAngle &&
           rotate0 == other.rotate0 &&
           rotate90 == other.rotate90 &&
@@ -104,18 +84,13 @@ class VideoOrientationLabels {
           rotate270 == other.rotate270;
 
   @override
-  int get hashCode => Object.hash(
-    flipHorizontal,
-    flipVertical,
-    flipOff,
-    flipOn,
-    rotateAngle,
-    rotate0,
-    rotate90,
-    rotate180,
-    rotate270,
-  );
+  int get hashCode =>
+      Object.hash(rotateAngle, rotate0, rotate90, rotate180, rotate270);
 }
+
+/// @nodoc
+@Deprecated('Use VideoRotationLabels instead')
+typedef VideoOrientationLabels = VideoRotationLabels;
 
 /// 全屏沉浸控件配置 / Configuration for fullscreen immersive controls.
 class VideoControlsFullscreenConfig {
@@ -134,7 +109,7 @@ class VideoControlsFullscreenConfig {
     this.aspectRatioLabels = const AspectRatioModeLabels(),
     this.overlaySlots = const VideoControlsOverlaySlots(),
     this.showOrientationMenu = true,
-    this.orientationLabels = const VideoOrientationLabels(),
+    this.orientationLabels = const VideoRotationLabels(),
   });
 
   /// 单次进退时长 / Seek step per gesture or arrow key.
@@ -152,8 +127,8 @@ class VideoControlsFullscreenConfig {
   /// 是否显示视频方向设置按钮；移动端仅全屏，桌面端在顶栏可见时显示 / Orientation button; mobile fullscreen only, desktop when top bar shows.
   final bool showOrientationMenu;
 
-  /// 视频方向面板文案 / Labels for video orientation panel.
-  final VideoOrientationLabels orientationLabels;
+  /// 视频旋转面板文案 / Labels for video rotation panel.
+  final VideoRotationLabels orientationLabels;
 
   @override
   bool operator ==(Object other) =>

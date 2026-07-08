@@ -2,15 +2,15 @@ import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../rust/player_events.dart';
+import '../enum/video_rotation.dart';
 import '../theme/video_controls_theme.dart';
 import 'fullscreen_config.dart';
 import 'playback_controls_model.dart';
 import 'themed_segmented_control.dart';
 
-/// 视频方向设置按钮（无定位）/ Video orientation settings trigger without positioning.
+/// 视频旋转设置按钮（无定位）/ Video rotation settings trigger without positioning.
 class VideoOrientationMenuButton extends StatelessWidget {
-  /// 创建方向设置按钮 / Creates the orientation settings button.
+  /// 创建旋转设置按钮 / Creates the rotation settings button.
   const VideoOrientationMenuButton({
     super.key,
     required this.model,
@@ -25,9 +25,14 @@ class VideoOrientationMenuButton extends StatelessWidget {
   final VideoControlsTheme theme;
 
   /// 面板文案 / Panel labels.
-  final VideoOrientationLabels labels;
+  final VideoRotationLabels labels;
 
-  static const List<int> _rotateOptions = [0, 90, 180, 270];
+  static const List<VideoRotation> _rotateOptions = [
+    VideoRotation.deg0,
+    VideoRotation.deg90,
+    VideoRotation.deg180,
+    VideoRotation.deg270,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -45,90 +50,26 @@ class VideoOrientationMenuButton extends StatelessWidget {
           menuBuilder: (context, hideMenu) {
             return SignalBuilder(
               builder: (context) {
-                final config = model.videoOrientation.value;
+                final rotation = model.videoRotation.value;
                 return SizedBox(
                   width: 280,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ThemedSegmentedControl<bool>(
-                          label: labels.flipHorizontal,
-                          theme: theme,
-                          showSelectedIcon: false,
-                          segments: [
-                            ButtonSegment<bool>(
-                              value: false,
-                              label: Text(labels.flipOff),
-                            ),
-                            ButtonSegment<bool>(
-                              value: true,
-                              label: Text(labels.flipOn),
-                            ),
-                          ],
-                          selected: {config.flipHorizontal},
-                          onSelectionChanged: (value) async {
-                            await model.setVideoOrientation(
-                              VideoOrientationConfig(
-                                flipHorizontal: value.first,
-                                flipVertical: config.flipVertical,
-                                rotateDegrees: config.rotateDegrees,
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        ThemedSegmentedControl<bool>(
-                          label: labels.flipVertical,
-                          theme: theme,
-                          showSelectedIcon: false,
-                          segments: [
-                            ButtonSegment<bool>(
-                              value: false,
-                              label: Text(labels.flipOff),
-                            ),
-                            ButtonSegment<bool>(
-                              value: true,
-                              label: Text(labels.flipOn),
-                            ),
-                          ],
-                          selected: {config.flipVertical},
-                          onSelectionChanged: (value) async {
-                            await model.setVideoOrientation(
-                              VideoOrientationConfig(
-                                flipHorizontal: config.flipHorizontal,
-                                flipVertical: value.first,
-                                rotateDegrees: config.rotateDegrees,
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        ThemedSegmentedControl<int>(
-                          label: labels.rotateAngle,
-                          theme: theme,
-                          showSelectedIcon: false,
-                          segments: [
-                            for (final degrees in _rotateOptions)
-                              ButtonSegment<int>(
-                                value: degrees,
-                                label: Text(labels.rotateLabel(degrees)),
-                              ),
-                          ],
-                          selected: {config.rotateDegrees},
-                          onSelectionChanged: (value) async {
-                            await model.setVideoOrientation(
-                              VideoOrientationConfig(
-                                flipHorizontal: config.flipHorizontal,
-                                flipVertical: config.flipVertical,
-                                rotateDegrees: value.first,
-                              ),
-                            );
-                          },
-                        ),
+                    child: ThemedSegmentedControl<VideoRotation>(
+                      label: labels.rotateAngle,
+                      theme: theme,
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final option in _rotateOptions)
+                          ButtonSegment<VideoRotation>(
+                            value: option,
+                            label: Text(labels.rotateLabel(option.degrees)),
+                          ),
                       ],
+                      selected: {rotation},
+                      onSelectionChanged: (value) async {
+                        await model.setVideoRotation(value.first);
+                      },
                     ),
                   ),
                 );

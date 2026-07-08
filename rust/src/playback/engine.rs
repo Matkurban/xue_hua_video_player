@@ -31,7 +31,7 @@ use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
 use crate::playback::gst::{
-    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+    InternalAspectRatioMode, InternalVideoMetadata, validate_rotate_degrees,
 };
 use crate::playback::gst_context::PlaybackGstContext;
 #[cfg(target_os = "ios")]
@@ -58,7 +58,7 @@ pub struct PlaybackEngine {
     seekable: Arc<AtomicBool>,
     video_metadata: Arc<Mutex<InternalVideoMetadata>>,
     track_cache: Arc<Mutex<TrackCache>>,
-    orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
+    rotate_degrees: Arc<Mutex<i32>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
     /// Flutter 外部纹理帧源（Apple/Win/Linux）/ Frame source for Flutter external-texture bridge.
     frame_sink: Arc<FrameSink>,
@@ -100,7 +100,7 @@ impl PlaybackEngine {
         let seekable = Arc::new(AtomicBool::new(true));
         let video_metadata = Arc::new(Mutex::new(InternalVideoMetadata::default()));
         let track_cache = Arc::new(Mutex::new(TrackCache::default()));
-        let orientation = Arc::new(Mutex::new(InternalVideoOrientationConfig::default()));
+        let rotate_degrees = Arc::new(Mutex::new(0i32));
         let aspect_mode = Arc::new(Mutex::new(InternalAspectRatioMode::default()));
         let frame_sink = FrameSink::new();
 
@@ -197,7 +197,7 @@ impl PlaybackEngine {
             looping.clone(),
             video_metadata.clone(),
             track_cache.clone(),
-            orientation.clone(),
+            rotate_degrees.clone(),
             aspect_mode.clone(),
             frame_sink.clone(),
             #[cfg(target_os = "android")]
@@ -218,7 +218,7 @@ impl PlaybackEngine {
             seekable,
             video_metadata,
             track_cache,
-            orientation,
+            rotate_degrees,
             aspect_mode,
             frame_sink,
             #[cfg(target_os = "android")]
@@ -290,6 +290,7 @@ impl PlaybackEngine {
             .store(is_seekable(&resolved), Ordering::SeqCst);
         *self.rate.lock() = 1.0;
         *self.aspect_mode.lock() = InternalAspectRatioMode::Fit;
+        *self.rotate_degrees.lock() = 0;
         self.track_cache.lock().clear();
         #[cfg(target_os = "android")]
         if let ResolvedSource::Uri(ref uri) = resolved {
@@ -525,13 +526,11 @@ impl PlaybackEngine {
         crate::player_events::VideoMetadata::from(self.video_metadata.lock().clone())
     }
 
-    pub fn set_video_orientation(&self, config: InternalVideoOrientationConfig) -> Result<()> {
-        *self.orientation.lock() = config;
-        let config = *self.orientation.lock();
+    pub fn set_video_rotation(&self, rotate_degrees: i32) -> Result<()> {
+        let degrees = validate_rotate_degrees(rotate_degrees)?;
+        *self.rotate_degrees.lock() = degrees;
         self.run_on_gst(move |shell| {
-            if shell.capabilities().orientation {
-                shell.apply_orientation(config)?;
-            }
+            shell.apply_rotation(degrees)?;
             Ok(())
         })
     }

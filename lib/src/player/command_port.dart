@@ -54,8 +54,8 @@ abstract class PlayerCommandPort {
   /// 选中或取消选中轨道 / Selects or deselects a track.
   Future<void> selectTrack(MediaTrack track, {required bool enable});
 
-  /// 设置视频方向 / Sets video orientation.
-  Future<void> setVideoOrientation(VideoOrientationConfig config);
+  /// 设置视频顺时针旋转角度 / Sets clockwise video rotation in degrees.
+  Future<void> setVideoRotation(int rotateDegrees);
 
   /// 设置宽高比模式 / Sets aspect ratio mode.
   Future<void> setAspectRatioMode(AspectRatioMode mode);
@@ -147,8 +147,11 @@ class ProductionPlayerCommandPort implements PlayerCommandPort {
       );
 
   @override
-  Future<void> setVideoOrientation(VideoOrientationConfig config) =>
-      rust.playerSetVideoOrientation(playerId: _id, config: config);
+  Future<void> setVideoRotation(int rotateDegrees) =>
+      rust.playerSetVideoRotation(
+        playerId: _id,
+        rotateDegrees: rotateDegrees,
+      );
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) =>

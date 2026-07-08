@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 use crate::media::ResolvedSource;
 use crate::playback::bus::Emitter;
 use crate::playback::gst::{
-    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+    InternalAspectRatioMode, InternalVideoMetadata,
 };
 use crate::playback::overlay::OverlaySession;
 use crate::playback::replay::PlayReplayContext;
@@ -43,8 +43,8 @@ pub struct PipelineSwapConfig {
     pub metadata: Arc<Mutex<InternalVideoMetadata>>,
     /// 多轨缓存 / Multi-track cache.
     pub track_cache: Arc<Mutex<TrackCache>>,
-    /// 画面旋转配置快照 / Orientation config snapshot.
-    pub orientation: InternalVideoOrientationConfig,
+    /// 顺时针旋转角度快照：0、90、180 或 270 / Clockwise rotation degrees snapshot.
+    pub rotate_degrees: i32,
     /// 宽高比模式快照 / Aspect ratio mode snapshot.
     pub aspect: InternalAspectRatioMode,
     /// 跨 shell 重建复用的帧源，保证 URI ↔ 资产切换后 Flutter 纹理仍收帧 / Frame source reused across shell rebuilds.
@@ -77,7 +77,7 @@ impl PipelineSwapConfig {
             looping: self.looping.clone(),
             metadata: self.metadata.clone(),
             track_cache: self.track_cache.clone(),
-            orientation: self.orientation,
+            rotate_degrees: self.rotate_degrees,
             aspect: self.aspect,
             frame_sink: self.frame_sink.clone(),
             #[cfg(target_os = "android")]
@@ -155,7 +155,7 @@ fn switch_uri_shell(
     }
     surface.rebind_cached_overlay(shell)?;
     shell.apply_aspect_ratio(swap.aspect);
-    shell.apply_orientation(swap.orientation)?;
+    shell.apply_rotation(swap.rotate_degrees)?;
     pipeline_set_uri(shell, uri, replay, surface)
 }
 
@@ -207,6 +207,7 @@ pub(crate) fn switch_asset_shell(
     wire_overlay_sync(shell, surface.stored_handle());
     surface.rebind_cached_overlay(shell)?;
     shell.apply_aspect_ratio(swap.aspect);
+    shell.apply_rotation(swap.rotate_degrees)?;
     replay.at_eos.store(false, Ordering::SeqCst);
     preroll_asset_shell(
         shell,

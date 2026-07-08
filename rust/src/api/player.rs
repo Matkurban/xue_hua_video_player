@@ -18,7 +18,7 @@ use parking_lot::Mutex;
 
 pub use crate::api::types::{
     AspectRatioMode, MediaSourceDto, MediaTrack, PipelineCapabilitiesDto, PlayerEvent,
-    PlayerEventKind, PlayerState, TrackType, VideoMetadata, VideoOrientationConfig,
+    PlayerEventKind, PlayerState, TrackType, VideoMetadata,
 };
 use crate::frb_generated::StreamSink;
 use crate::playback::PlaybackEngine;
@@ -402,9 +402,9 @@ pub fn player_get_video_metadata(player_id: i64) -> Result<VideoMetadata> {
     Ok(meta)
 }
 
-/// 设置视频方向（翻转/旋转）/ Sets video orientation (flip/rotate).
-pub fn player_set_video_orientation(player_id: i64, config: VideoOrientationConfig) -> Result<()> {
-    get_player(player_id)?.set_video_orientation(config.into())
+/// 设置视频顺时针旋转角度（0、90、180 或 270）/ Sets clockwise video rotation in degrees.
+pub fn player_set_video_rotation(player_id: i64, rotate_degrees: i32) -> Result<()> {
+    get_player(player_id)?.set_video_rotation(rotate_degrees)
 }
 
 /// 设置宽高比缩放模式 / Sets aspect ratio scaling mode.

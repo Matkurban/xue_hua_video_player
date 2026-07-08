@@ -17,7 +17,7 @@ use parking_lot::Mutex;
 use crate::media::AppSrcFeedState;
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
-use crate::playback::gst::{create_platform_video_sink, InternalVideoMetadata};
+use crate::playback::gst::{create_platform_video_sink, make_videoflip_element, InternalVideoMetadata};
 #[cfg(target_os = "android")]
 use crate::playback::sink::OverlaySizeSync;
 use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
@@ -27,31 +27,15 @@ const APPSRC_CHUNK: usize = 64 * 1024;
 
 /// 为 Flutter bundle 资产构建 AppSrc → decodebin 管线 / Builds an AppSrc → decodebin pipeline for Flutter bundle assets.
 ///
-/// # 参数 / Parameters
-/// - `asset_key` — Flutter asset 路径键 / Flutter asset path key
-/// - `emitter` — 视频事件发射器 / video event emitter
-/// - `metadata_cache` — 可选元数据缓存 / optional metadata cache
-/// - `frame_sink` — 外部纹理帧源 / external texture frame source
-/// - `overlay_size_sync`（Android）— 解码尺寸同步 / dimension sync on Android
-///
-/// # 返回值 / Returns
-/// - 成功：`(Pipeline, video_sink, AppSrcFeedState)` / pipeline, sink, and feed state
-///
-/// # 错误 / Errors
-/// - asset 打开失败、元素创建或链接失败 / asset open, element creation, or link failure
-///
-/// # 线程 / Threading
-/// - 必须在 Gst 线程上构建；AppSrc 回调在 streaming 线程触发 / Build on Gst thread; AppSrc callbacks on streaming thread
-///
-/// # 平台 / Platform
-/// - 视频 sink 同 URI 管线，由平台工厂选择 / video sink same as URI path via platform factory
+/// 返回 `(Pipeline, video_sink, feed, orientation_filter)`，其中 `orientation_filter` 为视频支路 `videoflip`。
+/// Returns `(Pipeline, video_sink, feed, orientation_filter)` where `orientation_filter` is the branch `videoflip`.
 pub fn build_asset_pipeline(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     frame_sink: &Arc<FrameSink>,
     #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
-) -> Result<(gst::Pipeline, gst::Element, Arc<AppSrcFeedState>)> {
+) -> Result<(gst::Pipeline, gst::Element, Arc<AppSrcFeedState>, gst::Element)> {
     let pipeline = gst::Pipeline::new();
     let video_sink = create_platform_video_sink(frame_sink)?;
     attach_video_probe(
@@ -62,6 +46,7 @@ pub fn build_asset_pipeline(
         overlay_size_sync,
     );
     let audio_bin = build_audio_sink_bin()?;
+    let orientation_filter = make_videoflip_element()?;
 
     let appsrc = gst::ElementFactory::make("appsrc")
         .name("src")
@@ -78,6 +63,7 @@ pub fn build_asset_pipeline(
     pipeline.add_many([
         &appsrc,
         &decodebin,
+        &orientation_filter,
         &video_sink,
         audio_bin.upcast_ref::<gst::Element>(),
     ])?;
@@ -86,6 +72,7 @@ pub fn build_asset_pipeline(
     let pipeline_weak = pipeline.downgrade();
     let video_sink_cb = video_sink.clone();
     let audio_bin_cb = audio_bin.clone();
+    let orientation_cb = orientation_filter.clone();
     decodebin.connect_pad_added(move |_elem, src_pad| {
         let Some(pipeline) = pipeline_weak.upgrade() else {
             return;
@@ -106,7 +93,7 @@ pub fn build_asset_pipeline(
         };
         let name = structure.name();
         let result = if name.starts_with("video/") {
-            link_video_branch(src_pad, &pipeline, &video_sink_cb)
+            link_video_branch(src_pad, &pipeline, &video_sink_cb, &orientation_cb)
         } else if name.starts_with("audio/") {
             link_audio_branch(src_pad, &pipeline, &audio_bin_cb)
         } else {
@@ -117,7 +104,7 @@ pub fn build_asset_pipeline(
         }
     });
 
-    Ok((pipeline, video_sink, feed))
+    Ok((pipeline, video_sink, feed, orientation_filter))
 }
 
 /// 为 AppSrc 注册 `need-data` 分块推送回调 / Wires AppSrc `need-data` chunk push callbacks.
@@ -161,21 +148,22 @@ fn wire_appsrc_callbacks(appsrc_el: &gst::Element, feed: Arc<AppSrcFeedState>) -
     Ok(())
 }
 
-/// 将 decodebin 视频 pad 链接到 queue → videoconvert → video_sink / Links decodebin video pad to sink branch.
+/// 将 decodebin 视频 pad 链接到 queue → videoflip → videoconvert → video_sink / Links decodebin video pad to sink branch.
 fn link_video_branch(
     src_pad: &gst::Pad,
     pipeline: &gst::Pipeline,
     video_sink: &gst::Element,
+    videoflip: &gst::Element,
 ) -> Result<()> {
     let queue = gst::ElementFactory::make("queue").build()?;
     let convert = gst::ElementFactory::make("videoconvert").build()?;
     pipeline.add_many([&queue, &convert])?;
-    gst::Element::link_many([&queue, &convert, video_sink])?;
+    gst::Element::link_many([queue.upcast_ref(), videoflip, &convert, video_sink])?;
     let sink_pad = queue
         .static_pad("sink")
         .ok_or_else(|| anyhow!("queue has no sink pad"))?;
     src_pad.link(&sink_pad)?;
-    for el in [&queue, &convert, video_sink] {
+    for el in [&queue, videoflip, &convert, video_sink] {
         el.sync_state_with_parent()?;
     }
     Ok(())

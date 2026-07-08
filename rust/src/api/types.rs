@@ -162,37 +162,6 @@ impl From<crate::playback::capabilities::PipelineCapabilities> for PipelineCapab
     }
 }
 
-/// Dart 侧视频翻转/旋转配置 / Video flip/rotate configuration for Dart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct VideoOrientationConfig {
-    /// 水平翻转 / Horizontal flip.
-    pub flip_horizontal: bool,
-    /// 垂直翻转 / Vertical flip.
-    pub flip_vertical: bool,
-    /// 顺时针旋转角度：0、90、180 或 270 / Clockwise rotation in degrees: 0, 90, 180, or 270.
-    pub rotate_degrees: i32,
-}
-
-impl From<VideoOrientationConfig> for crate::playback::gst::InternalVideoOrientationConfig {
-    fn from(c: VideoOrientationConfig) -> Self {
-        Self {
-            flip_horizontal: c.flip_horizontal,
-            flip_vertical: c.flip_vertical,
-            rotate_degrees: c.rotate_degrees,
-        }
-    }
-}
-
-impl From<crate::playback::gst::InternalVideoOrientationConfig> for VideoOrientationConfig {
-    fn from(c: crate::playback::gst::InternalVideoOrientationConfig) -> Self {
-        Self {
-            flip_horizontal: c.flip_horizontal,
-            flip_vertical: c.flip_vertical,
-            rotate_degrees: c.rotate_degrees,
-        }
-    }
-}
-
 /// 视频宽高比缩放模式 / Aspect ratio scaling mode for video display.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AspectRatioMode {

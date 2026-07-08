@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
+import '../enum/video_rotation.dart';
 import '../controls/playback_controls_model.dart';
 import '../presentation/playback_presentation_model.dart';
 import '../media/media_source_resolver.dart';
@@ -48,15 +49,9 @@ class PlaybackSession
   final FlutterSignal<VideoMetadata?> _videoMetadata = signal(null);
   final FlutterSignal<bool> _isSeekable = signal(true);
   final FlutterSignal<bool> _supportsTracks = signal(true);
-  final FlutterSignal<bool> _supportsOrientation = signal(true);
+  final FlutterSignal<bool> _supportsOrientation = signal(false);
   final FlutterSignal<int> _mediaGeneration = signal(0);
-  final FlutterSignal<VideoOrientationConfig> _videoOrientation = signal(
-    const VideoOrientationConfig(
-      flipHorizontal: false,
-      flipVertical: false,
-      rotateDegrees: 0,
-    ),
-  );
+  final FlutterSignal<VideoRotation> _videoRotation = signal(VideoRotation.deg0);
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   late final ReadonlySignal<int> mediaGeneration = _mediaGeneration;
@@ -118,8 +113,7 @@ class PlaybackSession
   @override
   ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
   @override
-  ReadonlySignal<VideoOrientationConfig> get videoOrientation =>
-      _videoOrientation;
+  ReadonlySignal<VideoRotation> get videoRotation => _videoRotation;
 
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
@@ -227,9 +221,9 @@ class PlaybackSession
       _guard(() => _port.selectTrack(track, enable: enable));
 
   @override
-  Future<void> setVideoOrientation(VideoOrientationConfig config) async {
-    _videoOrientation.value = config;
-    await _guard(() => _port.setVideoOrientation(config));
+  Future<void> setVideoRotation(VideoRotation rotation) async {
+    _videoRotation.value = rotation;
+    await _guard(() => _port.setVideoRotation(rotation.degrees));
   }
 
   @override
@@ -262,7 +256,7 @@ class PlaybackSession
     _isSeekable.dispose();
     _supportsTracks.dispose();
     _supportsOrientation.dispose();
-    _videoOrientation.dispose();
+    _videoRotation.dispose();
     _mediaGeneration.dispose();
   }
 
@@ -289,11 +283,7 @@ class PlaybackSession
       _volume.value = 1.0;
       _muted.value = false;
       _looping.value = false;
-      _videoOrientation.value = const VideoOrientationConfig(
-        flipHorizontal: false,
-        flipVertical: false,
-        rotateDegrees: 0,
-      );
+      _videoRotation.value = VideoRotation.deg0;
       _mediaGeneration.value++;
     });
   }
