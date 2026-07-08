@@ -28,6 +28,10 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     required this.secondaryIconSize,
     required this.barPadding,
     required this.borderRadius,
+    required this.bufferingScrimColor,
+    required this.bufferingIndicatorColor,
+    required this.bufferingTextColor,
+    this.bufferingTextStyle,
   });
 
   /// Material 预设（实心图标、宽滑条、半透明 scrim）/ Material preset.
@@ -44,6 +48,9 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     secondaryIconSize: 20,
     barPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     borderRadius: 0,
+    bufferingScrimColor: Colors.transparent,
+    bufferingIndicatorColor: Color(0xFFFFFFFF),
+    bufferingTextColor: Color(0xFFFFFFFF),
   );
 
   /// Cupertino 预设（细轨道、圆角半透明栏）/ Cupertino preset.
@@ -60,6 +67,9 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     secondaryIconSize: 20,
     barPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
     borderRadius: 14,
+    bufferingScrimColor: Colors.transparent,
+    bufferingIndicatorColor: Color(0xFFEBEBF5),
+    bufferingTextColor: Color(0xFFEBEBF5),
   );
 
   /// 空闲控件图标颜色 / Color of idle control icons.
@@ -97,4 +107,16 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
 
   /// 底栏圆角 / Control bar corner radius.
   final double borderRadius;
+
+  /// 缓冲遮罩色；默认透明（非全屏遮挡）/ Buffering scrim; default transparent.
+  final Color bufferingScrimColor;
+
+  /// 缓冲指示器颜色 / Buffering spinner color.
+  final Color bufferingIndicatorColor;
+
+  /// 缓冲进度文字颜色 / Buffering percent label color.
+  final Color bufferingTextColor;
+
+  /// 缓冲进度文字样式；为 null 时用 [bufferingTextColor] + 默认字号 / Optional buffering label style.
+  final TextStyle? bufferingTextStyle;
 }

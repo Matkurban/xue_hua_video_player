@@ -31,6 +31,7 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
 
   Duration? lastSeek;
   int seekCallCount = 0;
+  int togglePlayPauseCallCount = 0;
 
   @override
   ReadonlySignal<PlayerState> get state => _state;
@@ -60,7 +61,9 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
   ReadonlySignal<double> get speed => _speed;
 
   @override
-  Future<void> togglePlayPause() async {}
+  Future<void> togglePlayPause() async {
+    togglePlayPauseCallCount++;
+  }
 
   @override
   Future<void> toggleMuted() async {}

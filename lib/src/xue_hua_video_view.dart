@@ -110,6 +110,7 @@ class _XueHuaVideoViewState extends State<XueHuaVideoView> {
             PlaybackPresentation(
               model: widget.controller,
               aspectRatioMode: _immersive.aspectRatioMode,
+              controlsStyle: widget.controlsStyle,
             ),
             if (widget.showControls)
               VideoControls(

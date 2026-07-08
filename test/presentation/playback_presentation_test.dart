@@ -1,9 +1,13 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:signals/signals_flutter.dart';
+import 'package:xue_hua_video_player/src/controls/buffering_indicator.dart';
+import 'package:xue_hua_video_player/src/enum/video_controls_style.dart';
 import 'package:xue_hua_video_player/src/presentation/playback_presentation.dart';
 import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/theme/video_controls_theme.dart';
 
 import '../support/fake_playback_presentation_model.dart';
 
@@ -98,6 +102,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('50%'), findsOneWidget);
+
+      final indicatorBox = tester.widget<SizedBox>(
+        find.descendant(
+          of: find.byType(BufferingIndicator),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is SizedBox &&
+                widget.width == BufferingIndicator.materialIndicatorSize &&
+                widget.height == BufferingIndicator.materialIndicatorSize,
+          ),
+        ),
+      );
+      expect(indicatorBox.width, 36);
+      expect(indicatorBox.height, 36);
 
       model.setState(PlayerState.playing);
       model.setBufferingPercent(100);
@@ -134,6 +153,120 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('50%'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('uses Cupertino buffering indicator when requested', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel(
+        state: PlayerState.buffering,
+        bufferingPercent: 42,
+      );
+      aspectRatioMode = signal(AspectRatioMode.fit);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+                controlsStyle: VideoControlsStyle.cupertino,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('42%'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('default theme uses no fullscreen buffering scrim', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel(
+        state: PlayerState.buffering,
+        bufferingPercent: 50,
+      );
+      aspectRatioMode = signal(AspectRatioMode.fit);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is ColoredBox &&
+              widget.color == const Color(0x61000000),
+        ),
+        findsNothing,
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('shows buffering scrim when theme configures one', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel(
+        state: PlayerState.buffering,
+        bufferingPercent: 50,
+      );
+      aspectRatioMode = signal(AspectRatioMode.fit);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            extensions: [
+              VideoControlsTheme.material().copyWith(
+                bufferingScrimColor: Colors.black38,
+              ),
+            ],
+          ),
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is ColoredBox && widget.color == Colors.black38,
+        ),
+        findsOneWidget,
+      );
       debugDefaultTargetPlatformOverride = null;
     });
 
@@ -158,11 +291,41 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(Center), findsWidgets);
-      expect(find.byType(AspectRatio), findsOneWidget);
-      final aspectBox = tester.getSize(find.byType(AspectRatio));
-      expect(aspectBox.width, 400);
-      expect(aspectBox.height, closeTo(400 / (16 / 9), 1));
+      expect(find.byType(FittedBox), findsOneWidget);
+      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.contain);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('aspect ratio modes map to distinct BoxFit values', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel();
+      aspectRatioMode = signal(AspectRatioMode.fit);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 300,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.contain);
+
+      aspectRatioMode.value = AspectRatioMode.fill;
+      await tester.pumpAndSettle();
+      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.cover);
+
+      aspectRatioMode.value = AspectRatioMode.stretch;
+      await tester.pumpAndSettle();
+      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.fill);
+
       debugDefaultTargetPlatformOverride = null;
     });
 
@@ -186,7 +349,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(AspectRatio), findsNothing);
+      expect(find.byType(FittedBox), findsNothing);
     });
   });
 }

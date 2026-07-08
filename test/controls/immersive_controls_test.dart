@@ -135,7 +135,7 @@ void main() {
       }
     });
 
-    testWidgets('desktopImmersive false ignores arrow keys', (tester) async {
+    testWidgets('desktopImmersive false still handles arrow keys', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         immersive.dispose();
@@ -150,9 +150,47 @@ void main() {
 
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
         await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
 
-        expect(model.seekCallCount, 0);
+        expect(model.seekCallCount, 1);
+        expect(model.lastSeek, const Duration(seconds: 25));
         expect(find.text('适应'), findsNothing);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('space toggles play pause on desktop', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        await pumpControls(tester);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        await tester.pump();
+
+        expect(model.togglePlayPauseCallCount, 1);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('space works when desktopImmersive is false', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        immersive.dispose();
+        immersive = ImmersiveControlsState(
+          initialAspectRatioMode: AspectRatioMode.fit,
+          fullscreen: const VideoControlsFullscreenConfig(
+            desktopImmersive: false,
+          ),
+        );
+
+        await pumpControls(tester);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        await tester.pump();
+
+        expect(model.togglePlayPauseCallCount, 1);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

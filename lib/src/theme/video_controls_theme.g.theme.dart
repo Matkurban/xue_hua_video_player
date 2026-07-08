@@ -24,6 +24,10 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
     double? secondaryIconSize,
     EdgeInsets? barPadding,
     double? borderRadius,
+    Color? bufferingScrimColor,
+    Color? bufferingIndicatorColor,
+    Color? bufferingTextColor,
+    TextStyle? bufferingTextStyle,
   }) {
     final _this = (this as VideoControlsTheme);
 
@@ -40,6 +44,11 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
       secondaryIconSize: secondaryIconSize ?? _this.secondaryIconSize,
       barPadding: barPadding ?? _this.barPadding,
       borderRadius: borderRadius ?? _this.borderRadius,
+      bufferingScrimColor: bufferingScrimColor ?? _this.bufferingScrimColor,
+      bufferingIndicatorColor:
+          bufferingIndicatorColor ?? _this.bufferingIndicatorColor,
+      bufferingTextColor: bufferingTextColor ?? _this.bufferingTextColor,
+      bufferingTextStyle: bufferingTextStyle ?? _this.bufferingTextStyle,
     );
   }
 
@@ -95,6 +104,26 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
       )!,
       barPadding: EdgeInsets.lerp(_this.barPadding, other.barPadding, t)!,
       borderRadius: lerpDouble$(_this.borderRadius, other.borderRadius, t)!,
+      bufferingScrimColor: Color.lerp(
+        _this.bufferingScrimColor,
+        other.bufferingScrimColor,
+        t,
+      )!,
+      bufferingIndicatorColor: Color.lerp(
+        _this.bufferingIndicatorColor,
+        other.bufferingIndicatorColor,
+        t,
+      )!,
+      bufferingTextColor: Color.lerp(
+        _this.bufferingTextColor,
+        other.bufferingTextColor,
+        t,
+      )!,
+      bufferingTextStyle: TextStyle.lerp(
+        _this.bufferingTextStyle,
+        other.bufferingTextStyle,
+        t,
+      ),
     );
   }
 
@@ -122,7 +151,11 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
         _other.primaryIconSize == _this.primaryIconSize &&
         _other.secondaryIconSize == _this.secondaryIconSize &&
         _other.barPadding == _this.barPadding &&
-        _other.borderRadius == _this.borderRadius;
+        _other.borderRadius == _this.borderRadius &&
+        _other.bufferingScrimColor == _this.bufferingScrimColor &&
+        _other.bufferingIndicatorColor == _this.bufferingIndicatorColor &&
+        _other.bufferingTextColor == _this.bufferingTextColor &&
+        _other.bufferingTextStyle == _this.bufferingTextStyle;
   }
 
   @override
@@ -143,6 +176,10 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
       _this.secondaryIconSize,
       _this.barPadding,
       _this.borderRadius,
+      _this.bufferingScrimColor,
+      _this.bufferingIndicatorColor,
+      _this.bufferingTextColor,
+      _this.bufferingTextStyle,
     );
   }
 }

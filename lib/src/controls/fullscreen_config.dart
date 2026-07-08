@@ -1,4 +1,5 @@
 import '../rust/player_events.dart';
+import 'controls_overlay_slots.dart';
 
 /// [AspectRatioMode] 的显示文案 / Display labels for each [AspectRatioMode].
 class AspectRatioModeLabels {
@@ -45,10 +46,12 @@ class VideoControlsFullscreenConfig {
   /// - `seekStep` — 手势/快捷键单次进退时长 / seek delta per gesture or key press
   /// - `desktopImmersive` — 桌面端是否默认开启沉浸能力 / immersive features on desktop
   /// - `aspectRatioLabels` — 铺满模式菜单文案 / labels for aspect ratio menu
+  /// - `overlaySlots` — 沉浸顶栏 leading/title/actions 插槽 / top bar slots
   const VideoControlsFullscreenConfig({
     this.seekStep = const Duration(seconds: 5),
     this.desktopImmersive = true,
     this.aspectRatioLabels = const AspectRatioModeLabels(),
+    this.overlaySlots = const VideoControlsOverlaySlots(),
   });
 
   /// 单次进退时长 / Seek step per gesture or arrow key.
@@ -60,15 +63,19 @@ class VideoControlsFullscreenConfig {
   /// 铺满模式选项文案 / Labels for aspect ratio mode options.
   final AspectRatioModeLabels aspectRatioLabels;
 
+  /// 沉浸顶栏插槽 / AppBar-style overlay slots for immersive controls.
+  final VideoControlsOverlaySlots overlaySlots;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is VideoControlsFullscreenConfig &&
           seekStep == other.seekStep &&
           desktopImmersive == other.desktopImmersive &&
-          aspectRatioLabels == other.aspectRatioLabels;
+          aspectRatioLabels == other.aspectRatioLabels &&
+          overlaySlots == other.overlaySlots;
 
   @override
   int get hashCode =>
-      Object.hash(seekStep, desktopImmersive, aspectRatioLabels);
+      Object.hash(seekStep, desktopImmersive, aspectRatioLabels, overlaySlots);
 }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
+import '../controls/buffering_indicator.dart';
+import '../enum/video_controls_style.dart';
 import '../rust/api/types.dart';
 import '../rust/player_events.dart';
 import '../surface/texture_surface.dart';
 import '../surface/video_surface_handle.dart';
+import '../theme/video_controls_theme.dart';
 import 'playback_presentation_model.dart';
 
 /// 深度呈现模块：平台表面嵌入、宽高比布局、缓冲 UI / Deep presentation: platform surface embed, aspect layout, buffering chrome.
@@ -17,16 +20,21 @@ class PlaybackPresentation extends StatelessWidget {
   /// # 参数 / Parameters
   /// - `model` — 实现 [PlaybackPresentationModel] 的控制器 / controller implementing the model
   /// - `aspectRatioMode` — fit / fill / stretch 布局策略 signal / layout strategy signal
+  /// - `controlsStyle` — 缓冲指示器 Material/Cupertino 风格 / buffering indicator style
   const PlaybackPresentation({
     super.key,
     required this.model,
     required this.aspectRatioMode,
+    this.controlsStyle = VideoControlsStyle.adaptive,
   });
 
   final PlaybackPresentationModel model;
 
   /// letterbox / 裁剪 / 拉伸；Texture 在 Dart 布局；Android 亦转发至 `glimagesink` / Letterbox, crop, or stretch; Dart layout plus Android sink forward.
   final ReadonlySignal<AspectRatioMode> aspectRatioMode;
+
+  /// 缓冲指示器视觉风格 / Visual style for the buffering indicator.
+  final VideoControlsStyle controlsStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -36,25 +44,27 @@ class PlaybackPresentation extends StatelessWidget {
         if (playerId == null) return const SizedBox.shrink();
         final handle = VideoSurfaceHandle.fromPlayerId(playerId);
         final ratio = model.aspectRatio.value;
-        final surface = Stack(
-          fit: StackFit.expand,
-          children: [
-            TextureVideoSurface(handle: handle),
-            _BufferingOverlay(model: model),
-          ],
-        );
 
         return SignalBuilder(
           builder: (context) {
             final mode = aspectRatioMode.value;
-            return _AspectRatioModeSync(
-              model: model,
-              aspectRatioMode: mode,
-              child: _VideoAspectLayout(
-                aspectRatio: ratio,
-                mode: mode,
-                child: surface,
-              ),
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                _AspectRatioModeSync(
+                  model: model,
+                  aspectRatioMode: mode,
+                  child: _VideoAspectLayout(
+                    aspectRatio: ratio,
+                    mode: mode,
+                    child: TextureVideoSurface(handle: handle),
+                  ),
+                ),
+                _BufferingOverlay(
+                  model: model,
+                  controlsStyle: controlsStyle,
+                ),
+              ],
             );
           },
         );
@@ -90,28 +100,53 @@ class _VideoAspectLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = aspectRatio > 0 ? aspectRatio : 16 / 9;
 
-    return Center(
-      child: AspectRatio(
-        aspectRatio: ratio,
-        child: FittedBox(
-          fit: _boxFitForMode(mode),
-          alignment: Alignment.center,
-          clipBehavior: Clip.hardEdge,
-          child: SizedBox(width: ratio, height: 1, child: child),
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: _boxFitForMode(mode),
+        alignment: Alignment.center,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: ratio,
+          height: 1,
+          child: child,
         ),
       ),
     );
   }
 }
 
-/// 缓冲中半透明遮罩与进度指示 / Semi-transparent overlay and progress indicator while buffering.
+/// 缓冲中主题化指示器 / Themed buffering indicator while loading or rebuffering.
 class _BufferingOverlay extends StatelessWidget {
-  const _BufferingOverlay({required this.model});
+  const _BufferingOverlay({
+    required this.model,
+    required this.controlsStyle,
+  });
 
   final PlaybackPresentationModel model;
+  final VideoControlsStyle controlsStyle;
+
+  bool _useCupertino(BuildContext context) {
+    switch (controlsStyle) {
+      case VideoControlsStyle.material:
+        return false;
+      case VideoControlsStyle.cupertino:
+        return true;
+      case VideoControlsStyle.adaptive:
+        final platform = Theme.of(context).platform;
+        return platform == TargetPlatform.iOS ||
+            platform == TargetPlatform.macOS;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cupertino = _useCupertino(context);
+    final theme =
+        Theme.of(context).extension<VideoControlsTheme>() ??
+        (cupertino
+            ? VideoControlsTheme.cupertino()
+            : VideoControlsTheme.material());
+
     return SignalBuilder(
       builder: (context) {
         final buffering = model.bufferingPercent.value;
@@ -119,13 +154,10 @@ class _BufferingOverlay extends StatelessWidget {
         if (buffering >= 100 && state != PlayerState.buffering) {
           return const SizedBox.shrink();
         }
-        return ColoredBox(
-          color: Colors.black38,
-          child: Center(
-            child: CircularProgressIndicator(
-              value: buffering < 100 ? buffering / 100 : null,
-            ),
-          ),
+        return BufferingIndicator(
+          bufferingPercent: buffering,
+          theme: theme,
+          cupertino: cupertino,
         );
       },
     );

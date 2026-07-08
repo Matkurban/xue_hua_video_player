@@ -9,8 +9,8 @@ import '../enum/video_controls_style.dart';
 import '../rust/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/platform_util.dart';
-import 'aspect_ratio_menu.dart';
 import 'cupertino_video_controls.dart';
+import 'video_controls_top_bar.dart';
 import 'immersive_controls_state.dart';
 import 'immersive_gesture_layer.dart';
 import 'immersive_hud.dart';
@@ -138,15 +138,16 @@ class _VideoControlsState extends State<VideoControls> {
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (!widget.immersive.immersiveActive.value) {
-      return KeyEventResult.ignored;
-    }
 
     final step = widget.immersive.fullscreen.value.seekStep;
     final position = widget.model.position.value;
     final duration = widget.model.duration.value;
 
     switch (event.logicalKey) {
+      case LogicalKeyboardKey.space:
+        unawaited(widget.model.togglePlayPause());
+        _keepAlive();
+        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
         unawaited(_seekBy(-step, position, duration));
         return KeyEventResult.handled;
@@ -261,22 +262,23 @@ class _VideoControlsState extends State<VideoControls> {
                       model: widget.model,
                       onTap: _toggle,
                     ),
-                  if (!isMobilePlatform)
-                    Focus(
-                      focusNode: _focusNode,
-                      autofocus: true,
-                      onKeyEvent: _onKeyEvent,
-                      // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
-                      child: const IgnorePointer(child: SizedBox.expand()),
-                    ),
-                  AspectRatioMenu(
-                    immersive: widget.immersive,
-                    theme: theme,
-                    labels: widget.immersive.fullscreen.value.aspectRatioLabels,
-                  ),
                 ],
               );
             },
+          ),
+          if (!isMobilePlatform)
+            Focus(
+              focusNode: _focusNode,
+              autofocus: true,
+              onKeyEvent: _onKeyEvent,
+              // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
+              child: const IgnorePointer(child: SizedBox.expand()),
+            ),
+          VideoControlsTopBar(
+            immersive: widget.immersive,
+            theme: theme,
+            slots: widget.immersive.fullscreen.value.overlaySlots,
+            labels: widget.immersive.fullscreen.value.aspectRatioLabels,
           ),
           ImmersiveHud(immersive: widget.immersive),
           SignalBuilder(
