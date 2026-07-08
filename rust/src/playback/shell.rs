@@ -12,11 +12,10 @@ use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
-#[cfg(target_os = "ios")]
-#[cfg(target_os = "ios")]
-use crate::playback::overlay::IosLayerBackend;
 use crate::playback::tracks::TrackCache;
 use crate::playback::uri_pipeline::build_uri_playbin;
+use crate::playback::replay::PlayReplayContext;
+use crate::playback::surface::VideoSurface;
 use crate::video::attach_overlay_bus_sync_handler;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,25 +59,23 @@ impl PipelineShell {
 pub fn install_uri_shell(
     emitter: &Arc<Mutex<Option<Emitter>>>,
     looping: &Arc<AtomicBool>,
-    desired_playing: &Arc<AtomicBool>,
-    at_eos: &Arc<AtomicBool>,
-    running: &Arc<AtomicBool>,
+    replay: &PlayReplayContext,
     metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
-    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<&Arc<Mutex<Option<IosLayerBackend>>>>,
+    surface: &VideoSurface,
 ) -> Result<PipelineShell> {
     let (pipeline, video_sink) = build_uri_playbin(emitter, metadata_cache)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
         &pipeline,
         emitter,
         looping,
-        desired_playing,
-        at_eos,
-        running,
+        &replay.desired_playing,
+        &replay.at_eos,
+        &replay.running,
         true,
         track_cache,
         #[cfg(target_os = "ios")]
-        ios_layer_bus_slot.cloned(),
+        Some(&surface.ios_layer_bus_slot()),
     )?;
     Ok(PipelineShell {
         pipeline,
@@ -96,24 +93,22 @@ pub fn install_asset_shell(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
     looping: &Arc<AtomicBool>,
-    desired_playing: &Arc<AtomicBool>,
-    at_eos: &Arc<AtomicBool>,
-    running: &Arc<AtomicBool>,
+    replay: &PlayReplayContext,
     metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
-    #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<&Arc<Mutex<Option<IosLayerBackend>>>>,
+    surface: &VideoSurface,
 ) -> Result<PipelineShell> {
     let (pipeline, video_sink, feed) = build_asset_pipeline(asset_key, emitter, metadata_cache)?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
         &pipeline,
         emitter,
         looping,
-        desired_playing,
-        at_eos,
-        running,
+        &replay.desired_playing,
+        &replay.at_eos,
+        &replay.running,
         false,
         None,
         #[cfg(target_os = "ios")]
-        ios_layer_bus_slot.cloned(),
+        Some(&surface.ios_layer_bus_slot()),
     )?;
     Ok(PipelineShell {
         pipeline,

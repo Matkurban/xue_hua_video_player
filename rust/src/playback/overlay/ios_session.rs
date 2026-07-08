@@ -9,13 +9,15 @@ use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::gst_runtime::gst_main_context;
-use crate::playback::overlay::preroll_gate::{
-    decide_preroll_action, PipelineSnapshot, PrerollAction,
+use crate::playback::overlay::preroll_executor::{
+    run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
 };
+use crate::playback::overlay::preroll_gate::PipelineSnapshot;
 use crate::playback::overlay::IosLayerBackend;
 use crate::playback::replay::{replay_asset_shell, OverlayPlayIntent};
 use crate::playback::shell::{PipelineShell, SourceKind};
 use crate::playback::state::set_state_sync;
+use crate::playback::surface::VideoSurface;
 
 use crate::video::ios_layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
 
@@ -25,6 +27,7 @@ pub struct IosIdleWork {
     pub work_generation: u64,
     pub shell: Arc<Mutex<PipelineShell>>,
     pub stored: Arc<Mutex<Option<usize>>>,
+    pub surface: VideoSurface,
     pub play_intent: OverlayPlayIntent,
     pub ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
 }
@@ -151,9 +154,11 @@ impl IosOverlaySession {
             let _ = session.request_attach(
                 work.shell.clone(),
                 work.stored.clone(),
+                work.surface.clone_for_switch(),
                 work.play_intent.clone_for_async(),
                 "bus attach",
                 work_generation,
+                work.ios_layer_bus_slot.clone(),
             );
             session.schedule_apply(work);
         });
@@ -197,6 +202,7 @@ impl IosOverlaySession {
         &self,
         shell: Arc<Mutex<PipelineShell>>,
         stored: Arc<Mutex<Option<usize>>>,
+        surface: VideoSurface,
         play_intent: OverlayPlayIntent,
         log_reason: &'static str,
         work_generation: u64,
@@ -210,6 +216,7 @@ impl IosOverlaySession {
             self.schedule_apply(idle_work_from_parts(
                 shell,
                 stored,
+                surface,
                 play_intent,
                 work_generation,
                 ios_layer_bus_slot,
@@ -235,6 +242,8 @@ impl IosOverlaySession {
 
         let session = self.clone();
         let shell_finish = shell.clone();
+        let stored_finish = stored.clone();
+        let surface_finish = surface.clone_for_switch();
         let attach_generation = work_generation;
         let ios_slot_finish = ios_layer_bus_slot.clone();
 
@@ -269,6 +278,8 @@ impl IosOverlaySession {
                 session.finish_attach(
                     shell_finish,
                     host_view,
+                    stored_finish,
+                    surface_finish,
                     play_intent,
                     log_reason,
                     attach_generation,
@@ -296,6 +307,8 @@ impl IosOverlaySession {
         &self,
         shell: Arc<Mutex<PipelineShell>>,
         host_view: usize,
+        stored: Arc<Mutex<Option<usize>>>,
+        surface: VideoSurface,
         play_intent: OverlayPlayIntent,
         log_reason: &'static str,
         work_generation: u64,
@@ -311,7 +324,8 @@ impl IosOverlaySession {
         log::info!("gst: ios layer verified attached ({log_reason})");
         self.schedule_apply(idle_work_from_parts(
             shell,
-            play_intent.bundle.shell.surface.stored_handle(),
+            stored,
+            surface,
             play_intent,
             work_generation,
             ios_layer_bus_slot,
@@ -344,6 +358,7 @@ impl IosOverlaySession {
             let _ = self.request_attach(
                 work.shell.clone(),
                 work.stored.clone(),
+                work.surface.clone_for_switch(),
                 work.play_intent.clone_for_async(),
                 "idle attach",
                 work.work_generation,
@@ -356,7 +371,6 @@ impl IosOverlaySession {
 
         let want_play = work
             .play_intent
-            .bundle
             .replay
             .desired_playing
             .load(Ordering::SeqCst)
@@ -374,7 +388,7 @@ impl IosOverlaySession {
             return Ok(());
         }
 
-        let (pipeline, kind, current, _pending) = snapshot;
+        let (pipeline, _kind, current, _pending) = snapshot;
 
         if self.buffering_active.load(Ordering::SeqCst) && want_play {
             if current == gst::State::Playing {
@@ -390,67 +404,34 @@ impl IosOverlaySession {
 
         let overlay_ready = self.is_bound();
 
-        for _ in 0..4 {
-            let snapshot = PipelineSnapshot::from_shell(&work.shell.lock());
-            let action = decide_preroll_action(snapshot, want_play, overlay_ready);
-            match action {
-                PrerollAction::Noop | PrerollAction::Defer => break,
-                PrerollAction::PausePreroll => {
-                    log::info!("gst: overlay bound — starting Paused preroll");
-                    set_state_sync(&pipeline, gst::State::Paused)?;
-                }
-                PrerollAction::ResumePlaying => {
-                    if snapshot.pending != gst::State::VoidPending {
-                        log::info!(
-                            "gst: overlay bind — pipeline pending {:?}, current {:?}",
-                            snapshot.pending,
-                            snapshot.current
-                        );
-                        log::info!("gst: overlay bound — resuming play while pending");
-                    } else {
-                        log::info!("gst: overlay bound — resuming play (desired_playing=true)");
-                    }
-                    return resume_pipeline_playing(
-                        work.shell,
-                        &work.play_intent,
-                        &pipeline,
-                        kind,
-                        &work.ios_layer_bus_slot,
-                    );
-                }
-            }
-        }
+        let mut guard = work.shell.lock();
+        let mut effects = IosBindPrerollEffects {
+            shell_arc: work.shell.clone(),
+            play_intent: work.play_intent.clone_for_async(),
+            surface: work.surface.clone_for_switch(),
+        };
+        run_bind_preroll_loop(&mut guard, want_play, overlay_ready, &mut effects)?;
 
         Ok(())
     }
 
     /// Coalesced resume after overlay binds — routes through idle `apply_target_state`.
-    pub fn drain_pending_play(
-        &self,
-        shell: Arc<Mutex<PipelineShell>>,
-        play_intent: &OverlayPlayIntent,
-        work_generation: u64,
-        ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
-    ) {
-        self.schedule_apply(idle_work_from_parts(
-            shell,
-            play_intent.bundle.shell.surface.stored_handle(),
-            play_intent.clone_for_async(),
-            work_generation,
-            ios_layer_bus_slot,
-        ));
+    pub fn drain_pending_play(&self, work: IosIdleWork) {
+        self.schedule_apply(work);
     }
 
     pub fn idle_work(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
         stored: Arc<Mutex<Option<usize>>>,
+        surface: VideoSurface,
         play_intent: OverlayPlayIntent,
         ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
     ) -> IosIdleWork {
         idle_work_from_parts(
             shell,
             stored,
+            surface,
             play_intent,
             self.capture_generation(),
             ios_layer_bus_slot,
@@ -458,9 +439,52 @@ impl IosOverlaySession {
     }
 }
 
+struct IosBindPrerollEffects {
+    shell_arc: Arc<Mutex<PipelineShell>>,
+    play_intent: OverlayPlayIntent,
+    surface: VideoSurface,
+}
+
+impl PrerollEffects for IosBindPrerollEffects {
+    fn pause_preroll(
+        &mut self,
+        shell: &mut PipelineShell,
+        _snapshot: PipelineSnapshot,
+    ) -> Result<()> {
+        log::info!("gst: overlay bound — starting Paused preroll");
+        set_state_sync(&shell.pipeline, gst::State::Paused)
+    }
+
+    fn resume_playing(
+        &mut self,
+        shell: &mut PipelineShell,
+        snapshot: PipelineSnapshot,
+    ) -> Result<PrerollResumeOutcome> {
+        if snapshot.pending != gst::State::VoidPending {
+            log::info!(
+                "gst: overlay bind — pipeline pending {:?}, current {:?}",
+                snapshot.pending,
+                snapshot.current
+            );
+            log::info!("gst: overlay bound — resuming play while pending");
+        } else {
+            log::info!("gst: overlay bound — resuming play (desired_playing=true)");
+        }
+        resume_pipeline_playing(
+            self.shell_arc.clone(),
+            &self.play_intent,
+            &shell.pipeline,
+            shell.kind,
+            &self.surface,
+        )?;
+        Ok(PrerollResumeOutcome::Finished)
+    }
+}
+
 fn idle_work_from_parts(
     shell: Arc<Mutex<PipelineShell>>,
     stored: Arc<Mutex<Option<usize>>>,
+    surface: VideoSurface,
     play_intent: OverlayPlayIntent,
     work_generation: u64,
     ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
@@ -469,6 +493,7 @@ fn idle_work_from_parts(
         work_generation,
         shell,
         stored,
+        surface,
         play_intent,
         ios_layer_bus_slot,
     }
@@ -480,11 +505,10 @@ fn resume_pipeline_playing(
     play_intent: &OverlayPlayIntent,
     pipeline: &gst::Pipeline,
     kind: SourceKind,
-    ios_layer_bus_slot: &Arc<Mutex<Option<IosLayerBackend>>>,
+    surface: &VideoSurface,
 ) -> Result<()> {
-    if play_intent.bundle.replay.at_eos.load(Ordering::SeqCst) {
+    if play_intent.replay.at_eos.load(Ordering::SeqCst) {
         play_intent
-            .bundle
             .replay
             .at_eos
             .store(false, Ordering::SeqCst);
@@ -501,8 +525,9 @@ fn resume_pipeline_playing(
                 let mut guard = shell.lock();
                 return replay_asset_shell(
                     &mut guard,
-                    &play_intent.bundle,
-                    Some(ios_layer_bus_slot),
+                    &play_intent.replay,
+                    &play_intent.swap,
+                    surface,
                 );
             }
         }
