@@ -9,12 +9,14 @@ class FakePlayerCommandPort implements PlayerCommandPort {
     this.failCreate = false,
     this.failLoad = false,
     this.failSeek = false,
+    this.seekable = true,
     List<MediaTrack>? tracksToReturn,
   }) : tracksToReturn = tracksToReturn ?? const [];
 
   final bool failCreate;
   final bool failLoad;
   final bool failSeek;
+  final bool seekable;
 
   List<MediaTrack> tracksToReturn;
 
@@ -63,8 +65,8 @@ class FakePlayerCommandPort implements PlayerCommandPort {
 
   @override
   Future<PipelineCapabilitiesDto> getPipelineCapabilities() async {
-    return const PipelineCapabilitiesDto(
-      seek: true,
+    return PipelineCapabilitiesDto(
+      seek: seekable,
       tracks: false,
       orientation: true,
     );

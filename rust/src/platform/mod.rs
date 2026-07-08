@@ -18,4 +18,4 @@ pub use ios::{
     attach_layer_on_main_thread_async, attach_layer_on_main_thread_sync, host_view_ready_for_attach,
 };
 #[cfg(target_os = "macos")]
-pub use macos::run_on_main;
+pub use macos::{run_on_main, run_on_main_sync};

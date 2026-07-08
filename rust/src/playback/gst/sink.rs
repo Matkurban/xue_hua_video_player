@@ -111,7 +111,7 @@ pub fn bus_sync_reply_for_overlay_message(
     if !is_video_overlay_prepare_window_handle_message(msg) {
         return gst::BusSyncReply::Pass;
     }
-    let Some(_handle) = cached_handle else {
+    let Some(handle) = cached_handle else {
         log::warn!("prepare-window-handle received but no overlay handle is cached yet");
         return gst::BusSyncReply::Pass;
     };

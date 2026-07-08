@@ -230,6 +230,44 @@ void main() {
       expect(session.aspectRatio.value, closeTo(4 / 3, 0.001));
     });
 
+    test('metadataChanged does not clobber isSeekable from capabilities', () async {
+      port = FakePlayerCommandPort(seekable: false);
+      session = PlaybackSession(port: port);
+      await session.initialize();
+      await session.open(VideoSource.network('https://example.com/asset'));
+      expect(session.isSeekable.value, isFalse);
+
+      port.emit(
+        event(kind: PlayerEventKind.metadataChanged, width: 1920, height: 1080),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.isSeekable.value, isFalse);
+    });
+
+    test('open resets transport state from previous playback', () async {
+      await session.initialize();
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
+      port.emit(
+        event(
+          kind: PlayerEventKind.positionChanged,
+          positionMs: 9000,
+          durationMs: 10000,
+        ),
+      );
+      port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 10000));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.state.value, PlayerState.playing);
+      expect(session.position.value, const Duration(milliseconds: 9000));
+
+      await session.open(VideoSource.network('https://example.com/b.mp4'));
+
+      expect(session.state.value, PlayerState.idle);
+      expect(session.position.value, Duration.zero);
+      expect(session.duration.value, Duration.zero);
+    });
+
     test('open clears media-specific state', () async {
       await session.initialize();
       port.emit(

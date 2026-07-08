@@ -234,6 +234,13 @@ class PlaybackSession
       _videoMetadata.value = null;
       _tracks.value = const [];
       _speed.value = 1.0;
+      _state.value = PlayerState.idle;
+      _position.value = Duration.zero;
+      _duration.value = Duration.zero;
+      _isSeekable.value = true;
+      _volume.value = 1.0;
+      _muted.value = false;
+      _looping.value = false;
     });
   }
 
@@ -262,7 +269,6 @@ class PlaybackSession
           colorRange: event.colorRange,
           hdrFormat: event.hdrFormat,
         );
-        _isSeekable.value = event.isSeekable;
       case PlayerEventKind.stateChanged:
         _state.value = event.state;
       case PlayerEventKind.buffering:

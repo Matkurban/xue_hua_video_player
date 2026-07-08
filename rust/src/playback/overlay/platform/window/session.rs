@@ -231,7 +231,7 @@ impl OverlaySession for MacosOverlaySession {
             return Ok(());
         }
         let (width, height) = self.cached_dimensions();
-        MacosOverlayBackend::schedule_rebind_on_main(stored, slot.clone(), width, height);
+        MacosOverlayBackend::rebind_on_main_sync(stored, slot.clone(), width, height);
         Ok(())
     }
 

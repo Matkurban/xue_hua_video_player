@@ -1,4 +1,16 @@
 fn main() {
+    // `platform/macos.rs` uses GCD via an Objective-C shim (staticlib link needs explicit compile).
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let shim = manifest_dir.join("macos_shim/XueHuaMainThreadShim.m");
+        println!("cargo:rerun-if-changed={}", shim.display());
+        cc::Build::new()
+            .file(shim)
+            .flag("-fobjc-arc")
+            .compile("xhvp_macos_main_thread_shim");
+        println!("cargo:rustc-link-lib=framework=Foundation");
+    }
+
     // The GStreamer plugins we register statically on iOS (see
     // `register_ios_static_plugins` in `src/player.rs`) reference a handful of
     // Apple system frameworks and system libraries. The final Flutter app link

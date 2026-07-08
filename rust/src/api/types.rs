@@ -246,7 +246,7 @@ impl PlayerEvent {
     }
 
     pub(crate) fn metadata(meta: crate::playback::gst::InternalVideoMetadata) -> Self {
-        Self {
+        let mut event = Self {
             kind: PlayerEventKind::MetadataChanged,
             width: meta.width,
             height: meta.height,
@@ -260,7 +260,10 @@ impl PlayerEvent {
             color_range: meta.color_range,
             hdr_format: meta.hdr_format,
             ..Self::base(PlayerEventKind::MetadataChanged)
-        }
+        };
+        // Seek capability is owned by pipeline capabilities at load time, not video caps.
+        event.is_seekable = false;
+        event
     }
 
     pub(crate) fn state(state: PlayerState) -> Self {
