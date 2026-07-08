@@ -119,18 +119,29 @@ class _VideoControlsState extends State<VideoControls> {
           );
 
     return Positioned.fill(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: SignalBuilder(
-          builder: (context) {
-            return AnimatedOpacity(
-              opacity: _visible.value ? 1 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(ignoring: !_visible.value, child: controls),
-            );
-          },
-        ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggle,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          SignalBuilder(
+            builder: (context) {
+              return AnimatedOpacity(
+                opacity: _visible.value ? 1 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: IgnorePointer(
+                  ignoring: !_visible.value,
+                  child: controls,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

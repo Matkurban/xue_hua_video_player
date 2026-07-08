@@ -52,8 +52,16 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
     final model = widget.model;
     final theme = widget.theme;
     return Stack(
+      fit: StackFit.expand,
       children: [
-        CenterButton(model: model, theme: theme, onInteract: widget.onInteract),
+        Align(
+          alignment: Alignment.center,
+          child: CenterButton(
+            model: model,
+            theme: theme,
+            onInteract: widget.onInteract,
+          ),
+        ),
         Positioned(
           left: 0,
           right: 0,

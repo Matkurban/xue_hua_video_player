@@ -1,6 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../constant/constant.dart';
@@ -13,8 +14,8 @@ import 'scrub_controller.dart';
 
 /// Cupertino 风格内置视频控件栏 / Cupertino-styled built-in video control bar.
 ///
-/// 液态玻璃 [GlassCard] 底栏、[GlassSlider]、倍速 ActionSheet；中央 [CenterButton]。
-/// Liquid-glass [GlassCard] bar, [GlassSlider], speed ActionSheet; central [CenterButton].
+/// 磨砂底栏、[CupertinoSlider]、倍速 ActionSheet；中央 [CenterButton]。
+/// Frosted bar, [CupertinoSlider], speed ActionSheet; central [CenterButton].
 class CupertinoVideoControls extends StatefulWidget {
   const CupertinoVideoControls({
     super.key,
@@ -80,105 +81,132 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
     final theme = widget.theme;
     final size = MediaQuery.sizeOf(context);
     return Stack(
+      fit: StackFit.expand,
       children: [
-        CenterButton(model: model, theme: theme, onInteract: widget.onInteract),
+        Align(
+          alignment: Alignment.center,
+          child: CenterButton(
+            model: model,
+            theme: theme,
+            onInteract: widget.onInteract,
+          ),
+        ),
         Positioned(
           left: 8,
           right: 8,
           bottom: 8,
           child: SafeArea(
             top: false,
-            child: GlassCard(
-              width: size.width - 16,
-              padding: theme.barPadding,
-              child: Row(
-                children: [
-                  SignalBuilder(
-                    builder: (context) => IconButton(
-                      onPressed: () {
-                        widget.onInteract();
-                        model.toggleMuted();
-                      },
-                      style: IconButton.styleFrom(
-                        tapTargetSize: .shrinkWrap,
-                        visualDensity: .compact,
-                      ),
-                      icon: Icon(
-                        model.muted.value || model.volume.value == 0
-                            ? CupertinoIcons.volume_off
-                            : CupertinoIcons.volume_up,
-                        size: theme.secondaryIconSize,
-                        color: theme.iconColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SignalBuilder(
-                    builder: (context) => Text(
-                      formatDuration(model.position.value),
-                      style: TextStyle(color: theme.textColor, fontSize: 12),
-                    ),
-                  ),
-                  Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(theme.borderRadius),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: theme.backgroundColor),
+                  child: SizedBox(
+                    width: size.width - 16,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: PlaybackProgressSlider(
-                        model: model,
-                        scrub: _scrub,
-                        builder: (context, snap) => GlassSlider(
-                          value: snap.displayValue,
-                          activeColor: theme.activeTrackColor,
-                          thumbColor: theme.thumbColor,
-                          onChangeStart: snap.enabled
-                              ? (_) => snap.onSeekStart?.call()
-                              : null,
-                          onChanged: snap.onSeekChanged,
-                          onChangeEnd: snap.onSeekEnd,
-                        ),
+                      padding: theme.barPadding,
+                      child: Row(
+                        children: [
+                          SignalBuilder(
+                            builder: (context) => IconButton(
+                              onPressed: () {
+                                widget.onInteract();
+                                model.toggleMuted();
+                              },
+                              style: IconButton.styleFrom(
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: Icon(
+                                model.muted.value || model.volume.value == 0
+                                    ? CupertinoIcons.volume_off
+                                    : CupertinoIcons.volume_up,
+                                size: theme.secondaryIconSize,
+                                color: theme.iconColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SignalBuilder(
+                            builder: (context) => Text(
+                              formatDuration(model.position.value),
+                              style: TextStyle(
+                                color: theme.textColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: PlaybackProgressSlider(
+                                model: model,
+                                scrub: _scrub,
+                                builder: (context, snap) => CupertinoSlider(
+                                  value: snap.displayValue,
+                                  activeColor: theme.activeTrackColor,
+                                  thumbColor: theme.thumbColor,
+                                  onChangeStart: snap.enabled
+                                      ? (_) => snap.onSeekStart?.call()
+                                      : null,
+                                  onChanged: snap.onSeekChanged,
+                                  onChangeEnd: snap.onSeekEnd,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SignalBuilder(
+                            builder: (context) => Text(
+                              formatDuration(model.duration.value),
+                              style: TextStyle(
+                                color: theme.textColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SignalBuilder(
+                            builder: (context) => IconButton(
+                              onPressed: () async {
+                                widget.onInteract();
+                                await model.setLooping(!model.looping.value);
+                              },
+                              style: IconButton.styleFrom(
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: Icon(
+                                CupertinoIcons.repeat,
+                                size: theme.secondaryIconSize,
+                                color: model.looping.value
+                                    ? theme.iconColor
+                                    : theme.iconColor.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: _showSpeedSheet,
+                            child: SignalBuilder(
+                              builder: (context) => Text(
+                                '${model.speed.value}x',
+                                style: TextStyle(
+                                  color: theme.iconColor,
+                                  fontSize: theme.secondaryIconSize * 0.7,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  SignalBuilder(
-                    builder: (context) => Text(
-                      formatDuration(model.duration.value),
-                      style: TextStyle(color: theme.textColor, fontSize: 12),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SignalBuilder(
-                    builder: (context) => IconButton(
-                      onPressed: () async {
-                        widget.onInteract();
-                        await model.setLooping(!model.looping.value);
-                      },
-                      style: IconButton.styleFrom(
-                        tapTargetSize: .shrinkWrap,
-                        visualDensity: .compact,
-                      ),
-                      icon: Icon(
-                        CupertinoIcons.repeat,
-                        size: theme.secondaryIconSize,
-                        color: model.looping.value
-                            ? theme.iconColor
-                            : theme.iconColor.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: _showSpeedSheet,
-                    child: SignalBuilder(
-                      builder: (context) => Text(
-                        '${model.speed.value}x',
-                        style: TextStyle(
-                          color: theme.iconColor,
-                          fontSize: theme.secondaryIconSize * 0.7,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
