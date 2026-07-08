@@ -10,10 +10,12 @@ environment:
   flutter: '>=3.3.0'
 
 dependencies:
+  chat_context_menu: ^3.0.1
   flutter:
     sdk: flutter
   flutter_rust_bridge: 2.12.0
   plugin_platform_interface: ^2.0.2
+  screen_brightness: ^2.1.11
   signals: ^7.1.0
   theme_extensions_builder_annotation: ^7.4.0
   freezed_annotation: ^3.0.0

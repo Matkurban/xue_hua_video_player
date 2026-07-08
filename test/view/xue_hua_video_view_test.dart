@@ -87,5 +87,34 @@ void main() {
       expect(port.lastAspectRatioMode, AspectRatioMode.stretch);
       debugDefaultTargetPlatformOverride = null;
     });
+
+    testWidgets('open resets aspectRatioMode to fit', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      await controller.initialize();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: XueHuaVideoView(
+                controller: controller,
+                aspectRatioMode: AspectRatioMode.fill,
+                showControls: false,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(port.lastAspectRatioMode, AspectRatioMode.fill);
+
+      await controller.open(VideoSource.network('https://example.com/b.mp4'));
+      await tester.pumpAndSettle();
+
+      expect(controller.mediaGeneration.value, 1);
+      expect(port.lastAspectRatioMode, AspectRatioMode.fit);
+      debugDefaultTargetPlatformOverride = null;
+    });
   });
 }

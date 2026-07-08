@@ -49,6 +49,10 @@ class PlaybackSession
   final FlutterSignal<bool> _isSeekable = signal(true);
   final FlutterSignal<bool> _supportsTracks = signal(true);
   final FlutterSignal<bool> _supportsOrientation = signal(true);
+  final FlutterSignal<int> _mediaGeneration = signal(0);
+
+  /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
+  late final ReadonlySignal<int> mediaGeneration = _mediaGeneration;
 
   /// 是否正在播放 / Whether `state == playing`.
   @override
@@ -179,6 +183,7 @@ class PlaybackSession
     await _guard(() => _port.seek(position));
   }
 
+  @override
   Future<void> setVolume(double volume) async {
     _previewVolume(volume);
     await _guard(() => _port.setVolume(_volume.value));
@@ -243,6 +248,7 @@ class PlaybackSession
     _isSeekable.dispose();
     _supportsTracks.dispose();
     _supportsOrientation.dispose();
+    _mediaGeneration.dispose();
   }
 
   Future<void> _refreshTracksFromPort() async {
@@ -268,6 +274,7 @@ class PlaybackSession
       _volume.value = 1.0;
       _muted.value = false;
       _looping.value = false;
+      _mediaGeneration.value++;
     });
   }
 

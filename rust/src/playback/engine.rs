@@ -289,6 +289,7 @@ impl PlaybackEngine {
         self.seekable
             .store(is_seekable(&resolved), Ordering::SeqCst);
         *self.rate.lock() = 1.0;
+        *self.aspect_mode.lock() = InternalAspectRatioMode::Fit;
         self.track_cache.lock().clear();
         #[cfg(target_os = "android")]
         if let ResolvedSource::Uri(ref uri) = resolved {

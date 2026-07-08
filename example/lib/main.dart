@@ -94,7 +94,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _openAsset() async {
     FocusScope.of(context).unfocus();
     await _controller.open(
-      const VideoSource.asset('assets/sample2.mp4'),
+      const VideoSource.asset('assets/sample.mp4'),
       autoPlay: true,
     );
   }
@@ -203,52 +203,6 @@ class _PlayerPageState extends State<PlayerPage> {
                 : null,
           ),
           const SizedBox(height: 8),
-          SignalBuilder(
-            builder: (context) {
-              final tracks = _controller.tracks.value;
-              if (!_controller.supportsTracks.value || tracks.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('轨道'),
-                  const SizedBox(height: 4),
-                  ...tracks.map(
-                    (t) => ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(t.label),
-                      subtitle: Text(
-                        '${t.trackType.name}'
-                        '${t.language.isNotEmpty ? ' · ${t.language}' : ''}',
-                      ),
-                      trailing: t.selected
-                          ? const Icon(Icons.check, size: 18)
-                          : null,
-                      onTap: () => _controller.selectTrack(t),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              );
-            },
-          ),
-          SignalBuilder(
-            builder: (context) {
-              final meta = _controller.videoMetadata.value;
-              if (meta == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  '${meta.width}×${meta.height} '
-                  '@ ${meta.fps.toStringAsFixed(1)} fps'
-                  '${meta.hdrFormat.isNotEmpty ? ' · ${meta.hdrFormat}' : ''}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              );
-            },
-          ),
           SignalBuilder(
             builder: (context) {
               final error = _controller.error.value;

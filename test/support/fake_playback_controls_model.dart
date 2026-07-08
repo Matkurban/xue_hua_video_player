@@ -81,6 +81,20 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     lastSeek = position;
   }
 
+  double? lastVolume;
+  AspectRatioMode? lastAspectRatioMode;
+
+  @override
+  Future<void> setVolume(double volume) async {
+    lastVolume = volume;
+    _volume.value = volume;
+  }
+
+  @override
+  Future<void> setAspectRatioMode(AspectRatioMode mode) async {
+    lastAspectRatioMode = mode;
+  }
+
   void setPosition(Duration position) {
     _position.value = position;
   }

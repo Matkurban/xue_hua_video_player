@@ -23,4 +23,10 @@ abstract class PlaybackControlsModel {
   Future<void> setLooping(bool looping);
   Future<void> setSpeed(double speed);
   Future<void> seek(Duration position);
+
+  /// 设置音量 0.0–1.0 / Sets volume in 0.0–1.0.
+  Future<void> setVolume(double volume);
+
+  /// 设置铺满模式并同步至 pipeline / Sets aspect ratio mode and syncs to pipeline.
+  Future<void> setAspectRatioMode(AspectRatioMode mode);
 }

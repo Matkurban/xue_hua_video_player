@@ -76,6 +76,17 @@ void main() {
       expect(session.supportsOrientation.value, isTrue);
     });
 
+    test('mediaGeneration increments on each open', () async {
+      await session.initialize();
+      expect(session.mediaGeneration.value, 0);
+
+      await session.open(VideoSource.network('https://example.com/a.mp4'));
+      expect(session.mediaGeneration.value, 1);
+
+      await session.open(VideoSource.network('https://example.com/b.mp4'));
+      expect(session.mediaGeneration.value, 2);
+    });
+
     test('open failure surfaces error state', () async {
       port = FakePlayerCommandPort(failLoad: true);
       session = PlaybackSession(port: port);

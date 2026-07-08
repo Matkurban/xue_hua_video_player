@@ -50,6 +50,10 @@ class FakePlaybackPresentationModel implements PlaybackPresentationModel {
 
   void setBufferingPercent(int value) => _bufferingPercent.value = value;
 
+  void setAspectRatio(double value) => _aspectRatio.value = value;
+
+  void setPlayerId(int? value) => _playerId.value = value;
+
   void dispose() {
     _playerId.dispose();
     _initialized.dispose();

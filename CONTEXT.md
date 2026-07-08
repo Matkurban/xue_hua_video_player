@@ -145,7 +145,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 ## Dart rendering surface
 
 - **`lib/src/presentation/`** (partial export): **`PlaybackPresentation`** deep widget + **`PlaybackPresentationModel`** seam; owns surface embed, aspect sync, loading chrome.
-- **`lib/src/surface/`** (not exported): **`VideoSurfaceHandle`** routing + **`buildVideoSurface`** → **`TextureVideoSurface`** (`Texture` widget + native texture MethodChannel).
+- **`lib/src/surface/`** (not exported): **`VideoSurfaceHandle`** routing + **`TextureVideoSurface`** (`Texture` widget + native texture MethodChannel).
 - Full UI prefers **`XueHuaVideoView`**; surface-only with aspect sync uses package-private **`PlaybackPresentation`** (same stack as the view without controls).
 - **`PlaybackPresentation.aspectRatioMode`** syncs **`AspectRatioMode`** to the Rust pipeline where the sink supports it; letterbox/crop/stretch is applied in GStreamer, not Flutter `BoxFit`.
 

@@ -22,11 +22,23 @@ class CupertinoVideoControls extends StatefulWidget {
     required this.model,
     required this.theme,
     required this.onInteract,
+    this.showFullscreenButton = false,
+    this.landscapeLocked,
+    this.onFullscreenToggle,
   });
 
   final PlaybackControlsModel model;
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
+
+  /// 是否显示全屏按钮（仅移动端）/ Whether to show the fullscreen toggle (mobile only).
+  final bool showFullscreenButton;
+
+  /// 横屏锁定态 / Landscape lock state.
+  final ReadonlySignal<bool>? landscapeLocked;
+
+  /// 全屏切换回调 / Fullscreen toggle callback.
+  final VoidCallback? onFullscreenToggle;
 
   @override
   State<CupertinoVideoControls> createState() => _CupertinoVideoControlsState();
@@ -202,6 +214,30 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
                               ),
                             ),
                           ),
+                          if (widget.showFullscreenButton &&
+                              widget.landscapeLocked != null &&
+                              widget.onFullscreenToggle != null) ...[
+                            const SizedBox(width: 10),
+                            SignalBuilder(
+                              builder: (context) => IconButton(
+                                onPressed: () {
+                                  widget.onInteract();
+                                  widget.onFullscreenToggle!();
+                                },
+                                style: IconButton.styleFrom(
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                icon: Icon(
+                                  widget.landscapeLocked!.value
+                                      ? CupertinoIcons.arrow_down_right_arrow_up_left
+                                      : CupertinoIcons.arrow_up_left_arrow_down_right,
+                                  size: theme.secondaryIconSize,
+                                  color: theme.iconColor,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

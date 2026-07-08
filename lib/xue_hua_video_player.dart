@@ -11,6 +11,8 @@
 /// - [VideoControls]、[VideoControlsTheme] — 内置控件与主题 / built-in controls and theming
 library;
 
+export 'src/controls/fullscreen_config.dart'
+    show AspectRatioModeLabels, VideoControlsFullscreenConfig;
 export 'src/controls/playback_controls_model.dart' show PlaybackControlsModel;
 export 'src/presentation/playback_presentation_model.dart'
     show PlaybackPresentationModel;

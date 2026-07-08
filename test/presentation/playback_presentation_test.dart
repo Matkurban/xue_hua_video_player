@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/src/presentation/playback_presentation.dart';
 import 'package:xue_hua_video_player/src/rust/player_events.dart';
 
@@ -11,14 +12,17 @@ void main() {
 
   group('PlaybackPresentation', () {
     late FakePlaybackPresentationModel model;
+    late FlutterSignal<AspectRatioMode> aspectRatioMode;
 
     tearDown(() {
       model.dispose();
+      aspectRatioMode.dispose();
     });
 
     testWidgets('syncs aspectRatioMode on mount', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
+      aspectRatioMode = signal(AspectRatioMode.fill);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -28,7 +32,7 @@ void main() {
               height: 180,
               child: PlaybackPresentation(
                 model: model,
-                aspectRatioMode: AspectRatioMode.fill,
+                aspectRatioMode: aspectRatioMode,
               ),
             ),
           ),
@@ -43,6 +47,7 @@ void main() {
     testWidgets('re-syncs when aspectRatioMode changes', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
+      aspectRatioMode = signal(AspectRatioMode.fit);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -52,7 +57,7 @@ void main() {
               height: 180,
               child: PlaybackPresentation(
                 model: model,
-                aspectRatioMode: AspectRatioMode.fit,
+                aspectRatioMode: aspectRatioMode,
               ),
             ),
           ),
@@ -61,20 +66,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(model.lastAspectRatioMode, AspectRatioMode.fit);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 320,
-              height: 180,
-              child: PlaybackPresentation(
-                model: model,
-                aspectRatioMode: AspectRatioMode.stretch,
-              ),
-            ),
-          ),
-        ),
-      );
+      aspectRatioMode.value = AspectRatioMode.stretch;
       await tester.pumpAndSettle();
 
       expect(model.lastAspectRatioMode, AspectRatioMode.stretch);
@@ -87,6 +79,7 @@ void main() {
         state: PlayerState.buffering,
         bufferingPercent: 50,
       );
+      aspectRatioMode = signal(AspectRatioMode.fit);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -96,7 +89,7 @@ void main() {
               height: 180,
               child: PlaybackPresentation(
                 model: model,
-                aspectRatioMode: AspectRatioMode.fit,
+                aspectRatioMode: aspectRatioMode,
               ),
             ),
           ),
@@ -122,6 +115,7 @@ void main() {
         state: PlayerState.playing,
         bufferingPercent: 50,
       );
+      aspectRatioMode = signal(AspectRatioMode.fit);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -131,7 +125,7 @@ void main() {
               height: 180,
               child: PlaybackPresentation(
                 model: model,
-                aspectRatioMode: AspectRatioMode.fit,
+                aspectRatioMode: aspectRatioMode,
               ),
             ),
           ),
@@ -146,6 +140,7 @@ void main() {
     testWidgets('fit mode letterboxes with AspectRatio', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
+      aspectRatioMode = signal(AspectRatioMode.fit);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -155,7 +150,7 @@ void main() {
               height: 300,
               child: PlaybackPresentation(
                 model: model,
-                aspectRatioMode: AspectRatioMode.fit,
+                aspectRatioMode: aspectRatioMode,
               ),
             ),
           ),
@@ -173,6 +168,7 @@ void main() {
 
     testWidgets('hides surface when playerId is null', (tester) async {
       model = FakePlaybackPresentationModel(playerId: null);
+      aspectRatioMode = signal(AspectRatioMode.fit);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -182,7 +178,7 @@ void main() {
               height: 180,
               child: PlaybackPresentation(
                 model: model,
-                aspectRatioMode: AspectRatioMode.fit,
+                aspectRatioMode: aspectRatioMode,
               ),
             ),
           ),

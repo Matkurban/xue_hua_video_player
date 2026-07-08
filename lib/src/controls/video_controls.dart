@@ -1,12 +1,19 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../enum/video_controls_style.dart';
 import '../rust/player_events.dart';
 import '../theme/video_controls_theme.dart';
+import '../utils/platform_util.dart';
+import 'aspect_ratio_menu.dart';
 import 'cupertino_video_controls.dart';
+import 'immersive_controls_state.dart';
+import 'immersive_gesture_layer.dart';
+import 'immersive_hud.dart';
 import 'material_video_controls.dart';
 import 'playback_controls_model.dart';
 
@@ -19,16 +26,19 @@ class VideoControls extends StatefulWidget {
   ///
   /// # 参数 / Parameters
   /// - `model` — [PlaybackControlsModel] 实现 / playback controls model
+  /// - `immersive` — 沉浸 signals 数据源 / immersive signals state
   /// - `style` — Material / Cupertino / adaptive
   /// - `autoHide` — 播放中自动隐藏延迟 / auto-hide delay while playing
   const VideoControls({
     super.key,
     required this.model,
+    required this.immersive,
     this.style = VideoControlsStyle.adaptive,
     this.autoHide = const Duration(seconds: 3),
   });
 
   final PlaybackControlsModel model;
+  final ImmersiveControlsState immersive;
   final VideoControlsStyle style;
   final Duration autoHide;
 
@@ -38,9 +48,14 @@ class VideoControls extends StatefulWidget {
 
 class _VideoControlsState extends State<VideoControls> {
   final FlutterSignal<bool> _visible = signal(true);
+  final FocusNode _focusNode = FocusNode();
 
   Timer? _hideTimer;
   late final void Function() _disposeStateEffect;
+  bool _orientationLocked = false;
+  late final void Function() _disposeOrientationEffect;
+
+  List<DeviceOrientation>? _savedOrientations;
 
   @override
   void initState() {
@@ -53,12 +68,43 @@ class _VideoControlsState extends State<VideoControls> {
         _scheduleHide();
       }
     });
+    _disposeOrientationEffect = effect(() {
+      final locked = widget.immersive.landscapeLocked.value;
+      _orientationLocked = locked;
+      if (locked) {
+        unawaited(
+          SystemChrome.setPreferredOrientations([
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]),
+        );
+      } else if (_savedOrientations != null) {
+        unawaited(SystemChrome.setPreferredOrientations(_savedOrientations!));
+      }
+    });
+    if (isMobilePlatform) {
+      unawaited(_cacheOrientations());
+    }
+  }
+
+  Future<void> _cacheOrientations() async {
+    // Flutter has no getter for current preferred orientations; restore all on exit.
+    _savedOrientations = DeviceOrientation.values;
   }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
     _disposeStateEffect();
+    _disposeOrientationEffect();
+    _focusNode.dispose();
+    if (_orientationLocked) {
+      unawaited(
+        SystemChrome.setPreferredOrientations(
+          _savedOrientations ?? DeviceOrientation.values,
+        ),
+      );
+    }
     super.dispose();
   }
 
@@ -82,6 +128,72 @@ class _VideoControlsState extends State<VideoControls> {
   void _toggle() {
     _visible.value = !_visible.value;
     if (_visible.value) _scheduleHide();
+  }
+
+  void _toggleFullscreen() {
+    widget.immersive.landscapeLocked.value =
+        !widget.immersive.landscapeLocked.value;
+    _keepAlive();
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (!widget.immersive.immersiveActive.value) {
+      return KeyEventResult.ignored;
+    }
+
+    final step = widget.immersive.fullscreen.value.seekStep;
+    final position = widget.model.position.value;
+    final duration = widget.model.duration.value;
+
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowLeft:
+        unawaited(_seekBy(-step, position, duration));
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight:
+        unawaited(_seekBy(step, position, duration));
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowUp:
+        unawaited(_adjustVolume(0.05));
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowDown:
+        unawaited(_adjustVolume(-0.05));
+        return KeyEventResult.handled;
+      default:
+        return KeyEventResult.ignored;
+    }
+  }
+
+  Future<void> _seekBy(
+    Duration delta,
+    Duration position,
+    Duration duration,
+  ) async {
+    final target = position + delta;
+    final clamped = Duration(
+      milliseconds: math.max(
+        0,
+        math.min(target.inMilliseconds, duration.inMilliseconds),
+      ),
+    );
+    await widget.model.seek(clamped);
+    widget.immersive.showHud(
+      ImmersiveHudSnapshot(
+        kind: ImmersiveHudKind.seek,
+        value: delta.inSeconds.abs().toDouble(),
+        forward: delta.inMilliseconds > 0,
+      ),
+    );
+    _keepAlive();
+  }
+
+  Future<void> _adjustVolume(double delta) async {
+    final volume = (widget.model.volume.value + delta).clamp(0.0, 1.0);
+    await widget.model.setVolume(volume);
+    widget.immersive.showHud(
+      ImmersiveHudSnapshot(kind: ImmersiveHudKind.volume, value: volume),
+    );
+    _keepAlive();
   }
 
   bool _useCupertino(BuildContext context) {
@@ -111,11 +223,17 @@ class _VideoControlsState extends State<VideoControls> {
             model: widget.model,
             theme: theme,
             onInteract: _keepAlive,
+            showFullscreenButton: isMobilePlatform,
+            landscapeLocked: widget.immersive.landscapeLocked,
+            onFullscreenToggle: _toggleFullscreen,
           )
         : MaterialVideoControls(
             model: widget.model,
             theme: theme,
             onInteract: _keepAlive,
+            showFullscreenButton: isMobilePlatform,
+            landscapeLocked: widget.immersive.landscapeLocked,
+            onFullscreenToggle: _toggleFullscreen,
           );
 
     return Positioned.fill(
@@ -129,6 +247,40 @@ class _VideoControlsState extends State<VideoControls> {
               child: const SizedBox.expand(),
             ),
           ),
+          SignalBuilder(
+            builder: (context) {
+              if (!widget.immersive.immersiveActive.value) {
+                return const SizedBox.shrink();
+              }
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (isMobilePlatform)
+                    ImmersiveGestureLayer(
+                      immersive: widget.immersive,
+                      model: widget.model,
+                      onTap: _toggle,
+                    ),
+                  if (!isMobilePlatform)
+                    Focus(
+                      focusNode: _focusNode,
+                      autofocus: true,
+                      onKeyEvent: _onKeyEvent,
+                      // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
+                      child: const IgnorePointer(
+                        child: SizedBox.expand(),
+                      ),
+                    ),
+                  AspectRatioMenu(
+                    immersive: widget.immersive,
+                    theme: theme,
+                    labels: widget.immersive.fullscreen.value.aspectRatioLabels,
+                  ),
+                ],
+              );
+            },
+          ),
+          ImmersiveHud(immersive: widget.immersive),
           SignalBuilder(
             builder: (context) {
               return AnimatedOpacity(

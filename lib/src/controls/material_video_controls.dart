@@ -19,11 +19,23 @@ class MaterialVideoControls extends StatefulWidget {
     required this.model,
     required this.theme,
     required this.onInteract,
+    this.showFullscreenButton = false,
+    this.landscapeLocked,
+    this.onFullscreenToggle,
   });
 
   final PlaybackControlsModel model;
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
+
+  /// 是否显示全屏按钮（仅移动端）/ Whether to show the fullscreen toggle (mobile only).
+  final bool showFullscreenButton;
+
+  /// 横屏锁定态 / Landscape lock state.
+  final ReadonlySignal<bool>? landscapeLocked;
+
+  /// 全屏切换回调 / Fullscreen toggle callback.
+  final VoidCallback? onFullscreenToggle;
 
   @override
   State<MaterialVideoControls> createState() => _MaterialVideoControlsState();
@@ -185,6 +197,28 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                           ),
                         ),
                       ),
+                      if (widget.showFullscreenButton &&
+                          widget.landscapeLocked != null &&
+                          widget.onFullscreenToggle != null)
+                        SignalBuilder(
+                          builder: (context) => IconButton(
+                            style: IconButton.styleFrom(
+                              tapTargetSize: .shrinkWrap,
+                              visualDensity: .compact,
+                            ),
+                            color: theme.iconColor,
+                            icon: Icon(
+                              widget.landscapeLocked!.value
+                                  ? Icons.fullscreen_exit
+                                  : Icons.fullscreen,
+                              size: theme.secondaryIconSize,
+                            ),
+                            onPressed: () {
+                              widget.onInteract();
+                              widget.onFullscreenToggle!();
+                            },
+                          ),
+                        ),
                     ],
                   ),
                 ],

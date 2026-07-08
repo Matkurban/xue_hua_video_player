@@ -28,6 +28,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   double? lastVolume;
   bool? lastMute;
   AspectRatioMode? lastAspectRatioMode;
+  int setAspectRatioModeCallCount = 0;
   int playCallCount = 0;
   int pauseCallCount = 0;
   int getTracksCallCount = 0;
@@ -123,6 +124,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) async {
+    setAspectRatioModeCallCount++;
     lastAspectRatioMode = mode;
   }
 

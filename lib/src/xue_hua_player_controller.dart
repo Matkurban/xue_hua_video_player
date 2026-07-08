@@ -120,6 +120,9 @@ class XueHuaPlayerController
   @override
   ReadonlySignal<double> get aspectRatio => _session.aspectRatio;
 
+  /// 媒体打开代数；每次 [open] 递增 / Media open generation; increments on each [open].
+  ReadonlySignal<int> get mediaGeneration => _session.mediaGeneration;
+
   /// 创建原生 player 并订阅 Rust 事件流 / Creates the native player and subscribes to the Rust event stream.
   Future<void> initialize() => _session.initialize();
 
@@ -145,6 +148,7 @@ class XueHuaPlayerController
   Future<void> seek(Duration position) => _session.seek(position);
 
   /// 设置音量 [volume]（0.0–1.0）/ Sets volume in 0.0–1.0.
+  @override
   Future<void> setVolume(double volume) => _session.setVolume(volume);
 
   /// 设置静音 / Sets mute state.
