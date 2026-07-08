@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
+import '../rust/api/types.dart';
 import '../rust/player_events.dart';
 import '../surface/build_video_surface.dart';
 import '../surface/video_surface_handle.dart';
@@ -16,7 +17,8 @@ class PlaybackPresentation extends StatelessWidget {
 
   final PlaybackPresentationModel model;
 
-  /// How GStreamer scales video inside the platform sink (`force-aspect-ratio`).
+  /// Letterbox/crop/stretch behaviour. On Texture surfaces this is applied in
+  /// Dart layout; on Android it is also forwarded to `glimagesink`.
   final AspectRatioMode aspectRatioMode;
 
   @override
@@ -24,31 +26,78 @@ class PlaybackPresentation extends StatelessWidget {
     return SignalBuilder(
       builder: (context) {
         final playerId = model.playerId.value;
-        if (playerId == null) return const SizedBox.expand();
+        if (playerId == null) return const SizedBox.shrink();
         final handle = VideoSurfaceHandle.fromPlayerId(playerId);
+        final ratio = model.aspectRatio.value;
+        final surface = Stack(
+          fit: StackFit.expand,
+          children: [
+            buildVideoSurface(handle),
+            _BufferingOverlay(model: model),
+          ],
+        );
         return _AspectRatioModeSync(
           model: model,
           aspectRatioMode: aspectRatioMode,
-          child: AspectRatio(
-            aspectRatio: model.aspectRatio.value,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
-                  return const SizedBox.expand();
-                }
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    buildVideoSurface(handle),
-                    _BufferingOverlay(model: model),
-                  ],
-                );
-              },
-            ),
+          child: _VideoAspectLayout(
+            aspectRatio: ratio,
+            mode: aspectRatioMode,
+            child: surface,
           ),
         );
       },
     );
+  }
+}
+
+/// Sizes the video surface for external [Texture] rendering.
+///
+/// GStreamer `appsink` frames are raw rectangles; Flutter `Texture` stretches
+/// pixels to the widget bounds, so the widget itself must preserve DAR.
+class _VideoAspectLayout extends StatelessWidget {
+  const _VideoAspectLayout({
+    required this.aspectRatio,
+    required this.mode,
+    required this.child,
+  });
+
+  final double aspectRatio;
+  final AspectRatioMode mode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = aspectRatio > 0 ? aspectRatio : 16 / 9;
+
+    switch (mode) {
+      case AspectRatioMode.fit:
+        return Center(
+          child: AspectRatio(
+            aspectRatio: ratio,
+            child: child,
+          ),
+        );
+      case AspectRatioMode.fill:
+        return Center(
+          child: AspectRatio(
+            aspectRatio: ratio,
+            child: ClipRect(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                clipBehavior: Clip.hardEdge,
+                child: SizedBox(
+                  width: ratio,
+                  height: 1,
+                  child: child,
+                ),
+              ),
+            ),
+          ),
+        );
+      case AspectRatioMode.stretch:
+        return SizedBox.expand(child: child);
+    }
   }
 }
 

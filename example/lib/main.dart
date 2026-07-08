@@ -94,7 +94,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _openAsset() async {
     FocusScope.of(context).unfocus();
     await _controller.open(
-      const VideoSource.asset('assets/sample.mp4'),
+      const VideoSource.asset('assets/sample2.mp4'),
       autoPlay: true,
     );
   }

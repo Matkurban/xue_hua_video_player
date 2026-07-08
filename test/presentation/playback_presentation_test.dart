@@ -143,6 +143,34 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
 
+    testWidgets('fit mode letterboxes with AspectRatio', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 300,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: AspectRatioMode.fit,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Center), findsWidgets);
+      expect(find.byType(AspectRatio), findsOneWidget);
+      final aspectBox = tester.getSize(find.byType(AspectRatio));
+      expect(aspectBox.width, 400);
+      expect(aspectBox.height, closeTo(400 / (16 / 9), 1));
+      debugDefaultTargetPlatformOverride = null;
+    });
+
     testWidgets('hides surface when playerId is null', (tester) async {
       model = FakePlaybackPresentationModel(playerId: null);
 

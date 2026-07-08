@@ -46,3 +46,4 @@ app.*.map.json
 pubspec.lock
 lib/video_url.dart
 devtools_options.yaml
+/assets/sample2.mp4

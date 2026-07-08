@@ -16,7 +16,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
   s.module_name      = 'xue_hua_video_player'
 
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*.swift'
+  s.source_files = 'Classes/**/*.{swift,h,m,c}'
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
   s.swift_version = '5.0'

@@ -48,8 +48,8 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.Met
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
-        Long playerId = call.argument("playerId");
-        if (playerId == null || playerId == 0L) {
+        long playerId = playerIdFromCall(call);
+        if (playerId == 0L) {
             result.error("invalid_args", "playerId required", null);
             return;
         }
@@ -80,6 +80,15 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.Met
                 result.notImplemented();
                 break;
         }
+    }
+
+    /** StandardMessageCodec may deliver small ints as {@link Integer}, not {@link Long}. */
+    private static long playerIdFromCall(@NonNull MethodCall call) {
+        Object raw = call.argument("playerId");
+        if (raw instanceof Number) {
+            return ((Number) raw).longValue();
+        }
+        return 0L;
     }
 
     @Override

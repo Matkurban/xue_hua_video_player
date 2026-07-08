@@ -7,8 +7,8 @@ import 'xue_hua_player_controller.dart';
 
 export 'controls/video_controls.dart';
 
-/// Renders GStreamer video into a native Platform View, preserving aspect ratio
-/// and optionally overlaying a built-in adaptive control bar.
+/// Renders GStreamer video through a Flutter external texture, preserving aspect
+/// ratio and optionally overlaying a built-in adaptive control bar.
 class XueHuaVideoView extends StatelessWidget {
   const XueHuaVideoView({
     super.key,
@@ -21,7 +21,8 @@ class XueHuaVideoView extends StatelessWidget {
 
   final XueHuaPlayerController controller;
 
-  /// How GStreamer scales video inside the platform sink (`force-aspect-ratio`).
+  /// Letterbox / crop / stretch for the video surface. Applied in Dart for
+  /// Texture rendering; also forwarded to GStreamer on Android (`glimagesink`).
   final AspectRatioMode aspectRatioMode;
 
   /// Painted behind/around the video (letterbox bars).
