@@ -13,11 +13,7 @@ void main() {
   group('seekSecondsFromDrag', () {
     test('scales with drag distance and clamps to step', () {
       expect(
-        seekSecondsFromDrag(
-          horizontalDrag: 160,
-          width: 320,
-          maxStepSeconds: 5,
-        ),
+        seekSecondsFromDrag(horizontalDrag: 160, width: 320, maxStepSeconds: 5),
         5,
       );
       expect(
@@ -44,7 +40,9 @@ void main() {
       await controller.dispose();
     });
 
-    testWidgets('calls setAspectRatioMode once per mode change', (tester) async {
+    testWidgets('calls setAspectRatioMode once per mode change', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       try {
         await controller.initialize();

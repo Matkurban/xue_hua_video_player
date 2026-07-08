@@ -19,17 +19,17 @@ void main() {
       disposeTextureCount = 0;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(textureChannel, (call) async {
-        switch (call.method) {
-          case 'createTexture':
-            createTextureCount++;
-            return 1;
-          case 'disposeTexture':
-            disposeTextureCount++;
-            return null;
-          default:
-            return null;
-        }
-      });
+            switch (call.method) {
+              case 'createTexture':
+                createTextureCount++;
+                return 1;
+              case 'disposeTexture':
+                disposeTextureCount++;
+                return null;
+              default:
+                return null;
+            }
+          });
     });
 
     tearDown(() {
@@ -45,9 +45,7 @@ void main() {
         final handle = VideoSurfaceHandle.fromPlayerId(42);
         await tester.pumpWidget(
           MaterialApp(
-            home: Scaffold(
-              body: TextureVideoSurface(handle: handle),
-            ),
+            home: Scaffold(body: TextureVideoSurface(handle: handle)),
           ),
         );
         await tester.pumpAndSettle();
@@ -56,9 +54,7 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            home: Scaffold(
-              body: TextureVideoSurface(handle: handle),
-            ),
+            home: Scaffold(body: TextureVideoSurface(handle: handle)),
           ),
         );
         await tester.pumpAndSettle();
@@ -76,11 +72,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.linux;
       try {
         await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: _PlayerIdHost(initialPlayerId: 42),
-            ),
-          ),
+          MaterialApp(home: Scaffold(body: _PlayerIdHost(initialPlayerId: 42))),
         );
         await tester.pumpAndSettle();
         expect(createTextureCount, 1);
@@ -95,27 +87,28 @@ void main() {
       }
     });
 
-    testWidgets('unsupported platform shows placeholder without createTexture', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: TextureVideoSurface(
-              handle: const VideoSurfaceHandle(
-                playerId: 42,
-                kind: VideoSurfaceKind.unsupported,
+    testWidgets(
+      'unsupported platform shows placeholder without createTexture',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: TextureVideoSurface(
+                handle: const VideoSurfaceHandle(
+                  playerId: 42,
+                  kind: VideoSurfaceKind.unsupported,
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(createTextureCount, 0);
-      expect(disposeTextureCount, 0);
-      expect(find.textContaining('Video not supported'), findsOneWidget);
-    });
+        expect(createTextureCount, 0);
+        expect(disposeTextureCount, 0);
+        expect(find.textContaining('Video not supported'), findsOneWidget);
+      },
+    );
   });
 }
 

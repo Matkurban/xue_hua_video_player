@@ -27,7 +27,9 @@ void main() {
       state.dispose();
       state = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
-        fullscreen: const VideoControlsFullscreenConfig(desktopImmersive: false),
+        fullscreen: const VideoControlsFullscreenConfig(
+          desktopImmersive: false,
+        ),
       );
       expect(state.immersiveActive.value, isFalse);
     });

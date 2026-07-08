@@ -33,10 +33,7 @@ class CenterButton extends StatelessWidget {
         final PlayerState state = model.state.value;
         final buffering = model.bufferingPercent.value;
         if (buffering < 100 || state == PlayerState.buffering) {
-          return const SizedBox(
-            width: _buttonSize,
-            height: _buttonSize,
-          );
+          return const SizedBox(width: _buttonSize, height: _buttonSize);
         }
         final playing = state == PlayerState.playing;
         final icon = playing

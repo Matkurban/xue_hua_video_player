@@ -267,9 +267,7 @@ class _VideoControlsState extends State<VideoControls> {
                       autofocus: true,
                       onKeyEvent: _onKeyEvent,
                       // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
-                      child: const IgnorePointer(
-                        child: SizedBox.expand(),
-                      ),
+                      child: const IgnorePointer(child: SizedBox.expand()),
                     ),
                   AspectRatioMenu(
                     immersive: widget.immersive,

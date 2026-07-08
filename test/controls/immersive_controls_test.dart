@@ -45,12 +45,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Stack(
-              children: [
-                VideoControls(
-                  model: model,
-                  immersive: immersive,
-                ),
-              ],
+              children: [VideoControls(model: model, immersive: immersive)],
             ),
           ),
         ),
@@ -58,7 +53,9 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('arrow left seeks backward on desktop immersive', (tester) async {
+    testWidgets('arrow left seeks backward on desktop immersive', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
@@ -74,7 +71,9 @@ void main() {
       }
     });
 
-    testWidgets('arrow right seeks forward on desktop immersive', (tester) async {
+    testWidgets('arrow right seeks forward on desktop immersive', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
@@ -90,7 +89,9 @@ void main() {
       }
     });
 
-    testWidgets('arrow up increases volume on desktop immersive', (tester) async {
+    testWidgets('arrow up increases volume on desktop immersive', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
@@ -105,7 +106,9 @@ void main() {
       }
     });
 
-    testWidgets('arrow down decreases volume on desktop immersive', (tester) async {
+    testWidgets('arrow down decreases volume on desktop immersive', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
@@ -120,7 +123,9 @@ void main() {
       }
     });
 
-    testWidgets('shows custom aspect ratio label when immersive', (tester) async {
+    testWidgets('shows custom aspect ratio label when immersive', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);

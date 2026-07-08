@@ -69,5 +69,6 @@ class VideoControlsFullscreenConfig {
           aspectRatioLabels == other.aspectRatioLabels;
 
   @override
-  int get hashCode => Object.hash(seekStep, desktopImmersive, aspectRatioLabels);
+  int get hashCode =>
+      Object.hash(seekStep, desktopImmersive, aspectRatioLabels);
 }

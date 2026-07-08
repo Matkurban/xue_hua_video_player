@@ -43,17 +43,17 @@ void main() {
       disposeTextureCount = 0;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(textureChannel, (call) async {
-        switch (call.method) {
-          case 'createTexture':
-            createTextureCount++;
-            return 1;
-          case 'disposeTexture':
-            disposeTextureCount++;
-            return null;
-          default:
-            return null;
-        }
-      });
+            switch (call.method) {
+              case 'createTexture':
+                createTextureCount++;
+                return 1;
+              case 'disposeTexture':
+                disposeTextureCount++;
+                return null;
+              default:
+                return null;
+            }
+          });
       model = FakePlaybackPresentationModel();
       aspectRatioMode = signal(AspectRatioMode.fit);
     });

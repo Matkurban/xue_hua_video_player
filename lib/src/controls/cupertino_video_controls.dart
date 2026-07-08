@@ -225,13 +225,16 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
                                   widget.onFullscreenToggle!();
                                 },
                                 style: IconButton.styleFrom(
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                   visualDensity: VisualDensity.compact,
                                 ),
                                 icon: Icon(
                                   widget.landscapeLocked!.value
-                                      ? CupertinoIcons.arrow_down_right_arrow_up_left
-                                      : CupertinoIcons.arrow_up_left_arrow_down_right,
+                                      ? CupertinoIcons
+                                            .arrow_down_right_arrow_up_left
+                                      : CupertinoIcons
+                                            .arrow_up_left_arrow_down_right,
                                   size: theme.secondaryIconSize,
                                   color: theme.iconColor,
                                 ),
