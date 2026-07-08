@@ -1,3 +1,11 @@
+//! iOS overlay 会话 — CALayer 附着阶段、overlay_bound 校验与 idle 目标状态门控 /
+//! iOS overlay session — CALayer attach phase, verified overlay_bound, and idle target-state gate.
+//!
+//! [`IosOverlaySession`] 管理异步 CALayer 附着、generation 失效、缓冲暂停与绑定路径预卷循环。
+//!
+//! [`IosOverlaySession`] manages async CALayer attach, generation invalidation, buffering pause,
+//! and bind-path preroll loops.
+
 use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering},
     Arc,
@@ -21,19 +29,27 @@ use crate::playback::surface::VideoSurface;
 
 use crate::platform::ios::layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
 
-/// Work context for idle `apply_target_state` / attach retries.
+/// idle `apply_target_state` / 附着重试的工作上下文 / Work context for idle `apply_target_state` / attach retries.
 pub struct IosIdleWork {
+    /// 捕获时的 overlay generation / overlay generation at capture time
     pub work_generation: u64,
+    /// 管线壳层 / pipeline shell
     pub shell: Arc<Mutex<PipelineShell>>,
+    /// 原生宿主句柄缓存 / native host handle cache
     pub stored: Arc<Mutex<Option<usize>>>,
+    /// 关联 surface / associated surface
     pub surface: VideoSurface,
+    /// 播放意图 / play intent
     pub play_intent: OverlayPlayIntent,
+    /// iOS bus 层后端槽 / iOS bus-layer backend slot
     pub ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
 }
 
+/// iOS CALayer 附着阶段的单一接缝：校验 `overlay_bound` 与 idle 目标状态门控 /
 /// Single seam for iOS CALayer attach phase, verified overlay_bound, and idle target-state gate.
 #[derive(Clone)]
 pub struct IosOverlaySession {
+    /// GStreamer overlay 是否已绑定 / whether GStreamer overlay is bound
     pub overlay_bound: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     overlay_generation: Arc<AtomicU64>,
@@ -43,14 +59,23 @@ pub struct IosOverlaySession {
     apply_scheduled: Arc<AtomicBool>,
     attach_scheduled: Arc<AtomicBool>,
     state_apply_in_flight: Arc<AtomicBool>,
+    /// 上次成功附着的宿主句柄 / last successfully attached host handle
     pub last_applied_handle: Arc<AtomicUsize>,
     last_width: Arc<AtomicI32>,
     last_height: Arc<AtomicI32>,
+    /// iOS bus 层后端注册槽 / iOS bus-layer backend registration slot
     pub ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
     overlay_sink: Option<Arc<Mutex<gst::Element>>>,
 }
 
 impl IosOverlaySession {
+    /// 使用外部共享原子状态构造 session / Constructs session with externally shared atomic state.
+    ///
+    /// # 参数 / Parameters
+    /// - `overlay_bound` — 绑定标志 / bound flag
+    /// - `last_applied_handle` — 上次附着句柄 / last attached handle
+    /// - `running` — replay 存活标志 / replay lifetime flag
+    /// - `overlay_generation` — 工作 generation / work generation
     pub fn new(
         overlay_bound: Arc<AtomicBool>,
         last_applied_handle: Arc<AtomicUsize>,
@@ -75,6 +100,7 @@ impl IosOverlaySession {
         }
     }
 
+    /// 使用默认原子状态与给定 `running` 标志构造 / Constructs with default atomics and given `running` flag.
     pub fn new_with_running(running: Arc<AtomicBool>) -> Self {
         Self::new(
             Arc::new(AtomicBool::new(false)),
@@ -84,10 +110,12 @@ impl IosOverlaySession {
         )
     }
 
+    /// 接入 replay 运行标志（管线存活期）/ Wires replay running flag (pipeline lifetime).
     pub fn wire_running(&mut self, running: Arc<AtomicBool>) {
         self.running = running;
     }
 
+    /// 设置或更新 overlay video sink 元素槽 / Sets or updates the overlay video sink element slot.
     pub fn set_overlay_sink(&mut self, element: gst::Element) {
         match &self.overlay_sink {
             Some(slot) => *slot.lock() = element,
@@ -95,18 +123,22 @@ impl IosOverlaySession {
         }
     }
 
+    /// 返回 overlay sink 共享槽 / Returns the overlay sink shared slot.
     pub fn overlay_sink_slot(&self) -> Option<&Arc<Mutex<gst::Element>>> {
         self.overlay_sink.as_ref()
     }
 
+    /// 注册 iOS Gst bus 层后端 / Registers the iOS Gst bus-layer backend.
     pub fn register_ios_layer_backend(&self, backend: IosLayerBackend) {
         *self.ios_layer_bus_slot.lock() = Some(backend);
     }
 
+    /// 返回 overlay generation 共享计数器 / Returns shared overlay generation counter.
     pub fn overlay_generation(&self) -> Arc<AtomicU64> {
         self.overlay_generation.clone()
     }
 
+    /// 递增 generation，使陈旧附着/应用工作失效 / Bumps generation, invalidating stale attach/apply work.
     pub fn bump_overlay_generation(&self) {
         self.overlay_generation.fetch_add(1, Ordering::SeqCst);
     }
@@ -120,19 +152,23 @@ impl IosOverlaySession {
             || work_generation != self.overlay_generation.load(Ordering::SeqCst)
     }
 
+    /// 是否已在 Gst 侧完成 overlay 绑定 / Whether overlay is bound on Gst side.
     pub fn is_bound(&self) -> bool {
         self.overlay_bound.load(Ordering::SeqCst)
     }
 
+    /// 设置「overlay 绑定后待播放」标志 / Sets the pending-play-after-overlay flag.
     pub fn set_pending_play_after_overlay(&self, pending: bool) {
         self.pending_play_after_overlay
             .store(pending, Ordering::SeqCst);
     }
 
+    /// 设置网络缓冲活跃标志（缓冲时暂停播放）/ Sets network buffering active flag (pauses during buffering).
     pub fn set_buffering_active(&self, active: bool) {
         self.buffering_active.store(active, Ordering::SeqCst);
     }
 
+    /// 壳层重建时重置全部附着/调度状态 / Resets all attach/schedule state on shell rebuild.
     pub fn reset_for_shell_rebuild(&self) {
         self.overlay_bound.store(false, Ordering::SeqCst);
         self.attach_in_flight.store(false, Ordering::SeqCst);
@@ -145,11 +181,12 @@ impl IosOverlaySession {
         self.last_applied_handle.store(0, Ordering::SeqCst);
     }
 
-    /// Clears overlay state on every media change (URI reload, asset swap).
+    /// 每次媒体变更时清除 overlay 状态（URI 重载、资源切换）/ Clears overlay state on every media change (URI reload, asset swap).
     pub fn reset_for_media_change(&self) {
         self.reset_for_shell_rebuild();
     }
 
+    /// 宿主视图变更时部分重置（附着进行中则跳过）/ Partial reset on host view change (skipped when attach in flight).
     pub fn reset_for_host_change(&self) {
         if self.attach_in_flight.load(Ordering::SeqCst) {
             log::debug!("ios reset_for_host_change skipped (attach in flight)");
@@ -183,7 +220,7 @@ impl IosOverlaySession {
         *stored.lock() = Some(new_handle);
     }
 
-    /// Schedules idle attach retry (bus `READY→PAUSED` / `AsyncDone`).
+    /// 调度 idle 附着重试（bus `READY→PAUSED` / `AsyncDone`）/ Schedules idle attach retry (bus `READY→PAUSED` / `AsyncDone`).
     pub fn schedule_attach(&self, work: IosIdleWork) {
         if self.lifecycle_stale(work.work_generation) {
             return;
@@ -223,7 +260,7 @@ impl IosOverlaySession {
         });
     }
 
-    /// Schedules idle target-state apply (buffering, clock-lost, play resume).
+    /// 调度 idle 目标状态应用（缓冲、时钟丢失、播放恢复）/ Schedules idle target-state apply (buffering, clock-lost, play resume).
     pub fn schedule_apply(&self, work: IosIdleWork) {
         if self.lifecycle_stale(work.work_generation) {
             return;
@@ -256,7 +293,10 @@ impl IosOverlaySession {
         });
     }
 
-    /// Schedules at most one async CALayer attach; coalesces concurrent callers.
+    /// 至多调度一次异步 CALayer 附着；合并并发调用 / Schedules at most one async CALayer attach; coalesces concurrent callers.
+    ///
+    /// # 返回值 / Returns
+    /// - [`IosLayerAttachOutcome`] 结果 / [`IosLayerAttachOutcome`] result
     pub fn request_attach(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
@@ -471,11 +511,12 @@ impl IosOverlaySession {
         Ok(())
     }
 
-    /// Coalesced resume after overlay binds — routes through idle `apply_target_state`.
+    /// overlay 绑定后合并恢复播放 — 经 idle `apply_target_state` 路由 / Coalesced resume after overlay binds — routes through idle `apply_target_state`.
     pub fn drain_pending_play(&self, work: IosIdleWork) {
         self.schedule_apply(work);
     }
 
+    /// 构建当前 generation 的 idle 工作上下文 / Builds idle work context for the current generation.
     pub fn idle_work(
         &self,
         shell: Arc<Mutex<PipelineShell>>,

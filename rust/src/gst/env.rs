@@ -1,4 +1,21 @@
-/// Writable sandbox paths and registry location shared by iOS/macOS.
+//! iOS/macOS 沙盒可写路径与 GStreamer 环境变量配置。
+//!
+//! Writable sandbox paths and GStreamer environment configuration for iOS/macOS.
+//!
+//! 在 `gst::init()` 之前设置 GLib/GStreamer 期望的 `HOME`、`TMPDIR`、`GST_REGISTRY`
+//! 等变量，并配置平台特有的插件路径与解码器优先级。
+
+/// 配置 iOS/macOS 沙盒内可写的临时目录与 GStreamer 注册表路径。
+/// Configures writable temp directories and GStreamer registry path for iOS/macOS sandboxes.
+///
+/// # 参数 / Parameters
+/// 无 / None.
+///
+/// # 返回值 / Returns
+/// 无 / None.
+///
+/// # 平台 / Platform
+/// - 仅 **iOS** 与 **macOS** / **iOS** and **macOS** only.
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub fn setup_sandbox_writable_env() {
     use std::path::PathBuf;
@@ -27,7 +44,21 @@ pub fn setup_sandbox_writable_env() {
     std::env::set_var("GST_REGISTRY", &registry_str);
 }
 
-/// Prepares the process environment GStreamer/GLib expect, before `gst::init()`.
+/// 在 `gst::init()` 之前准备 iOS 进程环境。
+/// Prepares the iOS process environment before `gst::init()`.
+///
+/// # 参数 / Parameters
+/// 无 / None.
+///
+/// # 返回值 / Returns
+/// 无 / None.
+///
+/// # 平台 / Platform
+/// - 仅 **iOS** / **iOS** only.
+/// - 设置 VideoToolbox 硬件解码优先级，确保真机输出 IOSurface 支持的 `CVPixelBuffer`
+///   （软件 `avdec_*` 在真机上会导致黑屏）。
+///   Sets VideoToolbox hardware decode priority so decoded frames are IOSurface-backed
+///   `CVPixelBuffers` (software `avdec_*` output renders black on real devices).
 #[cfg(target_os = "ios")]
 pub fn setup_ios_env() {
     setup_sandbox_writable_env();
@@ -42,7 +73,21 @@ pub fn setup_ios_env() {
     );
 }
 
-/// Locates GStreamer libraries inside the app bundle, or the system framework.
+/// 定位应用包内或系统框架中的 GStreamer 库目录。
+/// Locates GStreamer libraries inside the app bundle or the system framework.
+///
+/// # 参数 / Parameters
+/// 无 / None.
+///
+/// # 返回值 / Returns
+/// - 找到时返回 `lib` 目录路径（如 `…/GStreamer.framework/Versions/1.0/lib`）；
+///   未找到时返回 `None`。
+///   Returns the `lib` directory path when found (e.g.
+///   `…/GStreamer.framework/Versions/1.0/lib`); `None` otherwise.
+///
+/// # 平台 / Platform
+/// - 仅 **macOS** / **macOS** only.
+/// - 优先检查可执行文件旁的嵌入式框架，再回退到 `/Library/Frameworks/…`。
 #[cfg(target_os = "macos")]
 pub fn bundled_gstreamer_lib_dir() -> Option<std::path::PathBuf> {
     use std::path::{Path, PathBuf};
@@ -68,7 +113,18 @@ pub fn bundled_gstreamer_lib_dir() -> Option<std::path::PathBuf> {
     None
 }
 
-/// Prepares macOS sandbox + embedded GStreamer.framework paths before `gst::init()`.
+/// 在 `gst::init()` 之前准备 macOS 沙盒与嵌入式 GStreamer.framework 路径。
+/// Prepares macOS sandbox and embedded GStreamer.framework paths before `gst::init()`.
+///
+/// # 参数 / Parameters
+/// 无 / None.
+///
+/// # 返回值 / Returns
+/// 无 / None.
+///
+/// # 平台 / Platform
+/// - 仅 **macOS** / **macOS** only.
+/// - 设置 `GST_PLUGIN_SYSTEM_PATH`、`GIO_MODULE_DIR` 与解码器优先级。
 #[cfg(target_os = "macos")]
 pub fn setup_macos_env() {
     setup_sandbox_writable_env();

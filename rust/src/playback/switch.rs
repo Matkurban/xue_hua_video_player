@@ -1,3 +1,14 @@
+//! URI ↔ 资产管线 shell 切换 / URI ↔ asset pipeline shell switching.
+//!
+//! [`switch_shell`] 在 [`crate::playback::engine::PlaybackEngine::load`] 时根据
+//! [`crate::media::ResolvedSource`] 重建或重配置 [`crate::playback::shell::PipelineShell`]，
+//! 并应用 overlay 重绑、宽高比与 orientation；[`PipelineSwapConfig`] 携带跨 shell 重建的元数据。
+//!
+//! [`switch_shell`] rebuilds or reconfigures [`crate::playback::shell::PipelineShell`] during
+//! [`crate::playback::engine::PlaybackEngine::load`] based on [`crate::media::ResolvedSource`],
+//! applying overlay rebind, aspect ratio, and orientation; [`PipelineSwapConfig`] carries
+//! metadata across shell rebuilds.
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -21,24 +32,45 @@ use crate::playback::sink::OverlaySizeSync;
 use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::TrackCache;
 
-/// Pipeline-only metadata for URI ↔ asset shell swaps (no replay atomics, no surface).
+/// URI ↔ 资产 shell 切换时的管线元数据（不含 replay 原子量与 surface）/ Pipeline-only metadata for URI ↔ asset shell swaps.
 #[derive(Clone)]
 pub struct PipelineSwapConfig {
+    /// 事件发射器 / Event emitter.
     pub emitter: Arc<Mutex<Option<Emitter>>>,
+    /// 循环播放标志 / Looping flag.
     pub looping: Arc<AtomicBool>,
+    /// 视频元数据缓存 / Video metadata cache.
     pub metadata: Arc<Mutex<InternalVideoMetadata>>,
+    /// 多轨缓存 / Multi-track cache.
     pub track_cache: Arc<Mutex<TrackCache>>,
+    /// 画面旋转配置快照 / Orientation config snapshot.
     pub orientation: InternalVideoOrientationConfig,
+    /// 宽高比模式快照 / Aspect ratio mode snapshot.
     pub aspect: InternalAspectRatioMode,
-    /// Frame source reused across shell rebuilds so the Flutter texture keeps
-    /// receiving frames after a URI ↔ asset switch (appsink platforms).
+    /// 跨 shell 重建复用的帧源，保证 URI ↔ 资产切换后 Flutter 纹理仍收帧 / Frame source reused across shell rebuilds.
     pub frame_sink: Arc<crate::playback::frame::FrameSink>,
-    /// Caps-driven ImageReader resize + overlay sync (Android texture path).
+    /// 解码尺寸变更触发的 ImageReader 调整与 overlay 同步（Android 纹理路径）/ Caps-driven overlay sync (Android texture path).
     #[cfg(target_os = "android")]
     pub overlay_size_sync: Option<OverlaySizeSync>,
 }
 
 impl PipelineSwapConfig {
+    /// 克隆供 Gst 异步闭包使用 / Clones for async Gst closures.
+    ///
+    /// # 参数 / Parameters
+    /// - 无 / None
+    ///
+    /// # 返回值 / Returns
+    /// - 共享 Arc 的新 [`PipelineSwapConfig`] / new config sharing Arc pointers
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - 任意线程 / any thread
+    ///
+    /// # 平台 / Platform
+    /// - Android 克隆 `overlay_size_sync` / clones `overlay_size_sync` on Android
     pub fn clone_for_async(&self) -> Self {
         Self {
             emitter: self.emitter.clone(),
@@ -54,7 +86,26 @@ impl PipelineSwapConfig {
     }
 }
 
-/// Rebuilds or reconfigures the pipeline shell for `resolved` and applies overlay/orientation.
+/// 为 `resolved` 重建或重配置 pipeline shell 并应用 overlay/orientation / Rebuilds or reconfigures the pipeline shell for `resolved`.
+///
+/// # 参数 / Parameters
+/// - `shell` — 可变 pipeline shell / mutable pipeline shell
+/// - `resolved` — 已解析的 URI 或 AppSrc 资产 / resolved URI or AppSrc asset
+/// - `swap` — 跨重建元数据 / metadata across rebuilds
+/// - `replay` — 重放上下文 / replay context
+/// - `surface` — VideoSurface / video surface
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())` / `Ok(())`
+///
+/// # 错误 / Errors
+/// - shell 安装、URI 设置或 preroll 失败 / shell install, URI set, or preroll failure
+///
+/// # 线程 / Threading
+/// - 必须在 Gst 线程上调用 / Must run on Gst thread
+///
+/// # 平台 / Platform
+/// - macOS/iOS 额外同步 overlay sink slot / macOS/iOS additionally sync overlay sink slot
 pub fn switch_shell(
     shell: &mut PipelineShell,
     resolved: ResolvedSource,
@@ -91,7 +142,7 @@ fn switch_uri_shell(
             #[cfg(target_os = "android")]
             swap.overlay_size_sync.clone(),
         )?;
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        #[cfg(target_os = "ios")]
         {
             let overlay_sink = surface.overlay_sink_slot().cloned();
             wire_overlay_sync(shell, surface.stored_handle(), overlay_sink);
@@ -99,7 +150,7 @@ fn switch_uri_shell(
                 shell.sync_overlay_sink_slot(slot);
             }
         }
-        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        #[cfg(not(target_os = "ios"))]
         wire_overlay_sync(shell, surface.stored_handle());
     }
     surface.rebind_cached_overlay(shell)?;
@@ -108,6 +159,22 @@ fn switch_uri_shell(
     pipeline_set_uri(shell, uri, replay, surface)
 }
 
+/// 切换到 AppSrc 资产 shell（总是完整重建）/ Switches to AppSrc asset shell (always full rebuild).
+///
+/// # 参数 / Parameters
+/// - `shell`、`asset_key`、`swap`、`replay`、`surface` — 同 [`switch_shell`] / same as [`switch_shell`]
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())` / `Ok(())`
+///
+/// # 错误 / Errors
+/// - [`install_asset_shell`] 或 preroll 失败 / install or preroll failure
+///
+/// # 线程 / Threading
+/// - Gst 线程 / Gst thread
+///
+/// # 平台 / Platform
+/// - Android 可能在 overlay 未绑定时延迟 Paused preroll / Android may defer Paused preroll until overlay bound
 pub(crate) fn switch_asset_shell(
     shell: &mut PipelineShell,
     asset_key: &str,
@@ -128,7 +195,7 @@ pub(crate) fn switch_asset_shell(
         #[cfg(target_os = "android")]
         swap.overlay_size_sync.clone(),
     )?;
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_os = "ios")]
     {
         let overlay_sink = surface.overlay_sink_slot().cloned();
         wire_overlay_sync(shell, surface.stored_handle(), overlay_sink);
@@ -136,7 +203,7 @@ pub(crate) fn switch_asset_shell(
             shell.sync_overlay_sink_slot(slot);
         }
     }
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(not(target_os = "ios"))]
     wire_overlay_sync(shell, surface.stored_handle());
     surface.rebind_cached_overlay(shell)?;
     shell.apply_aspect_ratio(swap.aspect);

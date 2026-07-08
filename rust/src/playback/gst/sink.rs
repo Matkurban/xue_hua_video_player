@@ -1,3 +1,12 @@
+//! 平台视频 sink 与 VideoOverlay 绑定 / Platform video sink and VideoOverlay binding.
+//!
+//! 按目标 OS 创建 appsink 或 VideoOverlay sink，处理 `prepare-window-handle` 总线同步、
+//! 窗口句柄绑定与渲染矩形更新；是 xhvp-gst 输出到 Flutter 纹理或原生视图的最后一环。
+//!
+//! Creates appsink or VideoOverlay sinks per target OS, handles `prepare-window-handle`
+//! bus sync, window handle binding, and render rectangle updates — the final xhvp-gst
+//! output stage to Flutter textures or native views.
+
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -9,7 +18,7 @@ use gstreamer_video::{
 };
 use parking_lot::Mutex;
 
-/// GStreamer-recommended video sink element name per platform.
+/// 各平台 GStreamer 推荐的视频 sink 元素名 / GStreamer-recommended video sink element name per platform.
 #[cfg_attr(
     any(
         target_os = "ios",
@@ -54,12 +63,25 @@ fn configure_video_sink(element: &gst::Element) {
     }
 }
 
-/// Creates the video sink for the current platform.
+/// 为当前平台创建视频 sink / Creates the video sink for the current platform.
 ///
-/// Apple (iOS/macOS) and desktop (Windows/Linux) render through a Flutter
-/// external texture, so they terminate the pipeline in an `appsink` (BGRA)
-/// feeding `frame_sink`. Android still uses its VideoOverlay sink
-/// (`glimagesink`).
+/// Apple（iOS/macOS）与桌面（Windows/Linux）经 Flutter 外部纹理，以 `appsink`（BGRA）
+/// 喂入 `frame_sink`；Android 仍使用 VideoOverlay sink（`glimagesink`）。
+///
+/// # 参数 / Parameters
+/// - `frame_sink` — 外部纹理帧源（appsink 平台）/ frame source for appsink platforms
+///
+/// # 返回值 / Returns
+/// - 成功：视频 sink 元素 / video sink element
+///
+/// # 错误 / Errors
+/// - 元素工厂创建失败 / element factory failure
+///
+/// # 线程 / Threading
+/// - 管线构建于 Gst 线程 / pipeline build on Gst thread
+///
+/// # 平台 / Platform
+/// - appsink：iOS/macOS/Windows/Linux；VideoOverlay：Android 等 / per-OS sink selection
 #[cfg_attr(
     not(any(
         target_os = "ios",
@@ -97,10 +119,25 @@ pub fn create_platform_video_sink(
     }
 }
 
-/// Binds a native window/surface handle to a VideoOverlay-capable sink.
+/// 将原生窗口/surface 句柄绑定到 VideoOverlay sink / Binds native window/surface handle to VideoOverlay sink.
 ///
-/// Does not call `expose` — callers should expose only after the first video frame
-/// or when the render rectangle is known (avoids green/clear framebuffer flash).
+/// 不调用 `expose`——调用方应在首帧或已知渲染矩形后再 expose，避免绿屏闪烁。
+///
+/// # 参数 / Parameters
+/// - `video_sink` — 视频 sink 元素 / video sink element
+/// - `handle` — 原生句柄（整数）/ native handle as integer
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())` / `Ok(())`
+///
+/// # 错误 / Errors
+/// - sink 未实现 VideoOverlay / sink does not implement VideoOverlay
+///
+/// # 线程 / Threading
+/// - 必须在 Gst 线程（或平台文档允许的线程）/ Gst thread per platform docs
+///
+/// # 平台 / Platform
+/// - VideoOverlay 平台（Android 等）/ VideoOverlay platforms
 pub fn set_overlay_window_handle(video_sink: &gst::Element, handle: usize) -> Result<()> {
     let overlay = video_sink
         .clone()
@@ -118,15 +155,14 @@ fn bind_overlay_element(overlay: &gst_video::VideoOverlay, handle: usize) {
     }
 }
 
-/// Clears the overlay window handle (surface destroyed).
+/// 清除 overlay 窗口句柄（surface 销毁时）/ Clears overlay window handle when surface is destroyed.
 pub fn clear_overlay_window_handle(video_sink: &gst::Element) -> Result<()> {
     set_overlay_window_handle(video_sink, 0)
 }
 
-/// Requests a redraw after surface geometry changes.
+/// 请求重绘（surface 几何变更后）/ Requests redraw after surface geometry changes.
 ///
-/// GStreamer Android tutorial 3 calls `gst_video_overlay_expose` twice because
-/// of how surface size changes propagate through the OpenGL ES pipeline.
+/// Android 教程建议调用两次 `expose` 以应对 GLES 管线尺寸传播。
 pub fn expose_overlay(video_sink: &gst::Element) {
     if let Ok(overlay) = video_sink.clone().dynamic_cast::<gst_video::VideoOverlay>() {
         overlay.expose();
@@ -134,10 +170,25 @@ pub fn expose_overlay(video_sink: &gst::Element) {
     }
 }
 
-/// Sets the embedded view rectangle and requests a redraw.
+/// 设置嵌入视图矩形并请求重绘 / Sets embedded view rectangle and requests redraw.
 ///
-/// Do not call on iOS from the Gst thread — `glimagesink` layer updates must not
-/// race UIKit; iOS sizing is handled by `EaglUIView` layout on the main thread.
+/// 勿在 iOS Gst 线程调用——iOS 尺寸由主线程 `EaglUIView` layout 处理。
+///
+/// # 参数 / Parameters
+/// - `video_sink` — 视频 sink / video sink
+/// - `width`、`height` — 渲染区域尺寸 / render area size
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - Gst 线程（iOS 除外）/ Gst thread except iOS
+///
+/// # 平台 / Platform
+/// - iOS：应由主线程 layout 处理 / iOS handled on main thread
 pub fn set_overlay_render_rectangle(video_sink: &gst::Element, width: i32, height: i32) {
     if width <= 0 || height <= 0 {
         return;
@@ -149,7 +200,23 @@ pub fn set_overlay_render_rectangle(video_sink: &gst::Element, width: i32, heigh
     }
 }
 
-/// Handles `prepare-window-handle` on the pipeline bus sync handler.
+/// 处理总线 `prepare-window-handle` 同步消息 / Handles `prepare-window-handle` on pipeline bus sync handler.
+///
+/// # 参数 / Parameters
+/// - `msg` — 总线消息 / bus message
+/// - `cached_handle` — 缓存的原生句柄 / cached native handle
+///
+/// # 返回值 / Returns
+/// - [`gst::BusSyncReply`]：Pass、Drop 或平台特定处理 / Pass, Drop, or platform-specific
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - Gst 总线 sync handler 线程 / Gst bus sync handler thread
+///
+/// # 平台 / Platform
+/// - iOS/macOS 转发到专用处理；其他平台直接绑定 / Darwin delegates; others bind directly
 pub fn bus_sync_reply_for_overlay_message(
     msg: &gst::MessageRef,
     cached_handle: Option<usize>,
@@ -169,7 +236,8 @@ pub fn bus_sync_reply_for_overlay_message(
     }
     #[cfg(target_os = "macos")]
     {
-        return bus_sync_reply_for_macos_overlay(msg);
+        let _ = handle;
+        return gst::BusSyncReply::Pass;
     }
     #[cfg(all(not(target_os = "ios"), not(target_os = "macos")))]
     if let Some(src) = msg.src() {
@@ -182,22 +250,7 @@ pub fn bus_sync_reply_for_overlay_message(
     gst::BusSyncReply::Drop
 }
 
-/// macOS `prepare-window-handle`: pass — `osxvideosink` must bind on the main thread via
-/// `MacosOverlayBackend::apply_gstreamer`, not from the Gst bus sync handler.
-#[cfg(target_os = "macos")]
-pub fn bus_sync_reply_for_macos_overlay(msg: &gst::MessageRef) -> gst::BusSyncReply {
-    use gstreamer_video::is_video_overlay_prepare_window_handle_message;
-
-    if !is_video_overlay_prepare_window_handle_message(msg) {
-        return gst::BusSyncReply::Pass;
-    }
-    log::debug!(
-        "prepare-window-handle: ignored on macOS (main-thread MacosOverlayBackend applies bind)"
-    );
-    gst::BusSyncReply::Pass
-}
-
-/// iOS `prepare-window-handle`: pass — `avsamplebufferlayersink` uses [`IosOverlaySession`] async CALayer attach, not VideoOverlay sync bind.
+/// iOS `prepare-window-handle`：Pass——由 [`IosOverlaySession`] 异步 CALayer 附加 / iOS: Pass — async CALayer attach.
 #[cfg(target_os = "ios")]
 pub fn bus_sync_reply_for_ios_overlay(
     msg: &gst::MessageRef,
@@ -213,19 +266,34 @@ pub fn bus_sync_reply_for_ios_overlay(
     gst::BusSyncReply::Pass
 }
 
-/// Installs a bus sync handler that answers `prepare-window-handle` for VideoOverlay sinks.
+/// 安装总线 sync handler 以应答 VideoOverlay `prepare-window-handle` / Installs bus sync handler for VideoOverlay.
+///
+/// # 参数 / Parameters
+/// - `pipeline` — GStreamer 管线 / pipeline
+/// - `overlay_handle` — 共享缓存句柄 / shared cached handle
+/// - `overlay_sink`（macOS/iOS）— 可选 sink 槽 / optional sink slot
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 无（无 bus 时静默返回）/ None (no-op if no bus)
+///
+/// # 线程 / Threading
+/// - handler 在 Gst 线程 / handler on Gst thread
+///
+/// # 平台 / Platform
+/// - 各平台 sync 策略不同 / per-platform sync strategy
 pub fn attach_overlay_bus_sync_handler(
     pipeline: &gst::Pipeline,
     overlay_handle: Arc<Mutex<Option<usize>>>,
-    #[cfg(any(target_os = "macos", target_os = "ios"))] overlay_sink: Option<
-        Arc<Mutex<gst::Element>>,
-    >,
+    #[cfg(target_os = "ios")] overlay_sink: Option<Arc<Mutex<gst::Element>>>,
 ) {
     let bus = match pipeline.bus() {
         Some(bus) => bus,
         None => return,
     };
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_os = "ios")]
     let overlay_sink_bus = overlay_sink.clone();
     bus.set_sync_handler(move |_bus, msg| {
         #[cfg(target_os = "ios")]
@@ -233,11 +301,7 @@ pub fn attach_overlay_bus_sync_handler(
             let handle = *overlay_handle.lock();
             return bus_sync_reply_for_ios_overlay(msg, handle, overlay_sink_bus.as_ref());
         }
-        #[cfg(target_os = "macos")]
-        {
-            return bus_sync_reply_for_macos_overlay(msg);
-        }
-        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        #[cfg(not(target_os = "ios"))]
         {
             let handle = *overlay_handle.lock();
             bus_sync_reply_for_overlay_message(msg, handle)

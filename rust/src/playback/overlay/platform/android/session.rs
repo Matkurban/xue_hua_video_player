@@ -1,4 +1,10 @@
-//! Android overlay session — attach phase, generation invalidation, bind-path preroll.
+//! Android overlay 会话 — 附着阶段、generation 失效与绑定路径预卷 / Android overlay session — attach phase, generation invalidation, bind-path preroll.
+//!
+//! [`AndroidOverlaySession`] 实现 [`OverlaySession`]：JNI 回调仅缓存句柄，
+//! 实际 GStreamer 绑定在 Gst 线程异步执行，并通过 generation 使陈旧工作失效。
+//!
+//! [`AndroidOverlaySession`] implements [`OverlaySession`]: JNI callbacks cache handles only;
+//! actual GStreamer binding runs asynchronously on the Gst thread with generation-based staleness.
 
 use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
@@ -24,6 +30,7 @@ use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
 
+/// Android overlay 绑定阶段的单一接缝（镜像 [`super::ios_session::IosOverlaySession`]）/
 /// Single seam for Android overlay bind phase (mirrors [`super::ios_session::IosOverlaySession`]).
 #[derive(Clone)]
 pub struct AndroidOverlaySession {
@@ -35,6 +42,7 @@ pub struct AndroidOverlaySession {
 }
 
 impl AndroidOverlaySession {
+    /// 创建未绑定的 Android overlay session / Creates an unbound Android overlay session.
     pub fn new() -> Self {
         Self {
             overlay_bound: Arc::new(AtomicBool::new(false)),
@@ -45,18 +53,22 @@ impl AndroidOverlaySession {
         }
     }
 
+    /// 返回 overlay 工作 generation 计数器的共享引用 / Returns shared reference to the overlay work generation counter.
     pub fn overlay_generation(&self) -> Arc<AtomicU64> {
         self.overlay_generation.clone()
     }
 
+    /// 递增 generation，使进行中的附着/清除工作失效 / Bumps generation, invalidating in-flight attach/clear work.
     pub fn bump_overlay_generation(&self) {
         self.overlay_generation.fetch_add(1, Ordering::SeqCst);
     }
 
+    /// 是否已在 Gst 侧完成 overlay 绑定 / Whether overlay bind completed on Gst side.
     pub fn is_bound(&self) -> bool {
         self.overlay_bound.load(Ordering::SeqCst)
     }
 
+    /// 设置 GStreamer overlay 绑定标志 / Sets the GStreamer overlay bound flag.
     pub fn set_bound(&self, bound: bool) {
         self.overlay_bound.store(bound, Ordering::SeqCst);
     }
@@ -65,6 +77,7 @@ impl AndroidOverlaySession {
         self.overlay_generation.load(Ordering::SeqCst)
     }
 
+    /// 返回当前工作 generation（供 JNI/调度方捕获）/ Returns current work generation (for JNI/scheduler capture).
     pub fn work_generation(&self) -> u64 {
         self.capture_generation()
     }
@@ -73,7 +86,7 @@ impl AndroidOverlaySession {
         work_generation != self.capture_generation()
     }
 
-    /// JNI-safe: cache handle/dimensions only (no Gst wait).
+    /// JNI 安全：仅缓存句柄/尺寸（不等待 Gst）/ JNI-safe: cache handle/dimensions only (no Gst wait).
     fn cache_surface_notify(
         &self,
         stored: &Mutex<Option<usize>>,
@@ -92,7 +105,12 @@ impl AndroidOverlaySession {
         Ok(())
     }
 
-    /// Clears overlay on surface destroy (schedules Gst work).
+    /// Surface 销毁时清除 overlay（调度 Gst 工作）/ Clears overlay on surface destroy (schedules Gst work).
+    ///
+    /// # 参数 / Parameters
+    /// - `shell` — 管线壳层 / pipeline shell
+    /// - `work_generation` — 捕获时的 generation；过期则跳过 / captured generation; skipped when stale
+    /// - `scheduler` — Gst 任务调度器 / Gst task scheduler
     pub fn schedule_clear_overlay(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
@@ -113,7 +131,7 @@ impl AndroidOverlaySession {
         }));
     }
 
-    /// Fire-and-forget apply after surface bind (never call from JNI with wait).
+    /// Surface 绑定后异步应用 overlay（禁止在 JNI 中阻塞等待）/ Fire-and-forget apply after surface bind (never call from JNI with wait).
     pub fn schedule_apply_after_bind(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
@@ -333,6 +351,7 @@ impl PrerollEffects for AndroidBindPrerollEffects {
     }
 }
 
+/// 返回生产环境 Gst 线程调度器 / Returns the production Gst-thread scheduler.
 pub fn default_scheduler() -> SpawnOnGstThreadScheduler {
     SpawnOnGstThreadScheduler
 }

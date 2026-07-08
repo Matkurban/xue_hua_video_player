@@ -1,3 +1,11 @@
+//! Android JNI 与 `ANativeWindow` 辅助函数 / Android JNI and `ANativeWindow` helpers.
+//!
+//! 缓存 `JavaVM`、绑定 Flutter 插件 jclass、从 `Surface` 获取原生窗口句柄，
+//! 以及通过 JNI 回调调整纹理内容尺寸。
+//!
+//! Caches `JavaVM`, binds Flutter plugin jclasses, obtains native window handles from `Surface`,
+//! and resizes texture content via JNI callbacks.
+
 #[cfg(target_os = "android")]
 use std::sync::{
     atomic::{AtomicPtr, Ordering},
@@ -26,12 +34,20 @@ extern "C" {
     fn ANativeWindow_release(window: *mut std::ffi::c_void);
 }
 
-/// Caches the process `JavaVM` for attaching on the Gst thread.
+/// 缓存进程 `JavaVM`，供 Gst 线程附着使用 / Caches the process `JavaVM` for attaching on the Gst thread.
+///
+/// # 参数 / Parameters
+/// - `vm` — 来自 JNI 回调的 `JavaVM` 原始指针 / raw `JavaVM` pointer from JNI callback
 #[cfg(target_os = "android")]
 pub fn store_java_vm(vm: *mut jni::sys::JavaVM) {
     JAVA_VM.store(vm, Ordering::SeqCst);
 }
 
+/// 绑定 `FlutterAssetHelper` 全局 jclass / Binds the `FlutterAssetHelper` global jclass.
+///
+/// # 参数 / Parameters
+/// - `env` — JNI 环境 / JNI environment
+/// - `class` — `FlutterAssetHelper` 类引用 / `FlutterAssetHelper` class reference
 #[cfg(target_os = "android")]
 pub fn bind_flutter_asset_helper_class(env: &mut Env, class: JClass) {
     match env.new_global_ref(class) {
@@ -45,7 +61,18 @@ pub fn bind_flutter_asset_helper_class(env: &mut Env, class: JClass) {
     }
 }
 
+/// 使用缓存的 application jclass 调用 `FlutterAssetHelper.openAssetFd` /
 /// Invokes `FlutterAssetHelper.openAssetFd` using the cached application jclass.
+///
+/// # 参数 / Parameters
+/// - `env` — JNI 环境 / JNI environment
+/// - `asset_key` — Flutter asset 键 / Flutter asset key
+///
+/// # 返回值 / Returns
+/// - `Ok((fd, start, length))` 文件描述符与偏移/长度 / file descriptor with offset/length
+///
+/// # 错误 / Errors
+/// - jclass 未绑定、JNI 调用失败或 fd 不可用 / jclass not bound, JNI failure, or fd unavailable
 #[cfg(target_os = "android")]
 pub fn call_open_asset_fd(env: &mut Env, asset_key: &str) -> Result<(i32, u64, u64)> {
     use jni::objects::{JLongArray, JObject, JValue};
@@ -86,6 +113,13 @@ pub fn call_open_asset_fd(env: &mut Env, asset_key: &str) -> Result<(i32, u64, u
     Ok((fd, buf[1] as u64, buf[2] as u64))
 }
 
+/// 附着当前线程到缓存的 `JavaVM` 并执行 JNI 闭包 / Attaches current thread to cached `JavaVM` and runs JNI closure.
+///
+/// # 参数 / Parameters
+/// - `f` — 接收 `&mut Env` 的闭包 / closure receiving `&mut Env`
+///
+/// # 返回值 / Returns
+/// - 闭包返回值或 `JavaVM not cached` 错误 / closure result or `JavaVM not cached` error
 #[cfg(target_os = "android")]
 pub fn with_jni_env<F, R>(f: F) -> Result<R>
 where
@@ -100,6 +134,10 @@ where
     vm.attach_current_thread(|env| f(env))
 }
 
+/// 将当前线程附着到缓存的 `JavaVM`（无 JNI 操作）/ Attaches current thread to cached `JavaVM` (no JNI work).
+///
+/// # 返回值 / Returns
+/// - `Ok(())` 成功或 `JavaVM` 尚未缓存 / `Ok(())` on success or when `JavaVM` not yet cached
 #[cfg(target_os = "android")]
 pub fn attach_java_vm() -> Result<()> {
     let vm_ptr = JAVA_VM.load(Ordering::SeqCst);
@@ -114,6 +152,7 @@ pub fn attach_java_vm() -> Result<()> {
 #[cfg(target_os = "android")]
 static PLUGIN_CLASS: Mutex<Option<Global<JClass>>> = Mutex::new(None);
 
+/// 绑定 `XueHuaVideoPlayerPlugin` 全局 jclass / Binds the `XueHuaVideoPlayerPlugin` global jclass.
 #[cfg(target_os = "android")]
 pub fn bind_xue_hua_video_player_plugin_class(env: &mut Env, class: JClass) {
     match env.new_global_ref(class) {
@@ -126,8 +165,17 @@ pub fn bind_xue_hua_video_player_plugin_class(env: &mut Env, class: JClass) {
     }
 }
 
+/// 将 Flutter `SurfaceProducer` 调整为协商后的视频分辨率并在主线程重新绑定 Surface /
 /// Resizes the Flutter `SurfaceProducer` to the negotiated video resolution and
 /// rebinds the surface on the main thread (must complete before overlay refresh).
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player ID
+/// - `width` — 目标宽度（`< 2` 时 no-op）/ target width (no-op when `< 2`)
+/// - `height` — 目标高度（`< 2` 时 no-op）/ target height (no-op when `< 2`)
+///
+/// # 返回值 / Returns
+/// - `Ok(())` JNI 调用成功 / `Ok(())` on successful JNI call
 #[cfg(target_os = "android")]
 pub fn notify_texture_content_size(player_id: i64, width: i32, height: i32) -> Result<()> {
     if width < 2 || height < 2 {
@@ -156,7 +204,18 @@ pub fn notify_texture_content_size(player_id: i64, width: i32, height: i32) -> R
     })
 }
 
+/// 将 Java `android.view.Surface` 转为 VideoOverlay 用的原生窗口句柄 /
 /// Converts a Java `android.view.Surface` to a native window handle for VideoOverlay.
+///
+/// # 参数 / Parameters
+/// - `env` — JNI 环境 / JNI environment
+/// - `surface` — Java `Surface` 对象 / Java `Surface` object
+///
+/// # 返回值 / Returns
+/// - `Ok(handle)` `ANativeWindow` 指针整型表示 / `ANativeWindow` pointer as integer
+///
+/// # 错误 / Errors
+/// - `ANativeWindow_fromSurface` 返回 null / `ANativeWindow_fromSurface` returned null
 #[cfg(target_os = "android")]
 pub fn native_window_handle_from_surface(env: &mut Env, surface: JObject) -> Result<usize> {
     // SAFETY: ANativeWindow_fromSurface is the API GStreamer Android tutorials use.
@@ -167,6 +226,10 @@ pub fn native_window_handle_from_surface(env: &mut Env, surface: JObject) -> Res
     Ok(window as usize)
 }
 
+/// 释放由 `ANativeWindow_fromSurface` 获得的窗口句柄 / Releases a window handle obtained from `ANativeWindow_fromSurface`.
+///
+/// # 参数 / Parameters
+/// - `handle` — 原生窗口指针；`0` 为 no-op / native window pointer; `0` is no-op
 #[cfg(target_os = "android")]
 pub fn release_native_window(handle: usize) {
     if handle == 0 {

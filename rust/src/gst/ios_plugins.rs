@@ -1,6 +1,9 @@
-// On iOS, GStreamer ships as a single *static* `GStreamer.framework`. As on
-// Android, statically-linked plugins are not discovered by scanning the
-// filesystem, so each plugin must be registered explicitly.
+//! iOS 静态链接 GStreamer 插件的显式注册。
+//!
+//! Explicit registration of statically linked GStreamer plugins on iOS.
+//!
+//! iOS 上 GStreamer 以单个静态 `GStreamer.framework` 形式交付。与 Android 类似，
+//! 静态链接的插件无法通过文件系统扫描发现，因此必须逐个调用注册函数。
 
 #[cfg(target_os = "ios")]
 extern "C" {
@@ -44,7 +47,21 @@ extern "C" {
     fn gst_plugin_applemedia_register();
 }
 
+/// 注册 iOS 框架中静态链接的全部 GStreamer 插件。
 /// Registers the statically-linked GStreamer plugins bundled in the iOS framework.
+///
+/// # 参数 / Parameters
+/// 无 / None.
+///
+/// # 返回值 / Returns
+/// 无 / None.
+///
+/// # 线程 / Threading
+/// - 必须在 `xhvp-gst` 线程上调用（由 [`super::init::ensure_gst_init`] 保证）。
+///   Must be called on the `xhvp-gst` thread (ensured by [`super::init::ensure_gst_init`]).
+///
+/// # 平台 / Platform
+/// - 仅 **iOS** / **iOS** only.
 #[cfg(target_os = "ios")]
 pub fn register_ios_static_plugins() {
     unsafe {

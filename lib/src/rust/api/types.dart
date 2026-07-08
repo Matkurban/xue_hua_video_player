@@ -11,9 +11,15 @@ part 'types.freezed.dart';
 // These functions are ignored because they are not marked as `pub`: `base`, `buffering`, `duration`, `eos`, `error`, `map_state`, `metadata`, `position`, `state`, `tracks_changed`, `video_size`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
 
+/// 视频宽高比缩放模式 / Aspect ratio scaling mode for video display.
 enum AspectRatioMode {
+  /// 保持比例， letterbox / Preserve aspect ratio (letterbox).
   fit,
+
+  /// 保持比例，裁剪填满 / Preserve aspect ratio (crop to fill).
   fill,
+
+  /// 拉伸填满 / Stretch to fill.
   stretch;
 
   static Future<AspectRatioMode> default_() =>
@@ -24,17 +30,29 @@ enum AspectRatioMode {
 sealed class MediaSourceDto with _$MediaSourceDto {
   const MediaSourceDto._();
 
+  /// 网络或本地 URI，如 `https://...`、`file://...` / Network or local URI.
   const factory MediaSourceDto.uri(String field0) = MediaSourceDto_Uri;
+
+  /// Flutter 资源键，如 `assets/sample.mp4` / Flutter asset key.
   const factory MediaSourceDto.flutterAsset(String field0) =
       MediaSourceDto_FlutterAsset;
 }
 
-/// Audio, video, or subtitle stream inside the current media.
+/// 当前媒体内的音轨、视频轨或字幕轨 / Audio, video, or subtitle stream inside the current media.
 class MediaTrack {
+  /// GStreamer 流 ID / GStreamer stream id.
   final int id;
+
+  /// 轨道类型 / Track type.
   final TrackType trackType;
+
+  /// ISO 639 语言码，可能为空 / ISO 639 language code, may be empty.
   final String language;
+
+  /// 用户可见标签 / User-visible label.
   final String label;
+
+  /// 是否当前选中 / Whether currently selected.
   final bool selected;
 
   const MediaTrack({
@@ -65,10 +83,15 @@ class MediaTrack {
           selected == other.selected;
 }
 
-/// Features available on the active pipeline (playbin vs AppSrc).
+/// 当前 pipeline 可用能力（playbin vs AppSrc）/ Features available on the active pipeline (playbin vs AppSrc).
 class PipelineCapabilitiesDto {
+  /// 是否支持 seek / Whether seeking is supported.
   final bool seek;
+
+  /// 是否支持多轨道选择 / Whether multi-track selection is supported.
   final bool tracks;
+
+  /// 是否支持视频方向变换 / Whether video orientation transforms are supported.
   final bool orientation;
 
   const PipelineCapabilitiesDto({
@@ -90,25 +113,63 @@ class PipelineCapabilitiesDto {
           orientation == other.orientation;
 }
 
-/// A flat event struct pushed to Dart over a broadcast stream.
+/// 扁平事件结构，经 broadcast stream 推送给 Dart / Flat event struct pushed to Dart over a broadcast stream.
+///
+/// 根据 [`kind`](Self::kind) 判断哪些字段有效；未使用的字段保持默认值。
+/// Use [`kind`](Self::kind) to determine meaningful fields; unused fields stay at defaults.
 class PlayerEvent {
+  /// 事件类型 / Event kind.
   final PlayerEventKind kind;
+
+  /// 当前位置（毫秒）/ Current position in milliseconds.
   final PlatformInt64 positionMs;
+
+  /// 总时长（毫秒）/ Total duration in milliseconds.
   final PlatformInt64 durationMs;
+
+  /// 视频宽（像素）/ Video width in pixels.
   final int width;
+
+  /// 视频高（像素）/ Video height in pixels.
   final int height;
+
+  /// 缓冲百分比 0–100 / Buffering percent 0–100.
   final int bufferingPercent;
+
+  /// 当前播放状态 / Current playback state.
   final PlayerState state;
+
+  /// 错误或附加消息 / Error or auxiliary message.
   final String message;
+
+  /// 帧率 / Frames per second.
   final double fps;
+
+  /// 像素宽高比分子 / Pixel aspect ratio numerator.
   final int pixelAspectWidth;
+
+  /// 像素宽高比分母 / Pixel aspect ratio denominator.
   final int pixelAspectHeight;
+
+  /// 显示宽高比分子 / Display aspect ratio numerator.
   final int displayAspectWidth;
+
+  /// 显示宽高比分母 / Display aspect ratio denominator.
   final int displayAspectHeight;
+
+  /// 是否隔行 / Whether interlaced.
   final bool interlaced;
+
+  /// 色彩矩阵 / Color matrix.
   final String colorMatrix;
+
+  /// 色彩范围 / Color range.
   final String colorRange;
+
+  /// HDR 格式 / HDR format.
   final String hdrFormat;
+
+  /// 是否可 seek / Whether media is seekable.
   final bool isSeekable;
 
   const PlayerEvent({
@@ -178,45 +239,108 @@ class PlayerEvent {
           isSeekable == other.isSeekable;
 }
 
-/// Discriminates which fields of [`PlayerEvent`] are meaningful.
+/// 区分 [`PlayerEvent`] 中哪些字段有效 / Discriminates which fields of [`PlayerEvent`] are meaningful.
 enum PlayerEventKind {
+  /// 总时长变更 / Duration changed.
   durationChanged,
+
+  /// 播放位置变更 / Position changed.
   positionChanged,
+
+  /// 视频尺寸变更 / Video dimensions changed.
   videoSize,
+
+  /// 播放状态变更 / Playback state changed.
   stateChanged,
+
+  /// 缓冲进度 / Buffering progress.
   buffering,
+
+  /// 播放结束 / End of stream.
   eos,
+
+  /// 错误 / Error.
   error,
+
+  /// 可用轨道列表变更 / Available tracks changed.
   tracksChanged,
+
+  /// 视频元数据变更 / Video metadata changed.
   metadataChanged,
 }
 
-/// High-level playback state reported to Dart.
+/// 上报给 Dart 的高层播放状态 / High-level playback state reported to Dart.
 enum PlayerState {
+  /// 空闲，尚未加载媒体 / Idle, no media loaded yet.
   idle,
+
+  /// 已就绪，可播放 / Ready, can start playback.
   ready,
+
+  /// 缓冲中 / Buffering.
   buffering,
+
+  /// 正在播放 / Playing.
   playing,
+
+  /// 已暂停 / Paused.
   paused,
+
+  /// 已停止（pipeline NULL）/ Stopped (pipeline NULL).
   stopped,
+
+  /// 播放到结尾 / Reached end of media.
   completed,
+
+  /// 发生错误 / Error state.
   error,
 }
 
-enum TrackType { audio, video, subtitle }
+/// 媒体轨道类型 / Media track type.
+enum TrackType {
+  /// 音频 / Audio.
+  audio,
 
-/// Decoded video metadata surfaced to Dart.
+  /// 视频 / Video.
+  video,
+
+  /// 字幕 / Subtitle.
+  subtitle,
+}
+
+/// 解码后视频元数据，暴露给 Dart / Decoded video metadata surfaced to Dart.
 class VideoMetadata {
+  /// 帧宽（像素）/ Frame width in pixels.
   final int width;
+
+  /// 帧高（像素）/ Frame height in pixels.
   final int height;
+
+  /// 帧率 / Frames per second.
   final double fps;
+
+  /// 像素宽高比分子 / Pixel aspect ratio numerator.
   final int pixelAspectWidth;
+
+  /// 像素宽高比分母 / Pixel aspect ratio denominator.
   final int pixelAspectHeight;
+
+  /// 显示宽高比分子 / Display aspect ratio numerator.
   final int displayAspectWidth;
+
+  /// 显示宽高比分母 / Display aspect ratio denominator.
   final int displayAspectHeight;
+
+  /// 是否为隔行扫描 / Whether interlaced.
   final bool interlaced;
+
+  /// 色彩矩阵（字符串化枚举）/ Color matrix (stringified enum).
   final String colorMatrix;
+
+  /// 色彩范围（字符串化枚举）/ Color range (stringified enum).
   final String colorRange;
+
+  /// HDR 格式标识，如 `"HDR10"`，无 HDR 时为空 / HDR format tag, e.g. `"HDR10"`, empty if SDR.
   final String hdrFormat;
 
   const VideoMetadata({
@@ -268,10 +392,15 @@ class VideoMetadata {
           hdrFormat == other.hdrFormat;
 }
 
-/// Video flip/rotate configuration for Dart.
+/// Dart 侧视频翻转/旋转配置 / Video flip/rotate configuration for Dart.
 class VideoOrientationConfig {
+  /// 水平翻转 / Horizontal flip.
   final bool flipHorizontal;
+
+  /// 垂直翻转 / Vertical flip.
   final bool flipVertical;
+
+  /// 顺时针旋转角度：0、90、180 或 270 / Clockwise rotation in degrees: 0, 90, 180, or 270.
   final int rotateDegrees;
 
   const VideoOrientationConfig({

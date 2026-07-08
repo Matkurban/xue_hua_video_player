@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1746545106;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1020581967;
 
 // Section: executor
 
@@ -87,47 +87,6 @@ fn wire__crate__api__player__apply_ios_overlay_gstreamer_impl(
         },
     )
 }
-fn wire__crate__api__player__apply_macos_overlay_gstreamer_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "apply_macos_overlay_gstreamer",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_player_id = <i64>::sse_decode(&mut deserializer);
-            let api_width = <i32>::sse_decode(&mut deserializer);
-            let api_height = <i32>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::player::apply_macos_overlay_gstreamer(
-                            api_player_id,
-                            api_width,
-                            api_height,
-                        )?;
-                        Ok(output_ok)
-                    })(),
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__types__aspect_ratio_mode_default_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -157,45 +116,6 @@ fn wire__crate__api__types__aspect_ratio_mode_default_impl(
                         Result::<_, ()>::Ok(crate::api::types::AspectRatioMode::default())?;
                     Ok(output_ok)
                 })())
-            }
-        },
-    )
-}
-fn wire__crate__api__player__cache_macos_overlay_handle_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "cache_macos_overlay_handle",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_player_id = <i64>::sse_decode(&mut deserializer);
-            let api_view_ptr = <i64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::player::cache_macos_overlay_handle(
-                            api_player_id,
-                            api_view_ptr,
-                        )?;
-                        Ok(output_ok)
-                    })(),
-                )
             }
         },
     )
@@ -1209,49 +1129,6 @@ fn wire__crate__api__player__set_video_overlay_window_impl(
         },
     )
 }
-fn wire__crate__api__player__sync_macos_video_layer_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "sync_macos_video_layer",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_player_id = <i64>::sse_decode(&mut deserializer);
-            let api_view_ptr = <i64>::sse_decode(&mut deserializer);
-            let api__width = <i32>::sse_decode(&mut deserializer);
-            let api__height = <i32>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::player::sync_macos_video_layer(
-                            api_player_id,
-                            api_view_ptr,
-                            api__width,
-                            api__height,
-                        )?;
-                        Ok(output_ok)
-                    })(),
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__player__sync_video_overlay_rectangle_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1687,96 +1564,81 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        2 => wire__crate__api__player__apply_macos_overlay_gstreamer_impl(
+        2 => wire__crate__api__types__aspect_ratio_mode_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        3 => wire__crate__api__types__aspect_ratio_mode_default_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        4 => wire__crate__api__player__cache_macos_overlay_handle_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        5 => wire__crate__api__player__create_player_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__player__dispose_player_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        8 => {
+        3 => wire__crate__api__player__create_player_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__player__dispose_player_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        6 => {
             wire__crate__api__player__notify_android_surface_impl(port, ptr, rust_vec_len, data_len)
         }
-        9 => wire__crate__api__player__notify_ios_overlay_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__player__player_duration_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__player__player_event_stream_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__player__player_get_pipeline_capabilities_impl(
+        7 => wire__crate__api__player__notify_ios_overlay_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__player__player_duration_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__player__player_event_stream_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__player__player_get_pipeline_capabilities_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__player__player_get_tracks_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__player__player_get_video_metadata_impl(
+        11 => wire__crate__api__player__player_get_tracks_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__player__player_get_video_metadata_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__player__player_is_seekable_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__player__player_load_source_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__player__player_pause_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__player__player_play_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__player__player_position_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__player__player_seek_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__player__player_select_track_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__player__player_set_aspect_ratio_mode_impl(
+        13 => wire__crate__api__player__player_is_seekable_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__player__player_load_source_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__player__player_pause_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__player__player_play_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__player__player_position_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__player__player_seek_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__player__player_select_track_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__player__player_set_aspect_ratio_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__player__player_set_asset_source_impl(
+        21 => wire__crate__api__player__player_set_asset_source_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__player__player_set_looping_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__player__player_set_mute_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__player__player_set_source_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__player__player_set_video_orientation_impl(
+        22 => wire__crate__api__player__player_set_looping_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__player__player_set_mute_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__player__player_set_source_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__player__player_set_speed_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__player__player_set_video_orientation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__player__set_video_overlay_window_impl(
+        27 => wire__crate__api__player__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__player__player_stop_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__player__set_video_overlay_window_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => {
-            wire__crate__api__player__sync_macos_video_layer_impl(port, ptr, rust_vec_len, data_len)
-        }
-        33 => wire__crate__api__player__sync_video_overlay_rectangle_impl(
+        30 => wire__crate__api__player__sync_video_overlay_rectangle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => {
+        31 => {
             wire__crate__api__types__video_metadata_default_impl(port, ptr, rust_vec_len, data_len)
         }
-        35 => wire__crate__api__types__video_orientation_config_default_impl(
+        32 => wire__crate__api__types__video_orientation_config_default_impl(
             port,
             ptr,
             rust_vec_len,

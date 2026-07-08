@@ -1,3 +1,15 @@
+//! GStreamer 播放引擎 / GStreamer-backed playback engine.
+//!
+//! [`PlaybackEngine`] 是 Dart FRB（[`crate::api::player`]）与 xhvp-gst 管线之间的核心：
+//! 在专用 Gst 线程上持有 [`crate::playback::gst_context::PlaybackGstContext`]，将
+//! `load`/`play`/`pause`/seek/overlay 等命令派发到 [`crate::playback::shell::PipelineShell`]，
+//! 经 [`crate::playback::bus`] 向 Dart 发射 [`PlayerEvent`]。
+//!
+//! [`PlaybackEngine`] is the core between Dart FRB ([`crate::api::player`]) and xhvp-gst:
+//! owns [`crate::playback::gst_context::PlaybackGstContext`] on a dedicated Gst thread,
+//! dispatches load/play/pause/seek/overlay to [`crate::playback::shell::PipelineShell`],
+//! and emits [`PlayerEvent`]s to Dart via [`crate::playback::bus`].
+
 #[cfg(target_os = "android")]
 use std::sync::atomic::AtomicI64;
 use std::sync::{
@@ -34,7 +46,7 @@ use crate::playback::switch::switch_shell;
 use crate::playback::tracks::{read_cached_tracks, TrackCache};
 use crate::player_events::{MediaTrack, PlayerEvent, PlayerState, TrackType};
 
-/// GStreamer-backed player rendering into a Platform View via VideoOverlay.
+/// 基于 GStreamer 的播放器，经 Platform View 或外部纹理渲染 / GStreamer-backed player rendering via Platform View or external texture.
 pub struct PlaybackEngine {
     gst_context: Arc<PlaybackGstContext>,
     emitter: Arc<Mutex<Option<Emitter>>>,
@@ -48,16 +60,33 @@ pub struct PlaybackEngine {
     track_cache: Arc<Mutex<TrackCache>>,
     orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
-    /// Frame source for the Flutter external-texture bridge (Apple/Win/Linux).
+    /// Flutter 外部纹理帧源（Apple/Win/Linux）/ Frame source for Flutter external-texture bridge.
     frame_sink: Arc<FrameSink>,
-    /// Assigned by the API layer in `create_player` (used for Android texture JNI).
+    /// API 层在 `create_player` 中分配（Android texture JNI）/ Assigned by API layer in `create_player`.
     #[cfg(target_os = "android")]
     player_id: Arc<AtomicI64>,
 }
 
+/// [`PlaybackEngine`] 的类型别名（历史命名）/ Type alias for [`PlaybackEngine`] (historical name).
 pub type GstPlayer = PlaybackEngine;
 
 impl PlaybackEngine {
+    /// 构造播放引擎：初始化 Gst、安装 URI shell、创建 [`PlaybackGstContext`] / Constructs engine: inits Gst, installs URI shell, creates context.
+    ///
+    /// # 参数 / Parameters
+    /// - 无 / None
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：[`PlaybackEngine`] / new engine
+    ///
+    /// # 错误 / Errors
+    /// - GStreamer 初始化或 shell 安装失败 / GStreamer init or shell install failure
+    ///
+    /// # 线程 / Threading
+    /// - 调用线程阻塞等待 Gst 线程完成初始化 / caller blocks on Gst thread init
+    ///
+    /// # 平台 / Platform
+    /// - iOS 注册 layer backend；Android 配置 overlay 尺寸同步 / iOS registers layer backend; Android sets size sync
     pub fn new() -> Result<Self> {
         crate::diag::logcat_info("PlaybackEngine::new enter");
 
@@ -100,7 +129,7 @@ impl PlaybackEngine {
         let track_cache_init = track_cache.clone();
         let frame_sink_init = frame_sink.clone();
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        #[cfg(target_os = "ios")]
         let (shell, surface) = spawn_on_gst_thread_and_wait(move || {
             ensure_gst_init()?;
             let replay = PlayReplayContext {
@@ -128,7 +157,7 @@ impl PlaybackEngine {
             wire_overlay_sync(&shell, overlay_init, Some(overlay_sink_slot));
             Ok((shell, surface))
         })?;
-        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        #[cfg(not(target_os = "ios"))]
         let (shell, surface) = spawn_on_gst_thread_and_wait(move || {
             ensure_gst_init()?;
             let replay = PlayReplayContext {
@@ -200,8 +229,7 @@ impl PlaybackEngine {
         Ok(engine)
     }
 
-    /// Frame source for the Flutter external-texture bridge. Registered by the
-    /// API layer under the player id so the native texture C-ABI can reach it.
+    /// 外部纹理帧源；API 层按 `player_id` 注册供原生 C-ABI 访问 / Frame source registered by API under player id for native C-ABI.
     pub fn frame_sink(&self) -> Arc<FrameSink> {
         self.frame_sink.clone()
     }
@@ -218,6 +246,7 @@ impl PlaybackEngine {
             .register_ios_layer_backend(IosLayerBackend::from_context(self.gst_context.clone()));
     }
 
+    /// 在 Gst 线程上执行 shell 操作并阻塞等待结果 / Runs shell operation on Gst thread and blocks for result.
     fn run_on_gst<R, F>(&self, f: F) -> Result<R>
     where
         F: FnOnce(&mut PipelineShell) -> Result<R> + Send + 'static,
@@ -230,10 +259,28 @@ impl PlaybackEngine {
         })
     }
 
+    /// 注册 Dart 事件发射器 / Registers Dart event emitter.
     pub fn set_emitter(&self, emitter: Emitter) {
         *self.emitter.lock() = Some(emitter);
     }
 
+    /// 加载媒体源并可选择自动播放 / Loads media source with optional auto-play.
+    ///
+    /// # 参数 / Parameters
+    /// - `source` — URI 或 Flutter 资产 / URI or Flutter asset
+    /// - `auto_play` — 是否加载后立即播放 / whether to play immediately after load
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：`Ok(())` / `Ok(())`
+    ///
+    /// # 错误 / Errors
+    /// - 源解析、overlay 准备或 shell 切换失败 / resolve, overlay, or switch failure
+    ///
+    /// # 线程 / Threading
+    /// - 调用线程阻塞等待 Gst 操作 / caller blocks on Gst dispatch
+    ///
+    /// # 平台 / Platform
+    /// - 纹理平台 autoPlay 立即 preroll；Android 可能延迟至 overlay 绑定 / texture vs overlay deferral
     pub fn load(&self, source: MediaSource, auto_play: bool) -> Result<()> {
         if auto_play {
             self.desired_playing.store(true, Ordering::SeqCst);
@@ -304,6 +351,22 @@ impl PlaybackEngine {
         self.load(MediaSource::FlutterAsset(asset_key.to_string()), false)
     }
 
+    /// 开始或恢复播放 / Starts or resumes playback.
+    ///
+    /// # 参数 / Parameters
+    /// - 无 / None
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：`Ok(())`；Android overlay 未绑定时延迟返回 Ok / `Ok(())`; may defer on Android
+    ///
+    /// # 错误 / Errors
+    /// - overlay 准备或 resume 失败 / overlay prep or resume failure
+    ///
+    /// # 线程 / Threading
+    /// - 通过 [`crate::playback::play_resume::resume_playing`] 在 Gst 线程恢复 / resumes on Gst thread
+    ///
+    /// # 平台 / Platform
+    /// - 纹理平台直接 resume；移动端可能先 rebind overlay / direct vs rebind-then-resume
     pub fn play(&self) -> Result<()> {
         self.desired_playing.store(true, Ordering::SeqCst);
         self.gst_context.surface.ensure_overlay_ready()?;
@@ -353,11 +416,13 @@ impl PlaybackEngine {
         }
     }
 
+    /// 暂停播放 / Pauses playback.
     pub fn pause(&self) -> Result<()> {
         self.desired_playing.store(false, Ordering::SeqCst);
         self.run_on_gst(|shell| shell.set_state_sync(gst::State::Paused))
     }
 
+    /// 停止播放（Ready + Stopped 事件）/ Stops playback (Ready + Stopped event).
     pub fn stop(&self) -> Result<()> {
         self.desired_playing.store(false, Ordering::SeqCst);
         self.at_eos.store(false, Ordering::SeqCst);
@@ -371,6 +436,7 @@ impl PlaybackEngine {
         })
     }
 
+    /// 跳转到指定位置（毫秒）/ Seeks to position in milliseconds.
     pub fn seek(&self, position_ms: i64) -> Result<()> {
         let rate = *self.rate.lock();
         let at_eos = self.at_eos.clone();
@@ -477,10 +543,26 @@ impl PlaybackEngine {
         })
     }
 
+    /// 设置原生 overlay 窗口句柄 / Sets native video overlay window handle.
+    ///
+    /// # 参数 / Parameters
+    /// - `window_handle` — 原生视图/窗口指针（整数）/ native view/window pointer as integer
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：`Ok(())` / `Ok(())`
+    ///
+    /// # 错误 / Errors
+    /// - 移动端 surface 通知或桌面 Gst 绑定失败 / mobile notify or desktop bind failure
+    ///
+    /// # 线程 / Threading
+    /// - 桌面平台可能阻塞等待 Gst 线程 / desktop may block on Gst thread
+    ///
+    /// # 平台 / Platform
+    /// - macOS 仅缓存句柄；移动端转发 surface；桌面在 Gst 线程绑定 / per-platform overlay bind
     pub fn set_video_overlay_window(&self, window_handle: i64) -> Result<()> {
         #[cfg(target_os = "macos")]
         {
-            self.gst_context.surface.cache_macos_handle(window_handle);
+            let _ = window_handle;
             return Ok(());
         }
         #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -498,11 +580,28 @@ impl PlaybackEngine {
         }
     }
 
-    /// Syncs VideoOverlay render rectangle after native surface resize.
+    /// 同步 VideoOverlay 渲染矩形（原生 surface 尺寸变更后）/ Syncs VideoOverlay render rectangle after native surface resize.
+    ///
+    /// # 参数 / Parameters
+    /// - `width`、`height` — 新尺寸（像素）/ new dimensions in pixels
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：`Ok(())` / `Ok(())`
+    ///
+    /// # 错误 / Errors
+    /// - macOS/iOS overlay 应用失败 / overlay apply failure on Darwin
+    ///
+    /// # 线程 / Threading
+    /// - 调度 Gst 或主线程 overlay 工作（因平台而异）/ schedules platform-specific overlay work
+    ///
+    /// # 平台 / Platform
+    /// - macOS：Texture 路径无 overlay 矩形同步 / macOS texture path: no overlay rectangle sync
+    /// - 移动端：缓存尺寸并调度 sync / mobile: cache dimensions and schedule sync
     pub fn sync_video_overlay_rectangle(&self, width: i32, height: i32) -> Result<()> {
         #[cfg(target_os = "macos")]
         {
-            return self.apply_macos_overlay_gstreamer(width, height);
+            let _ = (width, height);
+            return Ok(());
         }
         #[cfg(any(target_os = "android", target_os = "ios"))]
         {
@@ -570,22 +669,6 @@ impl PlaybackEngine {
             play_intent,
         )
     }
-
-    #[cfg(target_os = "macos")]
-    pub fn cache_macos_overlay_handle(&self, view_ptr: i64) {
-        self.gst_context.surface.cache_macos_handle(view_ptr);
-    }
-
-    #[cfg(target_os = "macos")]
-    pub fn apply_macos_overlay_gstreamer(&self, width: i32, height: i32) -> Result<()> {
-        let play_intent = self.gst_context.overlay_intent();
-        self.gst_context.surface.apply_macos_overlay_gstreamer(
-            self.gst_context.shell.clone(),
-            width,
-            height,
-            play_intent,
-        )
-    }
 }
 
 impl Drop for PlaybackEngine {
@@ -606,6 +689,7 @@ impl Drop for PlaybackEngine {
     }
 }
 
+/// 在 shell 上执行 seek 并可选发射位置/缓冲事件 / Performs seek on shell and optionally emits position/buffering events.
 fn pipeline_seek(
     shell: &PipelineShell,
     at_eos: &AtomicBool,
@@ -627,6 +711,7 @@ fn pipeline_seek(
     Ok(())
 }
 
+/// 调用 [`crate::playback::play_resume::resume_playing`] 恢复管线播放 / Invokes resume_playing to start pipeline playback.
 fn pipeline_play(ctx: &crate::playback::gst_context::PlaybackGstAsyncSnapshot) -> Result<()> {
     resume_playing(
         ctx.shell.clone(),

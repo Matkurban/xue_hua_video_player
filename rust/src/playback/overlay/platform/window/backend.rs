@@ -1,4 +1,10 @@
-//! Desktop (Win/Linux) and macOS VideoOverlay backends.
+//! 桌面（Win/Linux/macOS）VideoOverlay 后端 / Desktop (Win/Linux/macOS) VideoOverlay backends.
+//!
+//! 无状态辅助函数：应用窗口句柄、同步渲染矩形。macOS 播放经 appsink 纹理路径，
+//! 这些 API 主要服务 Win/Linux 桌面 overlay；macOS 保留 session 占位以统一 `VideoSurface`。
+//!
+//! Stateless helpers for window-handle overlay on Win/Linux. macOS playback uses the
+//! appsink texture path; these APIs mainly serve Win/Linux while macOS shares the session type.
 
 use anyhow::Result;
 use gstreamer as gst;
@@ -7,26 +13,17 @@ use std::sync::Arc;
 
 use crate::gst::spawn_on_gst_thread;
 use crate::playback::gst::{
-    clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
-    set_overlay_window_handle,
+    clear_overlay_window_handle, set_overlay_render_rectangle, set_overlay_window_handle,
 };
 use crate::playback::shell::PipelineShell;
 
 use crate::playback::overlay::video_overlay::VideoOverlayBackend;
 
-/// Desktop overlay operations delegated from [`crate::playback::surface::VideoSurface`].
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
+/// 桌面 overlay 操作 — 由 [`crate::playback::surface::VideoSurface`] 委托 / Desktop overlay operations delegated from [`crate::playback::surface::VideoSurface`].
+#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
 pub struct DesktopOverlayBackend;
 
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
+#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
 impl VideoOverlayBackend for DesktopOverlayBackend {
     fn stored_handle(&self) -> &Mutex<Option<usize>> {
         unreachable!(
@@ -35,11 +32,16 @@ impl VideoOverlayBackend for DesktopOverlayBackend {
     }
 }
 
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
+/// 将原生窗口句柄应用到 video sink 并更新缓存 / Applies native window handle to video sink and updates cache.
+///
+/// # 参数 / Parameters
+/// - `video_sink` — GStreamer video sink 元素 / GStreamer video sink element
+/// - `handle` — 窗口句柄；`0` 清除 / window handle; `0` clears
+/// - `stored` — 句柄缓存槽 / handle cache slot
+///
+/// # 返回值 / Returns
+/// - `Ok(())` 应用或清除成功 / `Ok(())` on successful apply or clear
+#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
 pub fn apply_overlay_handle(
     video_sink: &gst::Element,
     handle: usize,
@@ -59,11 +61,7 @@ pub fn apply_overlay_handle(
     Ok(())
 }
 
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
+#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
 impl DesktopOverlayBackend {
     pub fn rebind_cached_overlay(
         stored: &Mutex<Option<usize>>,
@@ -87,77 +85,6 @@ impl DesktopOverlayBackend {
                 guard.apply_overlay_render_rectangle(width, height);
             } else if stored.lock().is_some() {
                 guard.expose_video_overlay();
-            }
-        });
-    }
-}
-
-/// macOS overlay operations delegated from [`crate::playback::surface::VideoSurface`].
-#[cfg(target_os = "macos")]
-pub struct MacosOverlayBackend;
-
-#[cfg(target_os = "macos")]
-impl VideoOverlayBackend for MacosOverlayBackend {
-    fn stored_handle(&self) -> &Mutex<Option<usize>> {
-        unreachable!("MacosOverlayBackend is a stateless delegate; use VideoSurface stored handle")
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl MacosOverlayBackend {
-    pub fn apply_gstreamer(
-        stored: &Mutex<Option<usize>>,
-        sink: &gst::Element,
-        width: i32,
-        height: i32,
-    ) -> Result<()> {
-        match *stored.lock() {
-            None => clear_overlay_window_handle(sink),
-            Some(handle) => {
-                set_overlay_window_handle(sink, handle)?;
-                if width > 0 && height > 0 {
-                    set_overlay_render_rectangle(sink, width, height);
-                }
-                Ok(())
-            }
-        }
-    }
-
-    pub fn ensure_overlay_ready(stored: &Mutex<Option<usize>>) -> Result<()> {
-        if stored.lock().is_none() {
-            log::warn!(
-                "macOS overlay handle not cached yet; playback may fail until platform view binds"
-            );
-        }
-        Ok(())
-    }
-
-    /// Re-binds the cached `NSView` to a new video sink on the main thread after shell rebuild.
-    ///
-    /// Blocks the caller until bind completes so preroll does not race ahead of `set_window_handle`.
-    pub fn rebind_on_main_sync(
-        stored: Arc<Mutex<Option<usize>>>,
-        sink: Arc<Mutex<gst::Element>>,
-        width: i32,
-        height: i32,
-    ) {
-        crate::platform::run_on_main_sync(move || {
-            if let Err(e) = Self::apply_gstreamer(&stored, &sink.lock(), width, height) {
-                log::warn!("macOS overlay rebind on main: {e:#}");
-            }
-        });
-    }
-
-    /// Fire-and-forget rebind for non-Gst-thread callers that cannot block.
-    pub fn schedule_rebind_on_main(
-        stored: Arc<Mutex<Option<usize>>>,
-        sink: Arc<Mutex<gst::Element>>,
-        width: i32,
-        height: i32,
-    ) {
-        crate::platform::run_on_main(move || {
-            if let Err(e) = Self::apply_gstreamer(&stored, &sink.lock(), width, height) {
-                log::warn!("macOS overlay rebind on main: {e:#}");
             }
         });
     }

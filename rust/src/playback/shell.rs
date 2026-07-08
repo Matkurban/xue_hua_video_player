@@ -1,3 +1,13 @@
+//! Pipeline shell：sink、总线、overlay 同步 / Pipeline shell: sinks, bus handlers, and overlay sync wiring.
+//!
+//! [`PipelineShell`] 封装 playbin 或 AppSrc 管线的 GStreamer 元素、视频 sink、总线监听与
+//! seek/音量/多轨等操作；[`install_uri_shell`] / [`install_asset_shell`] 在引擎初始化或
+//! [`crate::playback::switch::switch_shell`] 时安装 shell。
+//!
+//! [`PipelineShell`] wraps GStreamer elements, video sink, bus watches, and seek/volume/track
+//! operations for playbin or AppSrc pipelines; installed by engine init or
+//! [`crate::playback::switch::switch_shell`].
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -32,13 +42,16 @@ use crate::player_events::TrackType;
 
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
 
+/// 媒体源类型：URI playbin 或 Flutter 资产 AppSrc / Media source kind: URI playbin or Flutter asset AppSrc.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceKind {
+    /// 网络/文件 URI（playbin3）/ Network/file URI (playbin3).
     Uri,
+    /// Flutter bundle 资产（AppSrc）/ Flutter bundle asset (AppSrc).
     Asset,
 }
 
-/// Shared pipeline shell: sinks, bus handlers, and overlay sync wiring.
+/// 共享 pipeline shell：sink、总线处理与 overlay 同步 / Shared pipeline shell: sinks, bus handlers, and overlay sync.
 pub struct PipelineShell {
     pipeline: gst::Pipeline,
     video_sink: gst::Element,
@@ -67,10 +80,26 @@ impl PipelineShell {
         PipelineCapabilities::from_source_kind(self.kind)
     }
 
-    /// True when the shell has a URI or asset key ready for preroll.
+    /// shell 是否有待加载媒体（避免 overlay 过早 preroll）/ Whether shell has media ready for preroll.
     ///
-    /// An empty playbin (`SourceKind::Uri` with `uri` unset) returns `false` so
-    /// early overlay bind does not panic or preroll before `load()`.
+    /// 空 playbin（URI 未设置）返回 `false`，防止 `load()` 前绑定 overlay 导致 panic。
+    ///
+    /// An empty playbin (`SourceKind::Uri` with `uri` unset) returns `false` so early overlay bind does not panic.
+    ///
+    /// # 参数 / Parameters
+    /// - 无 / None
+    ///
+    /// # 返回值 / Returns
+    /// - `true` 当 URI 或 asset key 非空 / `true` when URI or asset key is non-empty
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - Gst 线程 / Gst thread
+    ///
+    /// # 平台 / Platform
+    /// - 与平台无关 / Platform-independent
     pub fn has_pending_media(&self) -> bool {
         match self.kind {
             SourceKind::Uri => self
@@ -100,9 +129,24 @@ impl PipelineShell {
         Ok(())
     }
 
-    /// Seeks to the start carrying `rate`, so EOS replay / loop keep the
-    /// user-selected speed (a plain `seek_simple` resets the rate to 1.0) and
-    /// scaletempo gets a rate-bearing segment (pitch preserved).
+    /// 以指定速率 seek 到起点（EOS 重放/循环保持用户选速）/ Seeks to start carrying `rate` for EOS replay/loop.
+    ///
+    /// 普通 `seek_simple` 会将速率重置为 1.0；带 rate 的 seek 让 scaletempo 获得速率段并保持音高。
+    ///
+    /// # 参数 / Parameters
+    /// - `rate` — 播放速率 / playback rate
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：`Ok(())` / `Ok(())`
+    ///
+    /// # 错误 / Errors
+    /// - seek 失败 / seek failure
+    ///
+    /// # 线程 / Threading
+    /// - Gst 线程 / Gst thread
+    ///
+    /// # 平台 / Platform
+    /// - 与平台无关 / Platform-independent
     pub fn seek_to_start_with_rate(&self, rate: f64) -> Result<()> {
         self.pipeline
             .seek(
@@ -130,6 +174,22 @@ impl PipelineShell {
             .map_err(|e| anyhow!("seek failed: {e}"))
     }
 
+    /// 应用播放速率（位置保持的 flushing rate seek，经 scaletempo 保 pitch）/ Applies playback rate via position-preserving rate seek.
+    ///
+    /// # 参数 / Parameters
+    /// - `rate` — 目标速率 / target rate
+    ///
+    /// # 返回值 / Returns
+    /// - 成功：`Ok(())` / `Ok(())`
+    ///
+    /// # 错误 / Errors
+    /// - seek 失败 / seek failure
+    ///
+    /// # 线程 / Threading
+    /// - Gst 线程 / Gst thread
+    ///
+    /// # 平台 / Platform
+    /// - 依赖音频 bin 中的 scaletempo / depends on scaletempo in audio bin
     pub fn apply_playback_rate(&self, rate: f64) -> Result<()> {
         // Position-preserving flushing rate seek (not INSTANT_RATE_CHANGE): this
         // sends a rate-bearing segment so scaletempo time-stretches and keeps the
@@ -241,7 +301,7 @@ pub(crate) fn new_test_shell(
     }
 }
 
-/// Sets pipeline/element state and waits until the transition completes.
+/// 设置元素状态并等待转换完成 / Sets pipeline/element state and waits until the transition completes.
 pub(crate) fn set_element_state_sync(
     element: &impl IsA<gst::Element>,
     target: gst::State,
@@ -285,6 +345,26 @@ pub(crate) fn set_element_state_sync_timeout(
     Ok(())
 }
 
+/// 安装 URI playbin shell（引擎初始化或 URI 切换）/ Installs URI playbin shell (engine init or URI switch).
+///
+/// # 参数 / Parameters
+/// - `emitter`、`looping`、`replay` — 总线与重放上下文 / bus and replay context
+/// - `metadata_cache`、`track_cache` — 可选缓存 / optional caches
+/// - `surface` — VideoSurface / video surface
+/// - `frame_sink` — 外部纹理帧源 / external texture frame source
+/// - `overlay_size_sync`（Android）— 尺寸同步 / size sync on Android
+///
+/// # 返回值 / Returns
+/// - 成功：[`PipelineShell`] / configured shell
+///
+/// # 错误 / Errors
+/// - [`build_uri_playbin`] 或总线挂载失败 / pipeline or bus attach failure
+///
+/// # 线程 / Threading
+/// - Gst 线程 / Gst thread
+///
+/// # 平台 / Platform
+/// - iOS 传入 layer bus slot / passes iOS layer bus slot
 pub fn install_uri_shell(
     emitter: &Arc<Mutex<Option<Emitter>>>,
     looping: &Arc<AtomicBool>,
@@ -327,6 +407,23 @@ pub fn install_uri_shell(
     })
 }
 
+/// 安装 AppSrc 资产 shell / Installs AppSrc asset shell.
+///
+/// # 参数 / Parameters
+/// - `asset_key` — Flutter asset 键 / Flutter asset key
+/// - 其余同 [`install_uri_shell`] / remaining args same as [`install_uri_shell`]
+///
+/// # 返回值 / Returns
+/// - 成功：[`PipelineShell`] / configured shell
+///
+/// # 错误 / Errors
+/// - [`build_asset_pipeline`] 或总线挂载失败 / pipeline or bus failure
+///
+/// # 线程 / Threading
+/// - Gst 线程 / Gst thread
+///
+/// # 平台 / Platform
+/// - 无多轨缓存（AppSrc 能力受限）/ no track cache (limited AppSrc capabilities)
 pub fn install_asset_shell(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
@@ -370,6 +467,7 @@ pub fn install_asset_shell(
     })
 }
 
+/// 拆除 shell：释放总线监听与 AppSrc feed，置 Null / Tears down shell: releases bus watch and AppSrc feed, sets Null.
 pub fn teardown_shell(shell: &mut PipelineShell) {
     shell.bus_watch = None;
     shell.position_source = None;
@@ -377,16 +475,32 @@ pub fn teardown_shell(shell: &mut PipelineShell) {
     shell.set_state_null();
 }
 
+/// 为 `prepare-window-handle` 安装总线 sync handler / Wires bus sync handler for `prepare-window-handle`.
+///
+/// # 参数 / Parameters
+/// - `shell` — 已安装 shell / installed shell
+/// - `overlay_handle` — 缓存的原生句柄 / cached native handle
+/// - `overlay_sink`（macOS/iOS）— 可选 sink 槽 / optional sink slot
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - sync handler 在 Gst 线程 / sync handler on Gst thread
+///
+/// # 平台 / Platform
+/// - macOS/iOS 传入 overlay sink 槽；其他平台直接绑定句柄 / platform-specific bind behavior
 pub fn wire_overlay_sync(
     shell: &PipelineShell,
     overlay_handle: Arc<Mutex<Option<usize>>>,
-    #[cfg(any(target_os = "macos", target_os = "ios"))] overlay_sink: Option<
-        Arc<Mutex<gst::Element>>,
-    >,
+    #[cfg(target_os = "ios")] overlay_sink: Option<Arc<Mutex<gst::Element>>>,
 ) {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_os = "ios")]
     attach_overlay_bus_sync_handler(&shell.pipeline, overlay_handle, overlay_sink);
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(not(target_os = "ios"))]
     attach_overlay_bus_sync_handler(&shell.pipeline, overlay_handle);
 }
 

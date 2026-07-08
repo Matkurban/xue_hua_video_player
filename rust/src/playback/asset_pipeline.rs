@@ -1,3 +1,11 @@
+//! Flutter 资产 AppSrc 管线构建 / Flutter bundle asset AppSrc pipeline builder.
+//!
+//! 为 [`crate::playback::shell::install_asset_shell`] 构建 AppSrc → decodebin 管线，
+//! 从 Flutter asset bundle 分块喂入数据并动态链接音视频支路。
+//!
+//! Builds AppSrc → decodebin for [`crate::playback::shell::install_asset_shell`],
+//! feeding data from the Flutter asset bundle in chunks and dynamically linking A/V branches.
+
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -14,9 +22,29 @@ use crate::playback::gst::{create_platform_video_sink, InternalVideoMetadata};
 use crate::playback::sink::OverlaySizeSync;
 use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
 
+/// AppSrc 每次 `need-data` 读取的字节块大小 / Bytes read per AppSrc `need-data` callback.
 const APPSRC_CHUNK: usize = 64 * 1024;
 
-/// Builds an AppSrc → decodebin pipeline for Flutter bundle assets.
+/// 为 Flutter bundle 资产构建 AppSrc → decodebin 管线 / Builds an AppSrc → decodebin pipeline for Flutter bundle assets.
+///
+/// # 参数 / Parameters
+/// - `asset_key` — Flutter asset 路径键 / Flutter asset path key
+/// - `emitter` — 视频事件发射器 / video event emitter
+/// - `metadata_cache` — 可选元数据缓存 / optional metadata cache
+/// - `frame_sink` — 外部纹理帧源 / external texture frame source
+/// - `overlay_size_sync`（Android）— 解码尺寸同步 / dimension sync on Android
+///
+/// # 返回值 / Returns
+/// - 成功：`(Pipeline, video_sink, AppSrcFeedState)` / pipeline, sink, and feed state
+///
+/// # 错误 / Errors
+/// - asset 打开失败、元素创建或链接失败 / asset open, element creation, or link failure
+///
+/// # 线程 / Threading
+/// - 必须在 Gst 线程上构建；AppSrc 回调在 streaming 线程触发 / Build on Gst thread; AppSrc callbacks on streaming thread
+///
+/// # 平台 / Platform
+/// - 视频 sink 同 URI 管线，由平台工厂选择 / video sink same as URI path via platform factory
 pub fn build_asset_pipeline(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
@@ -92,6 +120,7 @@ pub fn build_asset_pipeline(
     Ok((pipeline, video_sink, feed))
 }
 
+/// 为 AppSrc 注册 `need-data` 分块推送回调 / Wires AppSrc `need-data` chunk push callbacks.
 fn wire_appsrc_callbacks(appsrc_el: &gst::Element, feed: Arc<AppSrcFeedState>) -> Result<()> {
     let appsrc = appsrc_el
         .clone()
@@ -132,6 +161,7 @@ fn wire_appsrc_callbacks(appsrc_el: &gst::Element, feed: Arc<AppSrcFeedState>) -
     Ok(())
 }
 
+/// 将 decodebin 视频 pad 链接到 queue → videoconvert → video_sink / Links decodebin video pad to sink branch.
 fn link_video_branch(
     src_pad: &gst::Pad,
     pipeline: &gst::Pipeline,
@@ -151,6 +181,7 @@ fn link_video_branch(
     Ok(())
 }
 
+/// 将 decodebin 音频 pad 链接到 queue → convert → resample → audio bin / Links decodebin audio pad to audio bin.
 fn link_audio_branch(
     src_pad: &gst::Pad,
     pipeline: &gst::Pipeline,

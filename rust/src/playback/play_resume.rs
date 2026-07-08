@@ -1,4 +1,12 @@
-//! Unified play / EOS resume — single interface for all platforms.
+//! 统一播放 / EOS 恢复入口 / Unified play / EOS resume — single interface for all platforms.
+//!
+//! [`resume_playing`] 是 [`crate::playback::engine::PlaybackEngine`] `play`/`load(autoPlay)`
+//! 与 overlay 绑定完成后的唯一恢复路径；根据 overlay 就绪、EOS 与 shell 类型决定
+//! 直接 Playing、seek 到起点或重建 AppSrc shell。
+//!
+//! [`resume_playing`] is the sole resume path for [`crate::playback::engine::PlaybackEngine`]
+//! `play`/`load(autoPlay)` and post-overlay-bind; chooses direct Playing, seek-to-start,
+//! or AppSrc shell rebuild based on overlay readiness, EOS, and shell kind.
 
 use std::sync::{atomic::Ordering, Arc};
 
@@ -14,7 +22,7 @@ use crate::playback::switch::PipelineSwapConfig;
 #[cfg(target_os = "android")]
 use crate::playback::overlay::refresh_mobile_overlay_on_gst;
 
-/// Planned pipeline action for play/EOS resume (pure decision — test surface).
+/// 播放/EOS 恢复的规划动作（纯决策，供测试）/ Planned pipeline action for play/EOS resume.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResumeAction {
     DeferOverlay,
@@ -23,7 +31,24 @@ pub(crate) enum ResumeAction {
     ReplayAssetShell,
 }
 
-/// Maps overlay readiness + EOS state + shell kind to the resume action.
+/// 将 overlay 就绪、EOS 与 shell 类型映射为恢复动作 / Maps overlay readiness, EOS, and shell kind to resume action.
+///
+/// # 参数 / Parameters
+/// - `overlay_ready` — 表面是否可播放 / whether surface is ready for play
+/// - `at_eos` — 是否处于 EOS / whether at end-of-stream
+/// - `kind` — URI 或 Asset shell / URI or Asset shell
+///
+/// # 返回值 / Returns
+/// - [`ResumeAction`] / planned action
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 纯函数 / Pure function
+///
+/// # 平台 / Platform
+/// - 与平台无关（`overlay_ready` 由调用方按平台计算）/ platform-agnostic
 pub(crate) fn plan_resume_action(
     overlay_ready: bool,
     at_eos: bool,
@@ -41,12 +66,31 @@ pub(crate) fn plan_resume_action(
     }
 }
 
-/// Resumes playback or replays from EOS — all platforms, single entry.
+/// 恢复播放或从 EOS 重放——全平台统一入口 / Resumes playback or replays from EOS — all platforms, single entry.
 ///
-/// Must be called WITHOUT the `shell` mutex held: this function locks `shell`
-/// itself (in short scopes). Calling it from a context that already holds the
-/// lock (e.g. inside `PlaybackEngine::run_on_gst`, which pre-locks) causes a
-/// non-reentrant `parking_lot` self-deadlock that freezes the gst MainLoop.
+/// **必须在未持有 `shell` 锁时调用**：本函数内部会短暂加锁；若调用方已持锁
+///（例如 `PlaybackEngine::run_on_gst`）会导致 `parking_lot` 不可重入自死锁并冻结 Gst MainLoop。
+///
+/// Must be called WITHOUT the `shell` mutex held; self-deadlock if called from `run_on_gst`.
+///
+/// # 参数 / Parameters
+/// - `shell` — 共享 pipeline shell 锁 / shared pipeline shell lock
+/// - `replay` — 重放上下文 / replay context
+/// - `swap` — shell 重建元数据 / shell rebuild metadata
+/// - `surface` — VideoSurface / video surface
+/// - `overlay_ready` — 是否可立即播放 / whether overlay is ready
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())`；overlay 未就绪时延迟（仍返回 Ok）/ `Ok(())`; defers when overlay not ready
+///
+/// # 错误 / Errors
+/// - 状态切换、seek 或 asset 重放失败 / state change, seek, or asset replay failure
+///
+/// # 线程 / Threading
+/// - 必须在 Gst 线程上调用；内部自行加锁 shell / Gst thread; locks shell internally
+///
+/// # 平台 / Platform
+/// - Android：Playing 后刷新 mobile overlay / refreshes mobile overlay after Playing on Android
 pub fn resume_playing(
     shell: Arc<Mutex<PipelineShell>>,
     replay: &PlayReplayContext,
@@ -119,14 +163,26 @@ fn android_refresh_after_playing(
     Ok(())
 }
 
-/// After an overlay bind completes, resume if the user already requested play.
+/// overlay 绑定完成后，若用户已请求播放则恢复 / After overlay bind, resume if user already requested play.
 ///
-/// Bind paths must call this (or [`resume_playing`] with `overlay_ready: true`) so
-/// macOS / Win / Linux recover the same way Android / iOS do when `desired_playing`
-/// was set before the native surface existed.
+/// 绑定路径必须调用本函数（或 `overlay_ready: true` 的 [`resume_playing`]），以便在
+/// `desired_playing` 先于原生 surface 设置时各平台行为一致。若 load 延迟了 Paused preroll，
+/// 管线可能仍在 Ready——先转 Paused 再 Playing 以完成 prepare-window-handle。
 ///
-/// If load deferred PAUSED preroll (overlay was unbound), the pipeline may still be
-/// at Ready — transition through Paused then Playing so sinks finish prepare-window-handle.
+/// # 参数 / Parameters
+/// - `shell`、`replay`、`swap`、`surface` — 同 [`resume_playing`] / same as [`resume_playing`]
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())`；`desired_playing=false` 时无操作 / `Ok(())`; no-op when not desired
+///
+/// # 错误 / Errors
+/// - preroll 或 [`resume_playing`] 失败 / preroll or resume failure
+///
+/// # 线程 / Threading
+/// - Gst 线程 / Gst thread
+///
+/// # 平台 / Platform
+/// - 主要用于需原生 overlay 绑定的平台 / platforms requiring native overlay bind
 pub fn maybe_resume_after_overlay_bind(
     shell: Arc<Mutex<PipelineShell>>,
     replay: &PlayReplayContext,
@@ -152,16 +208,30 @@ pub fn maybe_resume_after_overlay_bind(
     resume_playing(shell, replay, swap, surface, true)
 }
 
-/// Pure gate: whether bind-complete should call [`resume_playing`].
+/// 纯门控：绑定完成后是否应调用 [`resume_playing`] / Pure gate for post-bind resume.
 pub(crate) fn should_resume_after_overlay_bind(desired_playing: bool) -> bool {
     desired_playing
 }
 
-/// Computes whether the surface is ready for play resume on the active platform.
+/// 计算当前平台上 surface 是否可用于播放恢复 / Whether the surface is ready for play resume on the active platform.
 ///
-/// Apple (iOS/macOS) and desktop (Windows/Linux) render through a Flutter
-/// external texture (appsink), so there is no native overlay to bind — it is
-/// always ready.
+/// Apple（iOS/macOS）与桌面（Windows/Linux）经 Flutter 外部纹理（appsink）渲染，无原生
+/// overlay 绑定需求，恒为 ready。Android 等需 GStreamer 侧真实绑定。
+///
+/// # 参数 / Parameters
+/// - `surface` — VideoSurface / video surface
+///
+/// # 返回值 / Returns
+/// - `true` 表示可立即 resume / `true` if resume can proceed
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 任意线程 / any thread
+///
+/// # 平台 / Platform
+/// - 纹理平台恒 `true`；Android 需 `is_overlay_bound_on_gst` / texture platforms always true
 pub fn overlay_ready_for_play(surface: &VideoSurface) -> bool {
     #[cfg(any(
         target_os = "ios",

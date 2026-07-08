@@ -1,9 +1,13 @@
+//! 平台视图 C ABI 与 Android JNI 入口 / Platform view C ABI and Android JNI entry points.
+//!
+//! Swift/C++ 平台视图与 Flutter Android Surface 桥通过 `extern "C"` 与 `jni_mangle`
+//! 符号调用 Rust 播放 API。macOS 经 Flutter Texture 渲染，不再暴露 NSView overlay C ABI。
+//!
+//! Swift/C++ platform views and Flutter Android Surface bridge call Rust playback APIs
+//! via `extern "C"` and `jni_mangle`. macOS uses Flutter Texture (no NSView overlay C ABI).
+
 #[cfg(target_os = "ios")]
 use crate::api::player::apply_ios_overlay_gstreamer;
-#[cfg(target_os = "macos")]
-use crate::api::player::apply_macos_overlay_gstreamer;
-#[cfg(target_os = "macos")]
-use crate::api::player::cache_macos_overlay_handle;
 #[cfg(target_os = "android")]
 use crate::api::player::notify_android_surface;
 #[cfg(target_os = "ios")]
@@ -27,6 +31,7 @@ use jni::{jni_mangle, Env, EnvUnowned};
 #[cfg(target_os = "android")]
 use crate::platform::android::{native_window_handle_from_surface, store_java_vm};
 
+/// 原生库加载时缓存进程 JavaVM（Platform View Surface 之前）/
 /// Caches the process JavaVM when the native library loads (before Platform View surface).
 #[cfg(target_os = "android")]
 #[no_mangle]
@@ -41,17 +46,13 @@ pub extern "system" fn JNI_OnLoad(
     jni::sys::JNI_VERSION_1_6
 }
 
-/// C ABI entry for Swift / C++ platform views.
+/// Swift / C++ 平台视图的 C ABI 入口：设置视频 overlay 窗口句柄 /
+/// C ABI entry for Swift / C++ platform views: set video overlay window handle.
 #[no_mangle]
 pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle: i64) {
     #[cfg(target_os = "macos")]
     {
-        if let Err(e) = cache_macos_overlay_handle(player_id, window_handle) {
-            log::warn!(
-                "player_set_video_overlay_window cache(player_id={player_id}, \
-                 handle={window_handle}): {e:#}"
-            );
-        }
+        let _ = (player_id, window_handle);
         return;
     }
     #[cfg(target_os = "ios")]
@@ -86,20 +87,11 @@ pub extern "C" fn player_set_video_overlay_window(player_id: i64, window_handle:
     }
 }
 
+/// C ABI：原生视图 resize 后同步 VideoOverlay 渲染矩形（桌面）/
 /// C ABI: sync VideoOverlay render rectangle after native view resize (desktop).
 #[no_mangle]
 pub extern "C" fn player_sync_video_overlay_rectangle(player_id: i64, width: i32, height: i32) {
-    #[cfg(target_os = "macos")]
-    {
-        if let Err(e) = apply_macos_overlay_gstreamer(player_id, width, height) {
-            log::warn!(
-                "player_sync_video_overlay_rectangle(player_id={player_id}, \
-                 {width}x{height}): {e:#}"
-            );
-        }
-        return;
-    }
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "macos", target_os = "android"))]
     {
         let _ = (player_id, width, height);
         return;
@@ -113,34 +105,7 @@ pub extern "C" fn player_sync_video_overlay_rectangle(player_id: i64, width: i32
     }
 }
 
-/// macOS: synchronously records the target `NSView` handle for bus sync / rebind.
-#[cfg(target_os = "macos")]
-#[no_mangle]
-pub extern "C" fn player_sync_macos_video_layer(
-    player_id: i64,
-    ns_view_ptr: i64,
-    _width: i32,
-    _height: i32,
-) {
-    if let Err(e) = cache_macos_overlay_handle(player_id, ns_view_ptr) {
-        log::warn!(
-            "player_sync_macos_video_layer cache(player_id={player_id}, view={ns_view_ptr}): {e:#}"
-        );
-    }
-}
-
-/// macOS: binds the cached `NSView` to the GStreamer sink. Must run on the main thread.
-#[cfg(target_os = "macos")]
-#[no_mangle]
-pub extern "C" fn player_apply_macos_overlay_gstreamer(player_id: i64, width: i32, height: i32) {
-    if let Err(e) = apply_macos_overlay_gstreamer(player_id, width, height) {
-        log::warn!(
-            "player_apply_macos_overlay_gstreamer(player_id={player_id}, \
-             {width}x{height}): {e:#}"
-        );
-    }
-}
-
+/// iOS：附着 `avsamplebufferlayersink` CALayer 并预卷；必须在主线程调用 /
 /// iOS: attaches `avsamplebufferlayersink` CALayer and prerolls. Must run on the main thread.
 #[cfg(target_os = "ios")]
 #[no_mangle]
@@ -153,6 +118,7 @@ pub extern "C" fn player_apply_ios_overlay_gstreamer(player_id: i64, width: i32,
     }
 }
 
+/// iOS：在首次 asset 加载前记录 Flutter assets 目录 /
 /// iOS: records the Flutter assets directory before the first asset load.
 #[cfg(target_os = "ios")]
 #[no_mangle]
@@ -167,6 +133,7 @@ pub extern "C" fn xhvp_set_flutter_assets_dir(path: *const std::ffi::c_char) {
     }
 }
 
+/// iOS：缓存宿主 `UIView` 句柄与尺寸；Gst 附着由 `IosOverlaySession` 调度 /
 /// iOS: caches host `UIView` handle and dimensions; Gst attach runs via `IosOverlaySession`.
 #[cfg(target_os = "ios")]
 #[no_mangle]
@@ -184,6 +151,7 @@ pub extern "C" fn player_notify_ios_overlay(
     }
 }
 
+/// Android JNI：`Surface` 创建回调 / Android JNI: `Surface` created callback.
 #[cfg(target_os = "android")]
 #[jni_mangle(
     "com.flutter_rust_bridge.xue_hua_video_player.AndroidSurfaceBridge",
@@ -205,6 +173,7 @@ pub extern "system" fn native_on_surface_created<'caller>(
     .resolve::<LogErrorAndDefault>();
 }
 
+/// Android JNI：`Surface` 尺寸变更回调 / Android JNI: `Surface` size-changed callback.
 #[cfg(target_os = "android")]
 #[jni_mangle(
     "com.flutter_rust_bridge.xue_hua_video_player.AndroidSurfaceBridge",
@@ -228,6 +197,7 @@ pub extern "system" fn native_on_surface_changed<'caller>(
     .resolve::<LogErrorAndDefault>();
 }
 
+/// Android JNI：`Surface` 销毁回调（句柄置 0）/ Android JNI: `Surface` destroyed callback (handle set to 0).
 #[cfg(target_os = "android")]
 #[jni_mangle(
     "com.flutter_rust_bridge.xue_hua_video_player.AndroidSurfaceBridge",
@@ -244,6 +214,8 @@ pub extern "system" fn native_on_surface_destroyed<'caller>(
     }
 }
 
+/// Android Surface 回调的统一处理：获取 `ANativeWindow` 并通知播放层 /
+/// Unified Android Surface callback handler: obtain `ANativeWindow` and notify playback layer.
 #[cfg(target_os = "android")]
 fn on_android_surface(
     player_id: i64,
@@ -262,6 +234,7 @@ fn on_android_surface(
     notify_android_surface(player_id, handle, width, height)
 }
 
+/// Android JNI：绑定 `FlutterAssetHelper` jclass / Android JNI: bind `FlutterAssetHelper` jclass.
 #[cfg(target_os = "android")]
 #[jni_mangle(
     "com.flutter_rust_bridge.xue_hua_video_player.FlutterAssetHelper",
@@ -279,6 +252,7 @@ pub extern "system" fn native_bind_asset_helper_class<'caller>(
     .resolve::<LogErrorAndDefault>();
 }
 
+/// Android JNI：绑定 `XueHuaVideoPlayerPlugin` jclass / Android JNI: bind `XueHuaVideoPlayerPlugin` jclass.
 #[cfg(target_os = "android")]
 #[jni_mangle(
     "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlayerPlugin",

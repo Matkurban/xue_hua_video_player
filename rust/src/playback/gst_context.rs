@@ -1,4 +1,13 @@
-//! Bundled Gst-thread context for load, play, switch, and overlay paths.
+//! Gst 线程上下文捆绑 / Bundled Gst-thread context for load, play, switch, and overlay paths.
+//!
+//! [`PlaybackGstContext`] 在 [`crate::playback::engine::PlaybackEngine`] 与 Gst 线程闭包之间
+//! 共享 pipeline shell、VideoSurface、重放原子量及 swap 配置；[`PlaybackGstAsyncSnapshot`]
+//! 为 `spawn_on_gst_thread_and_wait` 传递的异步安全快照。
+//!
+//! [`PlaybackGstContext`] shares pipeline shell, VideoSurface, replay atomics, and swap config
+//! between [`crate::playback::engine::PlaybackEngine`] and Gst-thread closures;
+//! [`PlaybackGstAsyncSnapshot`] is the async-safe snapshot passed to
+//! `spawn_on_gst_thread_and_wait`.
 
 use std::sync::{atomic::AtomicBool, Arc};
 
@@ -16,10 +25,13 @@ use crate::playback::surface::VideoSurface;
 use crate::playback::switch::PipelineSwapConfig;
 use crate::playback::tracks::TrackCache;
 
-/// Live engine-owned Gst bundle — `shell` and `surface` are canonical.
+/// 引擎持有的实时 Gst 捆绑体；`shell` 与 `surface` 为权威状态 / Live engine-owned Gst bundle — `shell` and `surface` are canonical.
 pub struct PlaybackGstContext {
+    /// 加锁的 pipeline shell（playbin 或 AppSrc）/ Locked pipeline shell (playbin or AppSrc).
     pub shell: Arc<Mutex<PipelineShell>>,
+    /// 原生 overlay / 纹理表面状态 / Native overlay / texture surface state.
     pub surface: VideoSurface,
+    /// 播放意图与 EOS 重放共享原子量 / Shared atomics for play intent and EOS replay.
     pub replay: PlayReplayContext,
     emitter: Arc<Mutex<Option<Emitter>>>,
     looping: Arc<AtomicBool>,
@@ -32,11 +44,15 @@ pub struct PlaybackGstContext {
     overlay_size_sync: Option<OverlaySizeSync>,
 }
 
-/// Async-safe snapshot passed into Gst thread closures.
+/// 传入 Gst 线程闭包的异步安全快照 / Async-safe snapshot passed into Gst thread closures.
 pub struct PlaybackGstAsyncSnapshot {
+    /// Pipeline shell 共享锁 / Shared pipeline shell lock.
     pub shell: Arc<Mutex<PipelineShell>>,
+    /// 可克隆的 surface 句柄（用于 switch）/ Clonable surface handle (for switch).
     pub surface: VideoSurface,
+    /// 重放上下文（共享原子身份）/ Replay context (shared atomic identity).
     pub replay: PlayReplayContext,
+    /// URI ↔ 资产切换时的管线元数据 / Pipeline metadata for URI ↔ asset swaps.
     pub swap: PipelineSwapConfig,
 }
 
@@ -52,6 +68,32 @@ impl Clone for PlaybackGstAsyncSnapshot {
 }
 
 impl PlaybackGstContext {
+    /// 构造新的 Gst 上下文 / Constructs a new Gst context.
+    ///
+    /// # 参数 / Parameters
+    /// - `shell` — 已安装的 [`PipelineShell`] / installed [`PipelineShell`]
+    /// - `surface` — [`VideoSurface`] overlay 状态 / [`VideoSurface`] overlay state
+    /// - `replay` — 播放/重放共享原子量 / shared play/replay atomics
+    /// - `emitter` — 可选事件发射器 / optional event emitter
+    /// - `looping` — 循环播放标志 / looping flag
+    /// - `metadata` — 视频元数据缓存 / video metadata cache
+    /// - `track_cache` — 多轨缓存 / multi-track cache
+    /// - `orientation` — 画面旋转配置 / orientation config
+    /// - `aspect_mode` — 宽高比模式 / aspect ratio mode
+    /// - `frame_sink` — Flutter 外部纹理帧源 / Flutter external texture frame source
+    /// - `overlay_size_sync`（Android）— 解码尺寸变更回调 / decoded dimension change callback
+    ///
+    /// # 返回值 / Returns
+    /// - 新的 [`PlaybackGstContext`] / new context instance
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - 通常在 Gst 线程初始化后于引擎构造路径调用 / Called on engine construction after Gst init
+    ///
+    /// # 平台 / Platform
+    /// - Android 可选 `overlay_size_sync` / optional `overlay_size_sync` on Android
     pub fn new(
         shell: Arc<Mutex<PipelineShell>>,
         surface: VideoSurface,
@@ -81,6 +123,22 @@ impl PlaybackGstContext {
         }
     }
 
+    /// 构建 URI ↔ 资产 shell 重建用的 swap 配置 / Builds swap config for URI ↔ asset shell rebuilds.
+    ///
+    /// # 参数 / Parameters
+    /// - 无（读取 `self` 内部锁与克隆 Arc）/ None (reads internal locks and clones Arcs)
+    ///
+    /// # 返回值 / Returns
+    /// - [`PipelineSwapConfig`]，含当前 orientation/aspect 快照 / with current orientation/aspect snapshot
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - 短暂持有 `orientation`/`aspect_mode` 锁 / briefly holds orientation/aspect locks
+    ///
+    /// # 平台 / Platform
+    /// - Android 包含 `overlay_size_sync` / includes `overlay_size_sync` on Android
     pub fn swap_config(&self) -> PipelineSwapConfig {
         PipelineSwapConfig {
             emitter: self.emitter.clone(),
@@ -95,6 +153,22 @@ impl PlaybackGstContext {
         }
     }
 
+    /// 移动端 overlay 绑定时的统一播放意图 / Unified play intent for mobile overlay bind.
+    ///
+    /// # 参数 / Parameters
+    /// - 无 / None
+    ///
+    /// # 返回值 / Returns
+    /// - [`OverlayPlayIntent`]，含实时 replay 与 swap 快照 / with live replay and swap snapshot
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - 任意线程；内部调用 [`swap_config`] / any thread; calls [`swap_config`] internally
+    ///
+    /// # 平台 / Platform
+    /// - 主要用于 Android/iOS overlay 绑定路径 / primarily Android/iOS overlay bind paths
     pub fn overlay_intent(&self) -> OverlayPlayIntent {
         OverlayPlayIntent {
             replay: self.replay.clone(),
@@ -102,6 +176,22 @@ impl PlaybackGstContext {
         }
     }
 
+    /// 克隆异步安全快照供 `spawn_on_gst_thread_and_wait` 使用 / Clones async-safe snapshot for Gst thread dispatch.
+    ///
+    /// # 参数 / Parameters
+    /// - 无 / None
+    ///
+    /// # 返回值 / Returns
+    /// - [`PlaybackGstAsyncSnapshot`] / async snapshot
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - 任意线程可调用 / callable from any thread
+    ///
+    /// # 平台 / Platform
+    /// - 与平台无关 / Platform-independent
     pub fn clone_for_async(&self) -> PlaybackGstAsyncSnapshot {
         PlaybackGstAsyncSnapshot {
             shell: self.shell.clone(),

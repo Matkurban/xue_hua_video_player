@@ -1,3 +1,12 @@
+//! playbin3 多轨缓存与选择 / playbin3 multi-track cache and selection.
+//!
+//! 从 GStreamer `StreamCollection` 总线消息构建 [`TrackCache`]，将 GStreamer `stream-id`
+//! 与 Dart [`MediaTrack`] 并行存储，并通过 `GST_EVENT_SELECT_STREAMS` 实现音轨/字幕切换。
+//!
+//! Builds [`TrackCache`] from GStreamer `StreamCollection` bus messages, storing parallel
+//! GStreamer `stream-id` values with Dart [`MediaTrack`] entries, and switches tracks via
+//! `GST_EVENT_SELECT_STREAMS`.
+
 use std::sync::Arc;
 
 use gstreamer as gst;
@@ -6,7 +15,7 @@ use parking_lot::Mutex;
 
 use crate::player_events::{MediaTrack, TrackType};
 
-/// Cached playbin3 tracks plus parallel GStreamer `stream-id` values for selection.
+/// 缓存的 playbin3 轨道及并行 GStreamer `stream-id`（用于选择）/ Cached playbin3 tracks plus parallel GStreamer `stream-id` values for selection.
 #[derive(Debug, Clone, Default)]
 pub struct TrackCache {
     tracks: Vec<MediaTrack>,
@@ -14,15 +23,34 @@ pub struct TrackCache {
 }
 
 impl TrackCache {
+    /// 只读访问缓存轨道列表 / Read-only access to cached tracks.
     pub fn tracks(&self) -> &[MediaTrack] {
         &self.tracks
     }
 
+    /// 清空缓存（`load` 新源时调用）/ Clears cache (called on new `load`).
     pub fn clear(&mut self) {
         self.tracks.clear();
         self.stream_ids.clear();
     }
 
+    /// 按轨道类型与逻辑 id 查找 GStreamer stream-id / Looks up GStreamer stream-id by track type and logical id.
+    ///
+    /// # 参数 / Parameters
+    /// - `track_type` — 音轨/视频/字幕 / audio/video/subtitle
+    /// - `id` — 逻辑轨道 id / logical track id
+    ///
+    /// # 返回值 / Returns
+    /// - 匹配的 `stream-id` 或 `None` / matching stream-id or `None`
+    ///
+    /// # 错误 / Errors
+    /// - 无 / None
+    ///
+    /// # 线程 / Threading
+    /// - 任意线程 / any thread
+    ///
+    /// # 平台 / Platform
+    /// - 仅 playbin URI 管线 / playbin URI pipelines only
     pub fn stream_id_for(&self, track_type: TrackType, id: u32) -> Option<&str> {
         self.tracks
             .iter()
@@ -58,7 +86,22 @@ fn stream_type_to_track_type(stream_type: gst::StreamType) -> Option<TrackType> 
     }
 }
 
-/// Builds a [`TrackCache`] from a playbin3 [`gst::StreamCollection`].
+/// 从 playbin3 [`gst::StreamCollection`] 构建 [`TrackCache`] / Builds [`TrackCache`] from playbin3 collection.
+///
+/// # 参数 / Parameters
+/// - `collection` — GStreamer 流集合 / stream collection
+///
+/// # 返回值 / Returns
+/// - 填充的 [`TrackCache`] / populated cache
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 通常在总线消息处理中调用 / typically called from bus message handling
+///
+/// # 平台 / Platform
+/// - playbin3 URI 管线 / playbin3 URI pipelines
 pub fn tracks_from_collection(collection: &gst::StreamCollection) -> TrackCache {
     let mut cache = TrackCache::default();
     let mut audio_idx = 0u32;
@@ -114,7 +157,23 @@ pub fn tracks_from_collection(collection: &gst::StreamCollection) -> TrackCache 
     cache
 }
 
-/// Replaces the cache from a bus `StreamCollection` message.
+/// 用总线 `StreamCollection` 消息替换缓存 / Replaces cache from bus `StreamCollection` message.
+///
+/// # 参数 / Parameters
+/// - `collection` — 流集合 / stream collection
+/// - `cache` — 共享缓存锁 / shared cache lock
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 总线回调线程 / bus callback thread
+///
+/// # 平台 / Platform
+/// - playbin3 / playbin3
 pub fn update_cache_from_collection(
     collection: &gst::StreamCollection,
     cache: &Arc<Mutex<TrackCache>>,
@@ -122,7 +181,23 @@ pub fn update_cache_from_collection(
     *cache.lock() = tracks_from_collection(collection);
 }
 
-/// Updates `selected` flags from a bus `StreamsSelected` message.
+/// 用总线 `StreamsSelected` 消息更新 `selected` 标志 / Updates `selected` flags from `StreamsSelected` message.
+///
+/// # 参数 / Parameters
+/// - `message` — 已选流消息 / streams selected message
+/// - `cache` — 共享缓存 / shared cache
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 总线回调线程 / bus callback thread
+///
+/// # 平台 / Platform
+/// - playbin3 / playbin3
 pub fn mark_selected_streams(
     message: &gst::message::StreamsSelected,
     cache: &Arc<Mutex<TrackCache>>,
@@ -139,7 +214,22 @@ pub fn mark_selected_streams(
     }
 }
 
-/// Returns a snapshot of cached tracks (empty until the first stream-collection message).
+/// 返回缓存轨道快照（首条 stream-collection 消息前为空）/ Returns cached track snapshot (empty until first collection message).
+///
+/// # 参数 / Parameters
+/// - `cache` — 共享缓存 / shared cache
+///
+/// # 返回值 / Returns
+/// - [`MediaTrack`] 向量副本 / vector copy of tracks
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 任意线程（短暂持锁）/ any thread, brief lock
+///
+/// # 平台 / Platform
+/// - playbin3 / playbin3
 pub fn read_cached_tracks(cache: &Arc<Mutex<TrackCache>>) -> Vec<MediaTrack> {
     cache.lock().tracks().to_vec()
 }
@@ -215,7 +305,24 @@ fn selection_stream_ids(
     [video, audio, subtitle].into_iter().flatten().collect()
 }
 
-/// Sends `GST_EVENT_SELECT_STREAMS` for one track (keeps other selected types).
+/// 为单条轨道发送 `GST_EVENT_SELECT_STREAMS`（保留其他已选类型）/ Sends `GST_EVENT_SELECT_STREAMS` for one track.
+///
+/// # 参数 / Parameters
+/// - `pipeline` — playbin 管线 / playbin pipeline
+/// - `cache` — 轨道缓存 / track cache
+/// - `track_type`、`track_id` — 目标轨道 / target track
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 事件被拒绝时记录 warn / logs warn if event rejected
+///
+/// # 线程 / Threading
+/// - Gst 线程 / Gst thread
+///
+/// # 平台 / Platform
+/// - playbin3 / playbin3
 pub fn select_track_on_pipeline(
     pipeline: &gst::Pipeline,
     cache: &TrackCache,
@@ -226,7 +333,23 @@ pub fn select_track_on_pipeline(
     send_select_streams(pipeline, &stream_ids);
 }
 
-/// Disables subtitles by selecting only non-text streams.
+/// 禁用字幕：仅选择非 text 流 / Disables subtitles by selecting only non-text streams.
+///
+/// # 参数 / Parameters
+/// - `pipeline` — playbin 管线 / playbin pipeline
+/// - `cache` — 轨道缓存 / track cache
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 事件被拒绝时记录 warn / logs warn if rejected
+///
+/// # 线程 / Threading
+/// - Gst 线程 / Gst thread
+///
+/// # 平台 / Platform
+/// - playbin3 / playbin3
 pub fn disable_subtitles_on_pipeline(pipeline: &gst::Pipeline, cache: &TrackCache) {
     let stream_ids = selection_stream_ids(cache, None, false);
     send_select_streams(pipeline, &stream_ids);

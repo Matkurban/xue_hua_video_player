@@ -9,19 +9,24 @@ import 'types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `get_player`
 
-/// Creates a new GStreamer-backed player.
+/// 创建 GStreamer 播放器实例 / Creates a new GStreamer-backed player.
+///
+/// # 参数 / Parameters
+/// - 无 / None
+///
+/// # 返回值 / Returns
+/// - 成功：[`PlayerHandle`]，含新分配的 `player_id` / handle with new `player_id`
+///
+/// # 错误 / Errors
+/// - `PlaybackEngine::new` 或 GStreamer 初始化失败 / engine or GStreamer init failure
+///
+/// # 平台 / Platform
+/// - Android：初始化诊断日志并注册 `player_id` 到 texture 桥 / initializes diagnostics and registers texture bridge
+/// - 若 `PENDING_OVERLAYS` 中有待处理句柄，创建后立即应用 / applies staged overlay handle if present
 Future<PlayerHandle> createPlayer() =>
     RustLib.instance.api.crateApiPlayerCreatePlayer();
 
-/// Darwin: synchronously records the native view handle for bus sync / rebind (macOS only).
-Future<void> cacheMacosOverlayHandle({
-  required PlatformInt64 playerId,
-  required PlatformInt64 viewPtr,
-}) => RustLib.instance.api.crateApiPlayerCacheMacosOverlayHandle(
-  playerId: playerId,
-  viewPtr: viewPtr,
-);
-
+/// iOS 占位 / iOS stub.
 Future<void> notifyIosOverlay({
   required PlatformInt64 playerId,
   required PlatformInt64 handle,
@@ -34,17 +39,7 @@ Future<void> notifyIosOverlay({
   height: height,
 );
 
-/// macOS: applies the cached NSView handle to the GStreamer sink (main thread).
-Future<void> applyMacosOverlayGstreamer({
-  required PlatformInt64 playerId,
-  required int width,
-  required int height,
-}) => RustLib.instance.api.crateApiPlayerApplyMacosOverlayGstreamer(
-  playerId: playerId,
-  width: width,
-  height: height,
-);
-
+/// iOS 占位 / iOS stub.
 Future<void> applyIosOverlayGstreamer({
   required PlatformInt64 playerId,
   required int width,
@@ -55,20 +50,17 @@ Future<void> applyIosOverlayGstreamer({
   height: height,
 );
 
-/// macOS: records the target `NSView` handle (apply via Swift main-thread dispatch).
-Future<void> syncMacosVideoLayer({
-  required PlatformInt64 playerId,
-  required PlatformInt64 viewPtr,
-  required int width,
-  required int height,
-}) => RustLib.instance.api.crateApiPlayerSyncMacosVideoLayer(
-  playerId: playerId,
-  viewPtr: viewPtr,
-  width: width,
-  height: height,
-);
-
-/// Binds a native window/surface handle to the player's VideoOverlay sink.
+/// 将原生窗口/表面句柄绑定到 VideoOverlay sink / Binds a native window/surface handle to the player's VideoOverlay sink.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `window_handle` — 原生窗口句柄（Win/Linux 等）/ native window handle
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())`；播放器未创建时非零句柄暂存 / staged if player not yet created
+///
+/// # 错误 / Errors
+/// - 播放器不存在且句柄为 0 / player not found with zero handle
 Future<void> setVideoOverlayWindow({
   required PlatformInt64 playerId,
   required PlatformInt64 windowHandle,
@@ -77,6 +69,7 @@ Future<void> setVideoOverlayWindow({
   windowHandle: windowHandle,
 );
 
+/// Android 占位 / Android stub.
 Future<void> notifyAndroidSurface({
   required PlatformInt64 playerId,
   required PlatformInt64 handle,
@@ -89,12 +82,32 @@ Future<void> notifyAndroidSurface({
   height: height,
 );
 
-/// Subscribes to the player's event stream (state, position, duration, size,
-/// buffering, EOS, errors). Should be called once right after `create_player`.
+/// 订阅播放器事件流 / Subscribes to the player's event stream.
+///
+/// 推送状态、位置、时长、尺寸、缓冲、EOS、错误等事件。应在 `create_player` 后立即调用一次。
+/// Pushes state, position, duration, size, buffering, EOS, errors. Call once right after `create_player`.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `sink` — FRB 广播流 sink / FRB broadcast stream sink
+///
+/// # 返回值 / Returns
+/// - 成功：`Ok(())` / `Ok(())`
+///
+/// # 错误 / Errors
+/// - 播放器不存在 / player not found
 Stream<PlayerEvent> playerEventStream({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerEventStream(playerId: playerId);
 
-/// Loads media from a unified source descriptor (URI or Flutter asset).
+/// 从统一源描述符加载媒体 / Loads media from a unified source descriptor (URI or Flutter asset).
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `source` — URI 或 Flutter asset / URI or Flutter asset
+/// - `auto_play` — 加载完成后是否自动播放 / whether to start playback after load
+///
+/// # 错误 / Errors
+/// - 解析失败、pipeline 切换失败等 / resolution or pipeline switch failure
 Future<void> playerLoadSource({
   required PlatformInt64 playerId,
   required MediaSourceDto source,
@@ -105,7 +118,11 @@ Future<void> playerLoadSource({
   autoPlay: autoPlay,
 );
 
-/// Loads a media URI (`file://...`, `http(s)://...`, `rtsp://...`) and prerolls.
+/// 加载媒体 URI 并 preroll（不自动播放）/ Loads a media URI and prerolls without auto-play.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `uri` — `file://...`、`http(s)://...`、`rtsp://...` 等 / media URI
 Future<void> playerSetSource({
   required PlatformInt64 playerId,
   required String uri,
@@ -114,7 +131,11 @@ Future<void> playerSetSource({
   uri: uri,
 );
 
-/// Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
+/// 通过 AppSrc 加载 Flutter asset（Dart 侧无需临时文件）/ Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `asset_key` — 如 `assets/sample.mp4` / asset key
 Future<void> playerSetAssetSource({
   required PlatformInt64 playerId,
   required String assetKey,
@@ -123,15 +144,32 @@ Future<void> playerSetAssetSource({
   assetKey: assetKey,
 );
 
+/// 开始或恢复播放 / Starts or resumes playback.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
 Future<void> playerPlay({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerPlay(playerId: playerId);
 
+/// 暂停播放 / Pauses playback.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
 Future<void> playerPause({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerPause(playerId: playerId);
 
+/// 停止播放（pipeline → NULL）/ Stops playback (pipeline to NULL).
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
 Future<void> playerStop({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerStop(playerId: playerId);
 
+/// 跳转到指定位置 / Seeks to a position.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `position_ms` — 目标位置（毫秒）/ target position in milliseconds
 Future<void> playerSeek({
   required PlatformInt64 playerId,
   required PlatformInt64 positionMs,
@@ -140,6 +178,11 @@ Future<void> playerSeek({
   positionMs: positionMs,
 );
 
+/// 设置音量 / Sets playback volume.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `volume` — 0.0–1.0（具体 clamp 由 engine 负责）/ 0.0–1.0, clamped by engine
 Future<void> playerSetVolume({
   required PlatformInt64 playerId,
   required double volume,
@@ -148,6 +191,11 @@ Future<void> playerSetVolume({
   volume: volume,
 );
 
+/// 设置静音 / Sets mute state.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `mute` — `true` 静音 / `true` to mute
 Future<void> playerSetMute({
   required PlatformInt64 playerId,
   required bool mute,
@@ -156,6 +204,11 @@ Future<void> playerSetMute({
   mute: mute,
 );
 
+/// 设置播放速率 / Sets playback speed.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `speed` — 倍速，如 1.0、1.5 / speed multiplier
 Future<void> playerSetSpeed({
   required PlatformInt64 playerId,
   required double speed,
@@ -164,6 +217,11 @@ Future<void> playerSetSpeed({
   speed: speed,
 );
 
+/// 设置循环播放 / Sets looping.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+/// - `looping` — `true` 在 EOS 时循环 / `true` to loop at EOS
 Future<void> playerSetLooping({
   required PlatformInt64 playerId,
   required bool looping,
@@ -172,21 +230,39 @@ Future<void> playerSetLooping({
   looping: looping,
 );
 
+/// 查询当前播放位置 / Returns current playback position.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 播放器 ID / player id
+///
+/// # 返回值 / Returns
+/// - 位置（毫秒）/ position in milliseconds
 Future<PlatformInt64> playerPosition({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerPosition(playerId: playerId);
 
+/// 查询媒体总时长 / Returns media duration.
+///
+/// # 返回值 / Returns
+/// - 时长（毫秒），未知时可能为 0 / duration in ms, may be 0 if unknown
 Future<PlatformInt64> playerDuration({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerDuration(playerId: playerId);
 
+/// 查询是否可 seek / Returns whether seeking is supported.
 Future<bool> playerIsSeekable({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerIsSeekable(playerId: playerId);
 
+/// 查询当前 pipeline 能力 / Returns active pipeline capabilities.
 Future<PipelineCapabilitiesDto> playerGetPipelineCapabilities({
   required PlatformInt64 playerId,
 }) => RustLib.instance.api.crateApiPlayerPlayerGetPipelineCapabilities(
   playerId: playerId,
 );
 
+/// 同步 VideoOverlay 矩形尺寸 / Syncs VideoOverlay rectangle dimensions.
+///
+/// # 参数 / Parameters
+/// - `width` — overlay 宽（像素）/ width in pixels
+/// - `height` — overlay 高（像素）/ height in pixels
 Future<void> syncVideoOverlayRectangle({
   required PlatformInt64 playerId,
   required int width,
@@ -197,9 +273,16 @@ Future<void> syncVideoOverlayRectangle({
   height: height,
 );
 
+/// 获取可用轨道列表 / Returns available media tracks.
 Future<List<MediaTrack>> playerGetTracks({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerPlayerGetTracks(playerId: playerId);
 
+/// 选择或取消选择轨道 / Selects or deselects a track.
+///
+/// # 参数 / Parameters
+/// - `track_id` — GStreamer 流 ID / stream id
+/// - `track_type` — 轨道类型 / track type
+/// - `enable` — `true` 启用该轨 / `true` to enable
 Future<void> playerSelectTrack({
   required PlatformInt64 playerId,
   required int trackId,
@@ -212,12 +295,14 @@ Future<void> playerSelectTrack({
   enable: enable,
 );
 
+/// 获取当前视频元数据 / Returns current video metadata.
 Future<VideoMetadata> playerGetVideoMetadata({
   required PlatformInt64 playerId,
 }) => RustLib.instance.api.crateApiPlayerPlayerGetVideoMetadata(
   playerId: playerId,
 );
 
+/// 设置视频方向（翻转/旋转）/ Sets video orientation (flip/rotate).
 Future<void> playerSetVideoOrientation({
   required PlatformInt64 playerId,
   required VideoOrientationConfig config,
@@ -226,6 +311,7 @@ Future<void> playerSetVideoOrientation({
   config: config,
 );
 
+/// 设置宽高比缩放模式 / Sets aspect ratio scaling mode.
 Future<void> playerSetAspectRatioMode({
   required PlatformInt64 playerId,
   required AspectRatioMode mode,
@@ -234,13 +320,22 @@ Future<void> playerSetAspectRatioMode({
   mode: mode,
 );
 
-/// Tears down the player and stops the pipeline.
+/// 销毁播放器并停止 pipeline / Tears down the player and stops the pipeline.
+///
+/// # 参数 / Parameters
+/// - `player_id` — 要销毁的 ID / id to dispose
+///
+/// # 返回值 / Returns
+/// - 始终 `Ok(())`（幂等，重复 dispose 不报错）/ always `Ok(())` (idempotent)
 Future<void> disposePlayer({required PlatformInt64 playerId}) =>
     RustLib.instance.api.crateApiPlayerDisposePlayer(playerId: playerId);
 
-/// Identifiers returned when a player is created. `player_id` addresses all
-/// control calls; bind a Platform View with the same id via `creationParams`.
+/// 创建播放器时返回的标识符 / Identifiers returned when a player is created.
+///
+/// `player_id` 用于所有后续 FRB 控制调用；Platform View 应通过 `creationParams` 绑定相同 id。
+/// `player_id` addresses all subsequent control calls; bind a Platform View with the same id via `creationParams`.
 class PlayerHandle {
+  /// 播放器唯一 ID / Unique player identifier.
   final PlatformInt64 playerId;
 
   const PlayerHandle({required this.playerId});

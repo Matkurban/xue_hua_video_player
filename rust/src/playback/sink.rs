@@ -1,3 +1,12 @@
+//! 音频/字幕 sink bin 与视频探针 / Audio/subtitle sink bins and video pad probe.
+//!
+//! 为 playbin 与 AppSrc 管线构建音频 scaletempo bin、HTTP 源配置、视频 caps 探针
+//! （发射尺寸/元数据事件），以及 Android overlay 尺寸同步回调。
+//!
+//! Builds audio scaletempo bins, HTTP source configuration, and video caps probes
+//! (emitting size/metadata events) for playbin and AppSrc pipelines, plus Android
+//! overlay size sync callbacks.
+
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -9,11 +18,26 @@ use parking_lot::Mutex;
 use crate::playback::bus::Emitter;
 use crate::playback::gst::{expose_overlay, InternalVideoMetadata};
 
-/// Android-only: invoked when decoded video dimensions change (caps negotiation).
+/// Android 专用：解码视频尺寸变更时调用（caps 协商后）/ Android-only: invoked when decoded video dimensions change.
 #[cfg(target_os = "android")]
 pub type OverlaySizeSync = Arc<dyn Fn(i32, i32) + Send + Sync>;
 
-/// Configures an HTTP(S) source element for permissive TLS and a mobile user-agent.
+/// 配置 HTTP(S) 源元素的 TLS 与 User-Agent / Configures TLS and user-agent on HTTP(S) source elements.
+///
+/// # 参数 / Parameters
+/// - `element` — `souphttpsrc` 等源元素 / source element such as `souphttpsrc`
+///
+/// # 返回值 / Returns
+/// - 无 / None
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 在 playbin `source-setup`/`element-setup` 回调中调用 / called from playbin setup callbacks
+///
+/// # 平台 / Platform
+/// - 网络 URI 源；移动 UA 字符串 / network URI sources; mobile user-agent string
 pub fn configure_http_source(element: &gst::Element) {
     if element.find_property("ssl-strict").is_some() {
         element.set_property("ssl-strict", false);
@@ -31,7 +55,22 @@ pub fn configure_http_source(element: &gst::Element) {
     }
 }
 
-/// Builds an audio sink bin with optional `scaletempo` for pitch-preserving rate changes.
+/// 构建带可选 `scaletempo` 的音频 sink bin（保 pitch 变速）/ Builds audio sink bin with optional `scaletempo` for pitch-preserving rate changes.
+///
+/// # 参数 / Parameters
+/// - 无 / None
+///
+/// # 返回值 / Returns
+/// - 成功：带 ghost pad 的 [`gst::Bin`] / `gst::Bin` with ghost pad
+///
+/// # 错误 / Errors
+/// - `autoaudiosink` 创建失败 / autoaudiosink creation failure
+///
+/// # 线程 / Threading
+/// - 管线构建阶段于 Gst 线程 / pipeline build on Gst thread
+///
+/// # 平台 / Platform
+/// - `scaletempo` 不可用时回退直连 audiosink / falls back without scaletempo if unavailable
 pub fn build_audio_sink_bin() -> Result<gst::Bin> {
     let audio_bin = gst::Bin::new();
     let audiosink = gst::ElementFactory::make("autoaudiosink")
@@ -70,7 +109,22 @@ pub fn build_audio_sink_bin() -> Result<gst::Bin> {
     Ok(audio_bin)
 }
 
-/// Builds a fakesink text bin so playbin exposes subtitle track metadata without rendering.
+/// 构建 fakesink 字幕 bin，使 playbin 暴露字幕轨元数据但不渲染 / Builds fakesink text bin for subtitle track metadata without rendering.
+///
+/// # 参数 / Parameters
+/// - 无 / None
+///
+/// # 返回值 / Returns
+/// - 成功：字幕 sink bin / subtitle sink bin
+///
+/// # 错误 / Errors
+/// - `fakesink` 创建失败 / fakesink creation failure
+///
+/// # 线程 / Threading
+/// - 管线构建阶段 / pipeline build phase
+///
+/// # 平台 / Platform
+/// - 仅 playbin URI 管线 / playbin URI pipelines only
 pub fn build_text_sink_bin() -> Result<gst::Bin> {
     let text_bin = gst::Bin::new();
     let fakesink = gst::ElementFactory::make("fakesink")
@@ -86,7 +140,25 @@ pub fn build_text_sink_bin() -> Result<gst::Bin> {
     Ok(text_bin)
 }
 
-/// Emits video size and metadata events when decoded dimensions change.
+/// 在视频 sink pad 上挂探针：解码尺寸变更时发射事件与元数据 / Attaches pad probe to emit size/metadata on dimension changes.
+///
+/// # 参数 / Parameters
+/// - `video_sink` — 平台视频 sink / platform video sink
+/// - `emitter` — 事件发射器 / event emitter
+/// - `metadata_cache` — 可选元数据缓存 / optional metadata cache
+/// - `overlay_size_sync`（Android）— 尺寸同步回调 / size sync callback on Android
+///
+/// # 返回值 / Returns
+/// - 无（无 sink pad 时静默返回）/ None (no-op if no sink pad)
+///
+/// # 错误 / Errors
+/// - 无 / None
+///
+/// # 线程 / Threading
+/// - 探针在 GStreamer streaming 线程触发 / probe runs on GStreamer streaming thread
+///
+/// # 平台 / Platform
+/// - Android：触发 overlay 尺寸同步；非 Apple 平台首帧时 `expose_overlay`
 pub fn attach_video_probe(
     video_sink: &gst::Element,
     emitter: Arc<Mutex<Option<Emitter>>>,
@@ -149,6 +221,23 @@ pub fn attach_video_probe(
     });
 }
 
+/// 构建 Android overlay 尺寸同步闭包（纹理 content size + rectangle sync）/ Builds Android overlay size sync closure.
+///
+/// # 参数 / Parameters
+/// - `player_id` — FRB 播放器 ID / FRB player id
+/// - `gst_context` — 可选 [`PlaybackGstContext`] 槽（创建后填充）/ optional context slot filled after creation
+///
+/// # 返回值 / Returns
+/// - [`OverlaySizeSync`] 回调 / sync callback
+///
+/// # 错误 / Errors
+/// - 回调内部错误仅记录日志 / errors inside callback are logged only
+///
+/// # 线程 / Threading
+/// - 在 streaming 线程调用；调度 mobile overlay rectangle sync / called on streaming thread
+///
+/// # 平台 / Platform
+/// - 仅 Android / Android only
 #[cfg(target_os = "android")]
 pub fn android_overlay_size_sync(
     player_id: Arc<std::sync::atomic::AtomicI64>,

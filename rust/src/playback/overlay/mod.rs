@@ -1,4 +1,12 @@
+//! 平台 overlay 后端 — 从 [`super::surface::VideoSurface`] 拆分的结构层。
+//!
+//! 统一导出各平台 [`OverlaySession`] 实现、预卷（preroll）门控、Gst 线程调度器，
+//! 以及 [`VideoOverlayBackend`] 共享契约。
+//!
 //! Platform overlay backends — structural split from [`super::surface::VideoSurface`].
+//!
+//! Re-exports per-platform [`OverlaySession`] implementations, preroll gating,
+//! Gst-thread schedulers, and the shared [`VideoOverlayBackend`] contract.
 
 mod gst_scheduler;
 mod overlay_session;
@@ -26,12 +34,5 @@ pub use platform::android::{
 #[cfg(target_os = "ios")]
 pub use platform::ios::{IosIdleWork, IosLayerBackend, IosOverlaySession};
 
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
+#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
 pub use platform::window::{apply_overlay_handle, DesktopOverlayBackend, DesktopOverlaySession};
-
-#[cfg(target_os = "macos")]
-pub use platform::window::{MacosOverlayBackend, MacosOverlaySession};
