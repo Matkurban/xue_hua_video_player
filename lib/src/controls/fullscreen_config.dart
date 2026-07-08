@@ -44,6 +44,9 @@ class VideoOrientationLabels {
   const VideoOrientationLabels({
     this.flipHorizontal = '水平翻转',
     this.flipVertical = '垂直翻转',
+    this.flipOff = '关',
+    this.flipOn = '开',
+    this.rotateAngle = '旋转角度',
     this.rotate0 = '0°',
     this.rotate90 = '90°',
     this.rotate180 = '180°',
@@ -55,6 +58,15 @@ class VideoOrientationLabels {
 
   /// 垂直翻转 / Vertical flip.
   final String flipVertical;
+
+  /// 翻转关闭 / Flip off label.
+  final String flipOff;
+
+  /// 翻转开启 / Flip on label.
+  final String flipOn;
+
+  /// 旋转角度区标题 / Rotation section label.
+  final String rotateAngle;
 
   /// 顺时针 0° / Clockwise 0 degrees.
   final String rotate0;
@@ -83,6 +95,9 @@ class VideoOrientationLabels {
       other is VideoOrientationLabels &&
           flipHorizontal == other.flipHorizontal &&
           flipVertical == other.flipVertical &&
+          flipOff == other.flipOff &&
+          flipOn == other.flipOn &&
+          rotateAngle == other.rotateAngle &&
           rotate0 == other.rotate0 &&
           rotate90 == other.rotate90 &&
           rotate180 == other.rotate180 &&
@@ -92,6 +107,9 @@ class VideoOrientationLabels {
   int get hashCode => Object.hash(
     flipHorizontal,
     flipVertical,
+    flipOff,
+    flipOn,
+    rotateAngle,
     rotate0,
     rotate90,
     rotate180,

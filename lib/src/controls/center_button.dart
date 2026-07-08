@@ -6,6 +6,8 @@ import 'package:signals/signals_flutter.dart';
 
 import '../rust/player_events.dart';
 import '../theme/video_controls_theme.dart';
+import '../utils/platform_util.dart';
+import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
 
 /// 两种控件风格共用的中央播放/暂停/缓冲 affordance / Central play/pause/buffering affordance shared by both control styles.
@@ -18,18 +20,29 @@ class CenterButton extends StatelessWidget {
     required this.model,
     required this.theme,
     required this.onInteract,
+    this.hud,
   });
 
   final PlaybackControlsModel model;
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
 
+  /// 沉浸 HUD；非空时隐藏中央按钮避免与正中 HUD 重叠 / Hides button while center HUD is shown.
+  final ReadonlySignal<ImmersiveHudSnapshot?>? hud;
+
   static const double _buttonSize = 56;
+
+  static bool _hideForHud(ImmersiveHudSnapshot snap) =>
+      isMobilePlatform || snap.kind == ImmersiveHudKind.playPause;
 
   @override
   Widget build(BuildContext context) {
     return SignalBuilder(
       builder: (context) {
+        final snap = hud?.value;
+        if (snap != null && _hideForHud(snap)) {
+          return const SizedBox(width: _buttonSize, height: _buttonSize);
+        }
         final PlayerState state = model.state.value;
         final buffering = model.bufferingPercent.value;
         if (buffering < 100 || state == PlayerState.buffering) {

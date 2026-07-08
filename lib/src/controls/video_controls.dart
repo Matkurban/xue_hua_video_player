@@ -145,7 +145,7 @@ class _VideoControlsState extends State<VideoControls> {
 
     switch (event.logicalKey) {
       case LogicalKeyboardKey.space:
-        unawaited(widget.model.togglePlayPause());
+        unawaited(_togglePlayPauseWithHud());
         _keepAlive();
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
@@ -163,6 +163,17 @@ class _VideoControlsState extends State<VideoControls> {
       default:
         return KeyEventResult.ignored;
     }
+  }
+
+  Future<void> _togglePlayPauseWithHud() async {
+    final wasPlaying = widget.model.isPlaying.value;
+    await widget.model.togglePlayPause();
+    widget.immersive.showHud(
+      ImmersiveHudSnapshot(
+        kind: ImmersiveHudKind.playPause,
+        value: wasPlaying ? 0.0 : 1.0,
+      ),
+    );
   }
 
   Future<void> _seekBy(
@@ -227,6 +238,7 @@ class _VideoControlsState extends State<VideoControls> {
             showFullscreenButton: isMobilePlatform,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
+            immersive: widget.immersive,
           )
         : MaterialVideoControls(
             model: widget.model,
@@ -235,6 +247,7 @@ class _VideoControlsState extends State<VideoControls> {
             showFullscreenButton: isMobilePlatform,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
+            immersive: widget.immersive,
           );
 
     return Positioned.fill(
@@ -285,10 +298,10 @@ class _VideoControlsState extends State<VideoControls> {
             showOrientationMenu:
                 widget.immersive.fullscreen.value.showOrientationMenu,
           ),
-          ImmersiveHud(immersive: widget.immersive),
           SignalBuilder(
             builder: (context) {
               return AnimatedOpacity(
+                key: const ValueKey('video-controls-opacity'),
                 opacity: _visible.value ? 1 : 0,
                 duration: const Duration(milliseconds: 200),
                 child: IgnorePointer(
@@ -298,6 +311,7 @@ class _VideoControlsState extends State<VideoControls> {
               );
             },
           ),
+          ImmersiveHud(immersive: widget.immersive),
         ],
       ),
     );

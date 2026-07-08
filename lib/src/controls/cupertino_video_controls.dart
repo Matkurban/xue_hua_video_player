@@ -8,6 +8,7 @@ import '../constant/constant.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/time_util.dart';
 import 'center_button.dart';
+import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
 import 'playback_progress_slider.dart';
 import 'scrub_controller.dart';
@@ -25,6 +26,7 @@ class CupertinoVideoControls extends StatefulWidget {
     this.showFullscreenButton = false,
     this.landscapeLocked,
     this.onFullscreenToggle,
+    this.immersive,
   });
 
   final PlaybackControlsModel model;
@@ -39,6 +41,9 @@ class CupertinoVideoControls extends StatefulWidget {
 
   /// 全屏切换回调 / Fullscreen toggle callback.
   final VoidCallback? onFullscreenToggle;
+
+  /// 沉浸状态；用于中央按钮与 HUD 互斥 / Immersive state for center/HUD mutex.
+  final ImmersiveControlsState? immersive;
 
   @override
   State<CupertinoVideoControls> createState() => _CupertinoVideoControlsState();
@@ -101,6 +106,7 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
             model: model,
             theme: theme,
             onInteract: widget.onInteract,
+            hud: widget.immersive?.hud,
           ),
         ),
         Positioned(

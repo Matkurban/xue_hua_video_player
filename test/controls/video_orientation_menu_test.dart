@@ -103,5 +103,44 @@ void main() {
         debugDefaultTargetPlatformOverride = null;
       }
     });
+
+    testWidgets('orientation panel uses three SegmentedButtons', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        await pumpControls(tester);
+
+        await tester.tap(find.byIcon(Icons.screen_rotation));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SegmentedButton<bool>), findsNWidgets(2));
+        expect(find.byType(SegmentedButton<int>), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('orientation panel updates flip and rotation', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        await pumpControls(tester);
+
+        await tester.tap(find.byIcon(Icons.screen_rotation));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('开').first);
+        await tester.pumpAndSettle();
+
+        expect(model.lastVideoOrientation?.flipHorizontal, isTrue);
+
+        await tester.tap(find.text('90°'));
+        await tester.pumpAndSettle();
+
+        expect(model.lastVideoOrientation?.rotateDegrees, 90);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
   });
 }

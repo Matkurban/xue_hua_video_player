@@ -16,6 +16,9 @@ enum ImmersiveHudKind {
 
   /// 音量调节 / Volume adjustment.
   volume,
+
+  /// 播放/暂停 / Play or pause toggle.
+  playPause,
 }
 
 /// 沉浸 HUD 瞬时快照 / Transient immersive HUD snapshot.

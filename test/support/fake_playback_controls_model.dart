@@ -81,6 +81,9 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
   @override
   Future<void> togglePlayPause() async {
     togglePlayPauseCallCount++;
+    _state.value = _state.value == PlayerState.playing
+        ? PlayerState.paused
+        : PlayerState.playing;
   }
 
   @override

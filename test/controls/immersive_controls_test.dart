@@ -169,8 +169,10 @@ void main() {
 
         await tester.sendKeyEvent(LogicalKeyboardKey.space);
         await tester.pump();
+        await tester.pump();
 
         expect(model.togglePlayPauseCallCount, 1);
+        await tester.pump(const Duration(seconds: 1));
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -191,8 +193,10 @@ void main() {
 
         await tester.sendKeyEvent(LogicalKeyboardKey.space);
         await tester.pump();
+        await tester.pump();
 
         expect(model.togglePlayPauseCallCount, 1);
+        await tester.pump(const Duration(seconds: 1));
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -219,17 +223,17 @@ void main() {
         immersive.landscapeLocked.value = true;
         await pumpControls(tester);
 
-        final controlsOpacity = tester
-            .widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))
-            .last;
+        final controlsOpacity = tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('video-controls-opacity')),
+        );
         expect(controlsOpacity.opacity, 1);
 
         await tester.tapAt(const Offset(160, 120));
         await tester.pump();
 
-        final hidden = tester
-            .widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))
-            .last;
+        final hidden = tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('video-controls-opacity')),
+        );
         expect(hidden.opacity, 0);
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -258,17 +262,17 @@ void main() {
       try {
         await pumpControls(tester);
 
-        final visible = tester
-            .widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))
-            .last;
+        final visible = tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('video-controls-opacity')),
+        );
         expect(visible.opacity, 1);
 
         await tester.tapAt(const Offset(160, 120));
         await tester.pump();
 
-        final hidden = tester
-            .widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))
-            .last;
+        final hidden = tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('video-controls-opacity')),
+        );
         expect(hidden.opacity, 0);
       } finally {
         debugDefaultTargetPlatformOverride = null;
