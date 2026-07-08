@@ -26,6 +26,8 @@ use crate::playback::tracks::{
     disable_subtitles_on_pipeline, select_track_on_pipeline, TrackCache,
 };
 use crate::playback::uri_pipeline::build_uri_playbin;
+#[cfg(target_os = "android")]
+use crate::playback::sink::OverlaySizeSync;
 use crate::player_events::TrackType;
 
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
@@ -291,8 +293,15 @@ pub fn install_uri_shell(
     track_cache: Option<Arc<Mutex<TrackCache>>>,
     surface: &VideoSurface,
     frame_sink: &Arc<crate::playback::frame::FrameSink>,
+    #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
 ) -> Result<PipelineShell> {
-    let (pipeline, video_sink) = build_uri_playbin(emitter, metadata_cache, frame_sink)?;
+    let (pipeline, video_sink) = build_uri_playbin(
+        emitter,
+        metadata_cache,
+        frame_sink,
+        #[cfg(target_os = "android")]
+        overlay_size_sync,
+    )?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
         &pipeline,
         emitter,
@@ -326,9 +335,16 @@ pub fn install_asset_shell(
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     surface: &VideoSurface,
     frame_sink: &Arc<crate::playback::frame::FrameSink>,
+    #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
 ) -> Result<PipelineShell> {
-    let (pipeline, video_sink, feed) =
-        build_asset_pipeline(asset_key, emitter, metadata_cache, frame_sink)?;
+    let (pipeline, video_sink, feed) = build_asset_pipeline(
+        asset_key,
+        emitter,
+        metadata_cache,
+        frame_sink,
+        #[cfg(target_os = "android")]
+        overlay_size_sync,
+    )?;
     let (bus_watch, position_source) = attach_gst_bus_handlers(
         &pipeline,
         emitter,

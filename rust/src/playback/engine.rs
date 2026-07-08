@@ -2,12 +2,16 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+#[cfg(target_os = "android")]
+use std::sync::atomic::AtomicI64;
 
 use anyhow::Result;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
+#[cfg(target_os = "android")]
+use crate::playback::sink::{android_overlay_size_sync, OverlaySizeSync};
 #[cfg(target_os = "android")]
 use crate::gst::ensure_java_gstreamer_for_network;
 use crate::gst::{ensure_gst_init, spawn_on_gst_thread_and_wait};
@@ -46,6 +50,9 @@ pub struct PlaybackEngine {
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
     /// Frame source for the Flutter external-texture bridge (Apple/Win/Linux).
     frame_sink: Arc<FrameSink>,
+    /// Assigned by the API layer in `create_player` (used for Android texture JNI).
+    #[cfg(target_os = "android")]
+    player_id: Arc<AtomicI64>,
 }
 
 pub type GstPlayer = PlaybackEngine;
@@ -67,6 +74,19 @@ impl PlaybackEngine {
         let orientation = Arc::new(Mutex::new(InternalVideoOrientationConfig::default()));
         let aspect_mode = Arc::new(Mutex::new(InternalAspectRatioMode::default()));
         let frame_sink = FrameSink::new();
+
+        #[cfg(target_os = "android")]
+        let player_id = Arc::new(AtomicI64::new(0));
+        #[cfg(target_os = "android")]
+        let gst_context_slot: Arc<Mutex<Option<Arc<PlaybackGstContext>>>> =
+            Arc::new(Mutex::new(None));
+        #[cfg(target_os = "android")]
+        let overlay_size_sync: Option<OverlaySizeSync> = Some(android_overlay_size_sync(
+            player_id.clone(),
+            gst_context_slot.clone(),
+        ));
+        #[cfg(target_os = "android")]
+        let overlay_size_sync_for_shell = overlay_size_sync.clone();
 
         let emitter_init = emitter.clone();
         let looping_init = looping.clone();
@@ -100,6 +120,8 @@ impl PlaybackEngine {
                 Some(track_cache_init),
                 &surface,
                 &frame_sink_init,
+                #[cfg(target_os = "android")]
+                overlay_size_sync.clone(),
             )?;
             let overlay_sink_slot = Arc::new(Mutex::new(shell.clone_video_sink()));
             surface.set_overlay_sink_slot(shell.clone_video_sink());
@@ -124,6 +146,8 @@ impl PlaybackEngine {
                 Some(track_cache_init),
                 &surface,
                 &frame_sink_init,
+                #[cfg(target_os = "android")]
+                overlay_size_sync_for_shell.clone(),
             )?;
             wire_overlay_sync(&shell, overlay_init);
             Ok((shell, surface))
@@ -147,7 +171,13 @@ impl PlaybackEngine {
             orientation.clone(),
             aspect_mode.clone(),
             frame_sink.clone(),
+            #[cfg(target_os = "android")]
+            overlay_size_sync,
         ));
+        #[cfg(target_os = "android")]
+        {
+            *gst_context_slot.lock() = Some(gst_context.clone());
+        }
         let engine = Self {
             gst_context,
             emitter,
@@ -162,6 +192,8 @@ impl PlaybackEngine {
             orientation,
             aspect_mode,
             frame_sink,
+            #[cfg(target_os = "android")]
+            player_id,
         };
         #[cfg(target_os = "ios")]
         engine.register_ios_layer_backend();
@@ -172,6 +204,11 @@ impl PlaybackEngine {
     /// API layer under the player id so the native texture C-ABI can reach it.
     pub fn frame_sink(&self) -> Arc<FrameSink> {
         self.frame_sink.clone()
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn set_player_id(&self, id: i64) {
+        self.player_id.store(id, Ordering::SeqCst);
     }
 
     #[cfg(target_os = "ios")]

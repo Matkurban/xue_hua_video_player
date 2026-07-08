@@ -40,6 +40,8 @@ pub fn create_player() -> Result<PlayerHandle> {
     let player = PlaybackEngine::new()?;
     let player_id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     crate::playback::frame::register_frame_sink(player_id, player.frame_sink());
+    #[cfg(target_os = "android")]
+    player.set_player_id(player_id);
     PLAYERS.lock().insert(player_id, Arc::new(player));
     if let Some(handle) = PENDING_OVERLAYS.lock().remove(&player_id) {
         #[cfg(target_os = "macos")]

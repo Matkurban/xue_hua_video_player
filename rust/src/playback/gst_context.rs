@@ -13,6 +13,8 @@ use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::PipelineSwapConfig;
 use crate::playback::tracks::TrackCache;
+#[cfg(target_os = "android")]
+use crate::playback::sink::OverlaySizeSync;
 
 /// Live engine-owned Gst bundle — `shell` and `surface` are canonical.
 pub struct PlaybackGstContext {
@@ -26,6 +28,8 @@ pub struct PlaybackGstContext {
     orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
     aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
     frame_sink: Arc<FrameSink>,
+    #[cfg(target_os = "android")]
+    overlay_size_sync: Option<OverlaySizeSync>,
 }
 
 /// Async-safe snapshot passed into Gst thread closures.
@@ -59,6 +63,7 @@ impl PlaybackGstContext {
         orientation: Arc<Mutex<InternalVideoOrientationConfig>>,
         aspect_mode: Arc<Mutex<InternalAspectRatioMode>>,
         frame_sink: Arc<FrameSink>,
+        #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
     ) -> Self {
         Self {
             shell,
@@ -71,6 +76,8 @@ impl PlaybackGstContext {
             orientation,
             aspect_mode,
             frame_sink,
+            #[cfg(target_os = "android")]
+            overlay_size_sync,
         }
     }
 
@@ -83,6 +90,8 @@ impl PlaybackGstContext {
             orientation: *self.orientation.lock(),
             aspect: *self.aspect_mode.lock(),
             frame_sink: self.frame_sink.clone(),
+            #[cfg(target_os = "android")]
+            overlay_size_sync: self.overlay_size_sync.clone(),
         }
     }
 
@@ -146,6 +155,8 @@ mod tests {
             Arc::new(Mutex::new(orientation)),
             Arc::new(Mutex::new(aspect)),
             crate::playback::frame::FrameSink::new(),
+            #[cfg(target_os = "android")]
+            None,
         )
     }
 

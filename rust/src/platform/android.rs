@@ -111,6 +111,51 @@ pub fn attach_java_vm() -> Result<()> {
     vm.attach_current_thread(|_| Ok(()))
 }
 
+#[cfg(target_os = "android")]
+static PLUGIN_CLASS: Mutex<Option<Global<JClass>>> = Mutex::new(None);
+
+#[cfg(target_os = "android")]
+pub fn bind_xue_hua_video_player_plugin_class(env: &mut Env, class: JClass) {
+    match env.new_global_ref(class) {
+        Ok(global) => {
+            *PLUGIN_CLASS.lock().unwrap() = Some(global);
+        }
+        Err(e) => {
+            crate::diag::logcat_error(&format!("XueHuaVideoPlayerPlugin jclass bind failed: {e}"));
+        }
+    }
+}
+
+/// Resizes the Flutter `SurfaceProducer` to the negotiated video resolution and
+/// rebinds the surface on the main thread (must complete before overlay refresh).
+#[cfg(target_os = "android")]
+pub fn notify_texture_content_size(player_id: i64, width: i32, height: i32) -> Result<()> {
+    if width < 2 || height < 2 {
+        return Ok(());
+    }
+    with_jni_env(|env| {
+        use jni::objects::JValue;
+        use jni::{jni_sig, jni_str};
+
+        let guard = PLUGIN_CLASS.lock().unwrap();
+        let Some(class) = guard.as_ref() else {
+            return Err(anyhow!("XueHuaVideoPlayerPlugin jclass not bound yet"));
+        };
+        let args = [
+            JValue::Long(player_id),
+            JValue::Int(width),
+            JValue::Int(height),
+        ];
+        env.call_static_method(
+            class,
+            jni_str!("setTextureContentSizeSync"),
+            jni_sig!("(JII)V"),
+            &args,
+        )?;
+        Ok(())
+    })
+}
+
 /// Converts a Java `android.view.Surface` to a native window handle for VideoOverlay.
 #[cfg(target_os = "android")]
 pub fn native_window_handle_from_surface(env: &mut Env, surface: JObject) -> Result<usize> {

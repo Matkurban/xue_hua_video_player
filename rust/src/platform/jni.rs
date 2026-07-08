@@ -278,3 +278,20 @@ pub extern "system" fn native_bind_asset_helper_class<'caller>(
     })
     .resolve::<LogErrorAndDefault>();
 }
+
+#[cfg(target_os = "android")]
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.XueHuaVideoPlayerPlugin",
+    "nativeBindPluginClass",
+    "()V"
+)]
+pub extern "system" fn native_bind_plugin_class<'caller>(
+    mut env: EnvUnowned<'caller>,
+    class: JClass<'caller>,
+) {
+    env.with_env(|env| {
+        crate::platform::android::bind_xue_hua_video_player_plugin_class(env, class);
+        Ok::<(), jni::errors::Error>(())
+    })
+    .resolve::<LogErrorAndDefault>();
+}

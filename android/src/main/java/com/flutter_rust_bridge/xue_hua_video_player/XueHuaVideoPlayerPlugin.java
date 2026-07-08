@@ -3,6 +3,7 @@ package com.flutter_rust_bridge.xue_hua_video_player;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.loader.FlutterLoader;
@@ -22,12 +23,37 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.Met
         System.loadLibrary("xue_hua_video_player");
     }
 
+    private static native void nativeBindPluginClass();
+
+    @Nullable
+    private static volatile XueHuaVideoPlayerPlugin instance;
+
     private MethodChannel textureChannel;
     private TextureRegistry textureRegistry;
     private final Map<Long, XueHuaVideoTexture> videoTextures = new HashMap<>();
 
+    /** Called from Rust/JNI when video caps negotiate a new content size. */
+    public static void setTextureContentSizeSync(long playerId, int width, int height) {
+        XueHuaVideoPlayerPlugin plugin = instance;
+        if (plugin == null) {
+            return;
+        }
+        plugin.applyTextureContentSize(playerId, width, height);
+    }
+
+    private void applyTextureContentSize(long playerId, int width, int height) {
+        XueHuaVideoTexture texture;
+        synchronized (videoTextures) {
+            texture = videoTextures.get(playerId);
+        }
+        if (texture != null) {
+            texture.setContentSizeSync(width, height);
+        }
+    }
+
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
+        instance = this;
         Context context = binding.getApplicationContext();
         FlutterAssetHelper.init(context);
         FlutterLoader loader = FlutterInjector.instance().flutterLoader();
@@ -44,6 +70,7 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.Met
             TEXTURE_CHANNEL_NAME
         );
         textureChannel.setMethodCallHandler(this);
+        nativeBindPluginClass();
     }
 
     @Override
@@ -104,5 +131,6 @@ public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.Met
             videoTextures.clear();
         }
         textureRegistry = null;
+        instance = null;
     }
 }

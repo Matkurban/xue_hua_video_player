@@ -9,6 +9,10 @@ use parking_lot::Mutex;
 use crate::playback::bus::Emitter;
 use crate::playback::gst::{expose_overlay, InternalVideoMetadata};
 
+/// Android-only: invoked when decoded video dimensions change (caps negotiation).
+#[cfg(target_os = "android")]
+pub type OverlaySizeSync = Arc<dyn Fn(i32, i32) + Send + Sync>;
+
 /// Configures an HTTP(S) source element for permissive TLS and a mobile user-agent.
 pub fn configure_http_source(element: &gst::Element) {
     if element.find_property("ssl-strict").is_some() {
@@ -87,6 +91,7 @@ pub fn attach_video_probe(
     video_sink: &gst::Element,
     emitter: Arc<Mutex<Option<Emitter>>>,
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
+    #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
 ) {
     let sink_pad = match video_sink.static_pad("sink") {
         Some(pad) => pad,
@@ -95,6 +100,8 @@ pub fn attach_video_probe(
     let last_size = Arc::new(Mutex::new((0i32, 0i32)));
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     let sink_for_expose = video_sink.clone();
+    #[cfg(target_os = "android")]
+    let overlay_size_sync = overlay_size_sync;
     sink_pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_, info| {
         if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
             if let gst::EventView::Caps(caps) = ev.view() {
@@ -124,6 +131,12 @@ pub fn attach_video_probe(
                             }
                             cb(PlayerEvent::metadata(meta));
                         }
+                        #[cfg(target_os = "android")]
+                        if width > 0 && height > 0 {
+                            if let Some(sync) = overlay_size_sync.as_ref() {
+                                sync(width, height);
+                            }
+                        }
                         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
                         if first && width > 0 && height > 0 {
                             expose_overlay(&sink_for_expose);
@@ -134,4 +147,30 @@ pub fn attach_video_probe(
         }
         gst::PadProbeReturn::Ok
     });
+}
+
+#[cfg(target_os = "android")]
+pub fn android_overlay_size_sync(
+    player_id: Arc<std::sync::atomic::AtomicI64>,
+    gst_context: Arc<Mutex<Option<Arc<crate::playback::gst_context::PlaybackGstContext>>>>,
+) -> OverlaySizeSync {
+    use std::sync::atomic::Ordering;
+
+    Arc::new(move |width, height| {
+        if width < 2 || height < 2 {
+            return;
+        }
+        let id = player_id.load(Ordering::SeqCst);
+        if id <= 0 {
+            return;
+        }
+        if let Err(e) = crate::platform::android::notify_texture_content_size(id, width, height) {
+            crate::diag::logcat_error(&format!("android setContentSize: {e:#}"));
+        }
+        if let Some(ctx) = gst_context.lock().clone() {
+            ctx.surface.set_cached_dimensions(width, height);
+            ctx.surface
+                .schedule_mobile_overlay_rectangle_sync(ctx.shell.clone(), width, height);
+        }
+    })
 }

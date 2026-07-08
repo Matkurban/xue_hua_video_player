@@ -16,6 +16,8 @@ use crate::playback::replay::PlayReplayContext;
 use crate::playback::shell::{
     install_asset_shell, install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell,
 };
+#[cfg(target_os = "android")]
+use crate::playback::sink::OverlaySizeSync;
 use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::TrackCache;
 
@@ -31,6 +33,9 @@ pub struct PipelineSwapConfig {
     /// Frame source reused across shell rebuilds so the Flutter texture keeps
     /// receiving frames after a URI ↔ asset switch (appsink platforms).
     pub frame_sink: Arc<crate::playback::frame::FrameSink>,
+    /// Caps-driven ImageReader resize + overlay sync (Android texture path).
+    #[cfg(target_os = "android")]
+    pub overlay_size_sync: Option<OverlaySizeSync>,
 }
 
 impl PipelineSwapConfig {
@@ -43,6 +48,8 @@ impl PipelineSwapConfig {
             orientation: self.orientation,
             aspect: self.aspect,
             frame_sink: self.frame_sink.clone(),
+            #[cfg(target_os = "android")]
+            overlay_size_sync: self.overlay_size_sync.clone(),
         }
     }
 }
@@ -81,6 +88,8 @@ fn switch_uri_shell(
             Some(swap.track_cache.clone()),
             surface,
             &swap.frame_sink,
+            #[cfg(target_os = "android")]
+            swap.overlay_size_sync.clone(),
         )?;
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
@@ -116,6 +125,8 @@ pub(crate) fn switch_asset_shell(
         Some(swap.metadata.clone()),
         surface,
         &swap.frame_sink,
+        #[cfg(target_os = "android")]
+        swap.overlay_size_sync.clone(),
     )?;
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {

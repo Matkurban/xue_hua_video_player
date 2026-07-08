@@ -11,6 +11,8 @@ use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
 use crate::playback::gst::{create_platform_video_sink, InternalVideoMetadata};
 use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
+#[cfg(target_os = "android")]
+use crate::playback::sink::OverlaySizeSync;
 
 const APPSRC_CHUNK: usize = 64 * 1024;
 
@@ -20,10 +22,17 @@ pub fn build_asset_pipeline(
     emitter: &Arc<Mutex<Option<Emitter>>>,
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     frame_sink: &Arc<FrameSink>,
+    #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
 ) -> Result<(gst::Pipeline, gst::Element, Arc<AppSrcFeedState>)> {
     let pipeline = gst::Pipeline::new();
     let video_sink = create_platform_video_sink(frame_sink)?;
-    attach_video_probe(&video_sink, emitter.clone(), metadata_cache);
+    attach_video_probe(
+        &video_sink,
+        emitter.clone(),
+        metadata_cache,
+        #[cfg(target_os = "android")]
+        overlay_size_sync,
+    );
     let audio_bin = build_audio_sink_bin()?;
 
     let appsrc = gst::ElementFactory::make("appsrc")

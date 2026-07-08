@@ -81,12 +81,12 @@ impl AndroidOverlaySession {
         width: i32,
         height: i32,
     ) -> Result<()> {
+        let _ = (width, height);
         if handle == 0 {
             self.set_bound(false);
             cache_android_native_window(stored, 0)?;
             return Ok(());
         }
-        self.set_cached_dimensions(width, height);
         self.set_bound(false);
         cache_android_native_window(stored, handle as usize)?;
         Ok(())
