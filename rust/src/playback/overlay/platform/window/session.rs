@@ -217,6 +217,14 @@ impl MacosOverlaySession {
     }
 
     /// Binds on the main thread, then resumes play on `xhvp-gst` when desired.
+    ///
+    /// `osxvideosink`'s `set_window_handle` (`setView:`) must run on the main
+    /// thread; when called from a background thread GStreamer blocks on
+    /// `performSelector:onThread:waitUntilDone:YES`. If that background thread
+    /// holds `overlay_sink` while the platform view's own main-thread apply is
+    /// waiting for the same lock, the app deadlocks (spinning beachball, frozen
+    /// UI). To avoid it, marshal the whole apply — lock acquisition included —
+    /// onto the main thread so `overlay_sink` is only ever taken there.
     pub fn apply_and_maybe_resume(
         &self,
         shell: Arc<Mutex<PipelineShell>>,
@@ -226,23 +234,31 @@ impl MacosOverlaySession {
         height: i32,
         play_intent: OverlayPlayIntent,
     ) -> Result<()> {
-        let Some(slot) = self.overlay_sink.as_ref() else {
+        let Some(slot) = self.overlay_sink.clone() else {
             log::warn!("macOS overlay apply: no overlay_sink slot yet");
             return Ok(());
         };
-        MacosOverlayBackend::apply_gstreamer(&stored, &slot.lock(), width, height)?;
-        let bound = stored.lock().is_some();
-        self.set_bound(bound);
-        if !bound {
-            return Ok(());
-        }
-        let intent = play_intent.clone_for_async();
-        spawn_on_gst_thread(move || {
+        let overlay_bound = self.overlay_bound.clone();
+        crate::platform::run_on_main(move || {
             if let Err(e) =
-                maybe_resume_after_overlay_bind(shell, &intent.replay, &intent.swap, &surface)
+                MacosOverlayBackend::apply_gstreamer(&stored, &slot.lock(), width, height)
             {
-                log::warn!("macOS overlay bind resume: {e:#}");
+                log::warn!("macOS overlay apply on main: {e:#}");
+                return;
             }
+            let bound = stored.lock().is_some();
+            overlay_bound.store(bound, Ordering::SeqCst);
+            if !bound {
+                return;
+            }
+            let intent = play_intent.clone_for_async();
+            spawn_on_gst_thread(move || {
+                if let Err(e) =
+                    maybe_resume_after_overlay_bind(shell, &intent.replay, &intent.swap, &surface)
+                {
+                    log::warn!("macOS overlay bind resume: {e:#}");
+                }
+            });
         });
         Ok(())
     }

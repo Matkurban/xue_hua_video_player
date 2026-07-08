@@ -45,6 +45,11 @@ pub(crate) fn plan_resume_action(
 }
 
 /// Resumes playback or replays from EOS — all platforms, single entry.
+///
+/// Must be called WITHOUT the `shell` mutex held: this function locks `shell`
+/// itself (in short scopes). Calling it from a context that already holds the
+/// lock (e.g. inside `PlaybackEngine::run_on_gst`, which pre-locks) causes a
+/// non-reentrant `parking_lot` self-deadlock that freezes the gst MainLoop.
 pub fn resume_playing(
     shell: Arc<Mutex<PipelineShell>>,
     replay: &PlayReplayContext,
@@ -52,6 +57,12 @@ pub fn resume_playing(
     surface: &VideoSurface,
     overlay_ready: bool,
 ) -> Result<()> {
+    // Guard the calling convention: try_lock returns None when the current
+    // thread already holds `shell`, which would otherwise deadlock below.
+    debug_assert!(
+        shell.try_lock().is_some(),
+        "resume_playing called with the shell lock already held (would self-deadlock)"
+    );
     let kind = {
         let guard = shell.lock();
         guard.source_kind()
@@ -207,5 +218,57 @@ mod tests {
         surface.cache_handle(0x1000);
         // Cache alone is not a GStreamer bind on any platform; bind flags stay false.
         assert!(!overlay_ready_for_play(&surface));
+    }
+
+    // Regression: `PlaybackEngine::run_on_gst` pre-locks the shell, and calling
+    // `pipeline_play` -> `resume_playing` from inside it re-locked the same
+    // non-reentrant mutex, self-deadlocking the gst MainLoop (2nd open / resume
+    // after pause hung). `resume_playing` must be called without the shell lock;
+    // this verifies the guard rejects a caller-held lock instead of deadlocking.
+    #[test]
+    fn resume_playing_rejects_caller_held_shell_lock() {
+        use crate::playback::bus::Emitter;
+        use crate::playback::gst::{
+            InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+        };
+        use crate::playback::shell::new_test_shell;
+        use crate::playback::tracks::TrackCache;
+        use gstreamer as gst;
+        use std::sync::atomic::AtomicBool;
+
+        let _ = gst::init();
+        let shell = Arc::new(Mutex::new(new_test_shell(
+            gst::Pipeline::new(),
+            gst::ElementFactory::make("fakesink")
+                .build()
+                .expect("fakesink"),
+            SourceKind::Uri,
+            None,
+        )));
+        let replay = PlayReplayContext {
+            desired_playing: Arc::new(AtomicBool::new(true)),
+            at_eos: Arc::new(AtomicBool::new(false)),
+            running: Arc::new(AtomicBool::new(true)),
+        };
+        let swap = PipelineSwapConfig {
+            emitter: Arc::new(Mutex::new(None::<Emitter>)),
+            looping: Arc::new(AtomicBool::new(false)),
+            metadata: Arc::new(Mutex::new(InternalVideoMetadata::default())),
+            track_cache: Arc::new(Mutex::new(TrackCache::default())),
+            orientation: InternalVideoOrientationConfig::default(),
+            aspect: InternalAspectRatioMode::default(),
+        };
+        let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
+
+        let held = shell.lock();
+        let shell_for_call = shell.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = resume_playing(shell_for_call, &replay, &swap, &surface, true);
+        }));
+        drop(held);
+        assert!(
+            result.is_err(),
+            "resume_playing must reject a caller-held shell lock (guard), not deadlock"
+        );
     }
 }

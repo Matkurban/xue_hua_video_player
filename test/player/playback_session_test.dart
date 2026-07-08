@@ -294,5 +294,54 @@ void main() {
       expect(session.position.value, const Duration(seconds: 30));
       expect(session.state.value, PlayerState.buffering);
     });
+
+    // Regression: a macOS overlay-apply deadlock (overlay_sink locked on a
+    // background thread while osxvideosink marshalled set_window_handle to the
+    // main thread) froze the whole Dart isolate, so no PlayerEvent ever reached
+    // the session. Controls looked dead: `isPlaying` stayed false, so
+    // `togglePlayPause` only ever issued play, the progress bar never advanced,
+    // and the slider stayed disabled. This guards the end-to-end contract that
+    // once engine events flow, the controls become live and controllable.
+    group('controls stay live when engine playback events flow', () {
+      test('playing + duration + position events drive controls model',
+          () async {
+        await session.initialize();
+        await session.open(VideoSource.network('https://example.com/a.mp4'));
+
+        // Before any playback event the player is not "playing".
+        expect(session.isPlaying.value, isFalse);
+
+        port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
+        port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 10000));
+        port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 3000));
+        await Future<void>.delayed(Duration.zero);
+
+        // Controls now reflect a live, seekable player.
+        expect(session.isPlaying.value, isTrue);
+        expect(session.duration.value, const Duration(seconds: 10));
+        expect(session.position.value, const Duration(seconds: 3));
+
+        // A later position event advances the progress (not frozen at 0).
+        port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 4000));
+        await Future<void>.delayed(Duration.zero);
+        expect(session.position.value, const Duration(seconds: 4));
+      });
+
+      test('togglePlayPause issues pause once a playing event has arrived',
+          () async {
+        await session.initialize();
+        await session.open(VideoSource.network('https://example.com/a.mp4'));
+
+        port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
+        await Future<void>.delayed(Duration.zero);
+
+        await session.togglePlayPause();
+
+        // The bug made isPlaying stuck false, so toggle always called play;
+        // with events flowing it must pause instead ("按暂停视频不停" fix).
+        expect(port.pauseCallCount, 1);
+        expect(port.playCallCount, 0);
+      });
+    });
   });
 }

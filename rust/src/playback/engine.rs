@@ -228,7 +228,10 @@ impl PlaybackEngine {
             if auto_play {
                 if self.gst_context.surface.is_overlay_bound_on_gst() {
                     let ctx = self.gst_context.clone_for_async();
-                    self.run_on_gst(move |_shell| pipeline_play(&ctx))?;
+                    // pipeline_play -> resume_playing locks the shell internally,
+                    // so it must NOT run inside run_on_gst (which already holds the
+                    // shell lock) or it self-deadlocks (parking_lot is non-reentrant).
+                    spawn_on_gst_thread_and_wait(move || pipeline_play(&ctx))?;
                 } else if self.gst_context.surface.has_cached_handle() {
                     let (width, height) = self.gst_context.surface.cached_dimensions();
                     log::info!(
@@ -246,7 +249,8 @@ impl PlaybackEngine {
         {
             let ctx = self.gst_context.clone_for_async();
             if auto_play && self.gst_context.surface.overlay_ready_for_preroll() {
-                self.run_on_gst(move |_shell| pipeline_play(&ctx))?;
+                // resume_playing locks the shell internally — never via run_on_gst.
+                spawn_on_gst_thread_and_wait(move || pipeline_play(&ctx))?;
             } else if auto_play {
                 log::info!("gst: deferring autoPlay until overlay is bound");
             }
@@ -319,18 +323,19 @@ impl PlaybackEngine {
         }
 
         let ctx = self.gst_context.clone_for_async();
-        self.run_on_gst(move |shell| {
+        // pipeline_play -> resume_playing locks the shell internally, so it must
+        // run WITHOUT the shell lock held. Any rebind that needs the locked shell
+        // is done first in a scoped lock that is released before pipeline_play.
+        spawn_on_gst_thread_and_wait(move || {
             #[cfg(target_os = "android")]
             if !ctx.surface.is_overlay_bound_on_gst() {
-                ctx.surface.rebind_cached_overlay(shell)?;
+                let guard = ctx.shell.lock();
+                ctx.surface.rebind_cached_overlay(&guard)?;
             }
             #[cfg(not(any(target_os = "android", target_os = "macos")))]
-            ctx.surface.rebind_cached_overlay(shell)?;
-            #[cfg(target_os = "macos")]
             {
-                // Already bound — rebind is a no-op safety net on the main thread
-                // only when shell was rebuilt; avoid sync main from FRB wait path.
-                let _ = shell;
+                let guard = ctx.shell.lock();
+                ctx.surface.rebind_cached_overlay(&guard)?;
             }
             pipeline_play(&ctx)
         })
