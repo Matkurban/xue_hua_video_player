@@ -16,6 +16,7 @@ use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
 #[cfg(target_os = "ios")]
 use crate::playback::overlay::IosLayerBackend;
+use crate::playback::play_resume::{overlay_ready_for_play, resume_playing};
 use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
 use crate::playback::state::set_state_sync;
@@ -248,8 +249,9 @@ impl PlaybackEngine {
             let replay = self.play_replay_context();
             let swap = self.pipeline_swap_config().clone_for_async();
             let surface = self.surface.clone_for_switch();
+            let shell_arc = self.shell.clone();
             if auto_play && self.surface.overlay_ready_for_preroll() {
-                self.run_on_gst(move |shell| pipeline_play(shell, &replay, &swap, &surface))?;
+                self.run_on_gst(move |_shell| pipeline_play(&shell_arc, &replay, &swap, &surface))?;
             }
         }
         Ok(())
@@ -304,6 +306,7 @@ impl PlaybackEngine {
         let replay = self.play_replay_context();
         let swap = self.pipeline_swap_config().clone_for_async();
         let surface = self.surface.clone_for_switch();
+        let shell_arc = self.shell.clone();
         self.run_on_gst(move |shell| {
             #[cfg(target_os = "android")]
             if !surface.is_overlay_bound_on_gst() {
@@ -311,7 +314,7 @@ impl PlaybackEngine {
             }
             #[cfg(not(target_os = "android"))]
             surface.rebind_cached_overlay(shell)?;
-            pipeline_play(shell, &replay, &swap, &surface)
+            pipeline_play(&shell_arc, &replay, &swap, &surface)
         })
     }
 
@@ -605,27 +608,16 @@ fn pipeline_seek(
 }
 
 fn pipeline_play(
-    shell: &mut PipelineShell,
+    shell: &Arc<Mutex<PipelineShell>>,
     replay: &PlayReplayContext,
     swap: &PipelineSwapConfig,
     surface: &VideoSurface,
 ) -> Result<()> {
-    crate::playback::state::resume_or_replay_from_eos(
-        shell,
-        Some(replay),
-        Some(swap),
-        Some(surface),
-    )?;
-    #[cfg(target_os = "android")]
-    if let Some(handle) = *surface.stored_handle().lock() {
-        let (width, height) = surface.cached_dimensions();
-        crate::playback::overlay::refresh_mobile_overlay_on_gst(
-            shell,
-            handle,
-            width,
-            height,
-            "after Playing",
-        )?;
-    }
-    Ok(())
+    resume_playing(
+        shell.clone(),
+        replay,
+        swap,
+        surface,
+        overlay_ready_for_play(surface),
+    )
 }

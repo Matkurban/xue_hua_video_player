@@ -12,7 +12,7 @@ use crate::media::ResolvedSource;
 use crate::playback::bus::Emitter;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use crate::playback::overlay::assign_overlay_sink;
-use crate::playback::overlay::{platform_load_preroll_policy, LoadPrerollPolicy};
+use crate::playback::overlay::OverlaySession;
 use crate::playback::replay::PlayReplayContext;
 use crate::playback::shell::{
     install_asset_shell, install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell,
@@ -150,7 +150,9 @@ fn preroll_asset_shell(
     surface: &VideoSurface,
     defer_log: &str,
 ) -> Result<()> {
-    platform_load_preroll_policy().apply_load_preroll(shell, overlay_ready, surface, defer_log)
+    surface
+        .overlay_session()
+        .apply_load_preroll(shell, overlay_ready, surface, defer_log)
 }
 
 fn pipeline_set_uri(
@@ -164,7 +166,9 @@ fn pipeline_set_uri(
     replay.at_eos.store(false, Ordering::SeqCst);
     set_state_sync(pipeline, gst::State::Ready)?;
     pipeline.set_property("uri", uri);
-    platform_load_preroll_policy().apply_load_preroll(
+    surface
+        .overlay_session()
+        .apply_load_preroll(
         shell,
         overlay_ready,
         surface,

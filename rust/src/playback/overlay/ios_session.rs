@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering},
     Arc,
 };
 
@@ -8,14 +8,16 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::gst_runtime::gst_main_context;
+use crate::gst_runtime::{gst_main_context, spawn_on_gst_thread};
+use crate::playback::overlay::overlay_session::{load_preroll, OverlaySession};
 use crate::playback::overlay::preroll_executor::{
     run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
 };
 use crate::playback::overlay::preroll_gate::PipelineSnapshot;
 use crate::playback::overlay::IosLayerBackend;
-use crate::playback::replay::{replay_asset_shell, OverlayPlayIntent};
-use crate::playback::shell::{PipelineShell, SourceKind};
+use crate::playback::play_resume::resume_playing;
+use crate::playback::replay::OverlayPlayIntent;
+use crate::playback::shell::PipelineShell;
 use crate::playback::state::set_state_sync;
 use crate::playback::surface::VideoSurface;
 
@@ -44,6 +46,10 @@ pub struct IosOverlaySession {
     attach_scheduled: Arc<AtomicBool>,
     state_apply_in_flight: Arc<AtomicBool>,
     pub last_applied_handle: Arc<AtomicUsize>,
+    last_width: Arc<AtomicI32>,
+    last_height: Arc<AtomicI32>,
+    pub ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
+    overlay_sink: Option<Arc<Mutex<gst::Element>>>,
 }
 
 impl IosOverlaySession {
@@ -64,7 +70,35 @@ impl IosOverlaySession {
             attach_scheduled: Arc::new(AtomicBool::new(false)),
             state_apply_in_flight: Arc::new(AtomicBool::new(false)),
             last_applied_handle,
+            last_width: Arc::new(AtomicI32::new(0)),
+            last_height: Arc::new(AtomicI32::new(0)),
+            ios_layer_bus_slot: Arc::new(Mutex::new(None)),
+            overlay_sink: None,
         }
+    }
+
+    pub fn new_with_running(running: Arc<AtomicBool>) -> Self {
+        Self::new(
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicUsize::new(0)),
+            running,
+            Arc::new(AtomicU64::new(0)),
+        )
+    }
+
+    pub fn set_overlay_sink(&mut self, element: gst::Element) {
+        match &self.overlay_sink {
+            Some(slot) => *slot.lock() = element,
+            None => self.overlay_sink = Some(Arc::new(Mutex::new(element))),
+        }
+    }
+
+    pub fn overlay_sink_slot(&self) -> Option<&Arc<Mutex<gst::Element>>> {
+        self.overlay_sink.as_ref()
+    }
+
+    pub fn register_ios_layer_backend(&self, backend: IosLayerBackend) {
+        *self.ios_layer_bus_slot.lock() = Some(backend);
     }
 
     pub fn overlay_generation(&self) -> Arc<AtomicU64> {
@@ -121,6 +155,30 @@ impl IosOverlaySession {
         }
         self.overlay_bound.store(false, Ordering::SeqCst);
         self.last_applied_handle.store(0, Ordering::SeqCst);
+    }
+
+    fn cache_ios_overlay(
+        &self,
+        stored: &Arc<Mutex<Option<usize>>>,
+        handle: i64,
+        width: i32,
+        height: i32,
+    ) {
+        if handle == 0 {
+            self.reset_for_host_change();
+            *stored.lock() = None;
+            return;
+        }
+        let new_handle = handle as usize;
+        let host_changed = match *stored.lock() {
+            Some(h) if h != 0 => h != new_handle,
+            _ => false,
+        };
+        self.set_cached_dimensions(width, height);
+        if host_changed {
+            self.reset_for_host_change();
+        }
+        *stored.lock() = Some(new_handle);
     }
 
     /// Schedules idle attach retry (bus `READY→PAUSED` / `AsyncDone`).
@@ -436,6 +494,177 @@ impl IosOverlaySession {
             ios_layer_bus_slot,
         )
     }
+
+    fn apply_gstreamer_inner(
+        &self,
+        shell: Arc<Mutex<PipelineShell>>,
+        stored: Arc<Mutex<Option<usize>>>,
+        surface: VideoSurface,
+        width: i32,
+        height: i32,
+        play_intent: OverlayPlayIntent,
+    ) -> Result<()> {
+        if width <= 0 || height <= 0 {
+            return Ok(());
+        }
+        let (prev_w, prev_h) = self.cached_dimensions();
+        self.set_cached_dimensions(width, height);
+        let host_view = *stored.lock();
+        let Some(host_view) = host_view else {
+            return Ok(());
+        };
+
+        let last_applied = self.last_applied_handle.load(Ordering::SeqCst);
+        if last_applied != 0 && last_applied != host_view {
+            self.reset_for_host_change();
+        }
+
+        if self.is_bound() && self.last_applied_handle.load(Ordering::SeqCst) == host_view {
+            let dimensions_changed = prev_w != width || prev_h != height;
+            if dimensions_changed || play_intent.replay.desired_playing.load(Ordering::SeqCst) {
+                let session = self.clone();
+                let stored_clone = stored.clone();
+                let surface_for_work = surface.clone_for_switch();
+                let running = play_intent.replay.running.clone();
+                let work_generation = session.overlay_generation().load(Ordering::SeqCst);
+                let ios_intent = play_intent.clone_for_async();
+                let ios_slot = self.ios_layer_bus_slot.clone();
+                spawn_on_gst_thread(move || {
+                    if !running.load(Ordering::SeqCst)
+                        || work_generation != session.overlay_generation().load(Ordering::SeqCst)
+                    {
+                        return;
+                    }
+                    if dimensions_changed {
+                        let sink = {
+                            let guard = shell.lock();
+                            guard.video_sink.clone()
+                        };
+                        if let Ok(layer) = crate::video::ios_layer::read_sink_layer(&sink) {
+                            if !crate::platform_view_ios::attach_layer_on_main_thread_sync(
+                                host_view, layer,
+                            ) {
+                                crate::video::ios_layer::release_sink_layer(layer);
+                            }
+                        }
+                    }
+                    if !running.load(Ordering::SeqCst)
+                        || work_generation != session.overlay_generation().load(Ordering::SeqCst)
+                    {
+                        return;
+                    }
+                    session.drain_pending_play(session.idle_work(
+                        shell,
+                        stored_clone,
+                        surface_for_work,
+                        ios_intent,
+                        ios_slot,
+                    ));
+                });
+            }
+            return Ok(());
+        }
+
+        let session = self.clone();
+        let surface_for_attach = surface.clone_for_switch();
+        let running = play_intent.replay.running.clone();
+        let work_generation = session.overlay_generation().load(Ordering::SeqCst);
+        let ios_intent = play_intent.clone_for_async();
+        let ios_slot = self.ios_layer_bus_slot.clone();
+        spawn_on_gst_thread(move || {
+            if !running.load(Ordering::SeqCst)
+                || work_generation != session.overlay_generation().load(Ordering::SeqCst)
+            {
+                return;
+            }
+            let _ = session.request_attach(
+                shell,
+                stored,
+                surface_for_attach,
+                ios_intent,
+                "Swift apply",
+                work_generation,
+                ios_slot,
+            );
+        });
+        Ok(())
+    }
+}
+
+impl OverlaySession for IosOverlaySession {
+    fn gate_ready_for_load(&self, _surface_overlay_ready: bool) -> bool {
+        false
+    }
+
+    fn apply_load_preroll(
+        &self,
+        _shell: &PipelineShell,
+        surface_overlay_ready: bool,
+        _surface: &VideoSurface,
+        defer_log: &str,
+    ) -> Result<()> {
+        load_preroll::ios_apply_load_preroll(surface_overlay_ready, defer_log)
+    }
+
+    fn is_bound(&self) -> bool {
+        self.overlay_bound.load(Ordering::SeqCst)
+    }
+
+    fn overlay_ready_for_preroll(&self, has_cached_handle: bool) -> bool {
+        has_cached_handle
+    }
+
+    fn mark_shell_rebuilt(&self) {
+        self.bump_overlay_generation();
+        self.reset_for_shell_rebuild();
+    }
+
+    fn set_cached_dimensions(&self, width: i32, height: i32) {
+        if width > 0 {
+            self.last_width.store(width, Ordering::SeqCst);
+        }
+        if height > 0 {
+            self.last_height.store(height, Ordering::SeqCst);
+        }
+    }
+
+    fn cached_dimensions(&self) -> (i32, i32) {
+        (
+            self.last_width.load(Ordering::SeqCst),
+            self.last_height.load(Ordering::SeqCst),
+        )
+    }
+
+    fn rebind_cached_overlay(
+        &self,
+        _shell: &PipelineShell,
+        _stored: &Mutex<Option<usize>>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn cache_notify(
+        &self,
+        stored: &Arc<Mutex<Option<usize>>>,
+        handle: i64,
+        width: i32,
+        height: i32,
+    ) -> Result<()> {
+        self.cache_ios_overlay(stored, handle, width, height);
+        Ok(())
+    }
+
+    fn apply_gstreamer(
+        &self,
+        shell: Arc<Mutex<PipelineShell>>,
+        stored: Arc<Mutex<Option<usize>>>,
+        surface: VideoSurface,
+        width: i32,
+        height: i32,
+        play_intent: OverlayPlayIntent,
+    ) -> Result<()> {
+        self.apply_gstreamer_inner(shell, stored, surface, width, height, play_intent)
+    }
 }
 
 struct IosBindPrerollEffects {
@@ -469,12 +698,12 @@ impl PrerollEffects for IosBindPrerollEffects {
         } else {
             log::info!("gst: overlay bound — resuming play (desired_playing=true)");
         }
-        resume_pipeline_playing(
+        resume_playing(
             self.shell_arc.clone(),
-            &self.play_intent,
-            &shell.pipeline,
-            shell.kind,
+            &self.play_intent.replay,
+            &self.play_intent.swap,
             &self.surface,
+            true,
         )?;
         Ok(PrerollResumeOutcome::Finished)
     }
@@ -496,40 +725,4 @@ fn idle_work_from_parts(
         play_intent,
         ios_layer_bus_slot,
     }
-}
-
-/// Resumes PLAYING without holding `shell` across `set_state_sync` (bus may re-enter attach).
-fn resume_pipeline_playing(
-    shell: Arc<Mutex<PipelineShell>>,
-    play_intent: &OverlayPlayIntent,
-    pipeline: &gst::Pipeline,
-    kind: SourceKind,
-    surface: &VideoSurface,
-) -> Result<()> {
-    if play_intent.replay.at_eos.load(Ordering::SeqCst) {
-        play_intent
-            .replay
-            .at_eos
-            .store(false, Ordering::SeqCst);
-        match kind {
-            SourceKind::Uri => {
-                pipeline
-                    .seek_simple(
-                        gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                        gst::ClockTime::ZERO,
-                    )
-                    .map_err(|e| anyhow::anyhow!("seek to start before play: {e}"))?;
-            }
-            SourceKind::Asset => {
-                let mut guard = shell.lock();
-                return replay_asset_shell(
-                    &mut guard,
-                    &play_intent.replay,
-                    &play_intent.swap,
-                    surface,
-                );
-            }
-        }
-    }
-    set_state_sync(pipeline, gst::State::Playing)
 }

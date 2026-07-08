@@ -10,14 +10,16 @@ mod android_session;
 #[cfg(target_os = "android")]
 pub use android::{cache_android_native_window, refresh_mobile_overlay_on_gst};
 #[cfg(target_os = "android")]
-pub use android_session::{
-    default_scheduler, AndroidOverlaySession, AndroidOverlayState,
-};
+pub use android_session::{default_scheduler, AndroidOverlaySession};
 
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
+mod macos_session;
+#[cfg(target_os = "macos")]
 pub use macos::MacosOverlayBackend;
+#[cfg(target_os = "macos")]
+pub use macos_session::MacosOverlaySession;
 
 #[cfg(all(
     not(target_os = "android"),
@@ -30,7 +32,19 @@ mod desktop;
     not(target_os = "macos"),
     not(target_os = "ios")
 ))]
+mod desktop_session;
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "macos"),
+    not(target_os = "ios")
+))]
 pub use desktop::{apply_overlay_handle, DesktopOverlayBackend};
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "macos"),
+    not(target_os = "ios")
+))]
+pub use desktop_session::DesktopOverlaySession;
 
 #[cfg(target_os = "ios")]
 mod ios;
@@ -45,12 +59,12 @@ mod sink_slot;
 pub use sink_slot::assign_overlay_sink;
 
 mod gst_scheduler;
-mod load_preroll;
+mod overlay_session;
 mod preroll_executor;
 mod preroll_gate;
 
 pub use gst_scheduler::{GstTaskScheduler, SpawnOnGstThreadScheduler};
-pub use load_preroll::{LoadPrerollPolicy, platform_load_preroll_policy};
+pub use overlay_session::OverlaySession;
 pub use preroll_executor::{
     run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
 };

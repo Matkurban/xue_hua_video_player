@@ -3,7 +3,8 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-use crate::playback::overlay::VideoOverlayBackend;
+use crate::playback::overlay::overlay_session::fake::FakeOverlaySession;
+use crate::playback::overlay::{OverlaySession, VideoOverlayBackend};
 use crate::playback::surface::VideoSurface;
 
 struct MockOverlayState {
@@ -39,9 +40,20 @@ fn mock_backend_preroll_requires_bind() {
 }
 
 #[test]
-fn video_surface_delegates_to_overlay_trait() {
+fn video_surface_delegates_overlay_ready_to_session() {
     let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
     assert!(!surface.overlay_ready_for_preroll());
     surface.cache_handle(99);
     assert!(surface.overlay_ready_for_preroll());
+}
+
+#[test]
+fn fake_overlay_session_gate_and_preroll() {
+    use std::sync::atomic::Ordering;
+
+    let session = FakeOverlaySession::new(true, true);
+    assert!(session.gate_ready_for_load(true));
+    assert!(!session.overlay_ready_for_preroll(true));
+    session.bound.store(true, Ordering::SeqCst);
+    assert!(session.overlay_ready_for_preroll(true));
 }

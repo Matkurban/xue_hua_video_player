@@ -5,6 +5,7 @@ pub mod engine;
 mod overlay;
 mod replay;
 pub(crate) mod shell;
+mod play_resume;
 mod sink;
 pub(crate) mod state;
 mod surface;
