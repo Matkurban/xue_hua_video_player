@@ -10,8 +10,8 @@ use parking_lot::Mutex;
 use crate::gst_runtime::spawn_on_gst_thread;
 #[cfg(target_os = "android")]
 use crate::playback::overlay::{
-    android_session::{default_scheduler, AndroidOverlayState},
-    cache_android_native_window, refresh_mobile_overlay_on_gst,
+    cache_android_native_window, default_scheduler, refresh_mobile_overlay_on_gst,
+    AndroidOverlayState,
 };
 #[cfg(target_os = "ios")]
 use crate::playback::overlay::ios_session::IosOverlaySession;
@@ -33,9 +33,6 @@ use crate::video::ios_layer::IosLayerAttachOutcome;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use crate::playback::overlay::assign_overlay_sink;
-
-#[cfg(target_os = "android")]
-pub use crate::playback::overlay::refresh_mobile_overlay_on_gst;
 
 /// Nested iOS overlay state on [`VideoSurface`].
 #[cfg(target_os = "ios")]
@@ -616,11 +613,7 @@ impl VideoSurface {
         Self {
             stored: self.stored.clone(),
             #[cfg(target_os = "android")]
-            android: AndroidOverlayState {
-                session: self.android.session.clone(),
-                last_width: self.android.last_width.clone(),
-                last_height: self.android.last_height.clone(),
-            },
+            android: self.android.clone_for_switch(),
             #[cfg(target_os = "ios")]
             ios: IosOverlayState {
                 session: self.ios.session.clone(),

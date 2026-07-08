@@ -619,7 +619,7 @@ fn pipeline_play(
     #[cfg(target_os = "android")]
     if let Some(handle) = *surface.stored_handle().lock() {
         let (width, height) = surface.cached_dimensions();
-        crate::playback::surface::refresh_mobile_overlay_on_gst(
+        crate::playback::overlay::refresh_mobile_overlay_on_gst(
             shell,
             handle,
             width,

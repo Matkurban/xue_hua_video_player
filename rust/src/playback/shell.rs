@@ -136,7 +136,10 @@ pub fn wire_overlay_sync(
         Arc<Mutex<gst::Element>>,
     >,
 ) {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     attach_overlay_bus_sync_handler(&shell.pipeline, overlay_handle, overlay_sink);
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    attach_overlay_bus_sync_handler(&shell.pipeline, overlay_handle);
 }
 
 #[cfg(test)]

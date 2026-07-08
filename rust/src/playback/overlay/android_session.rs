@@ -69,6 +69,14 @@ impl AndroidOverlayState {
         self.session.bump_overlay_generation();
         self.session.set_bound(false);
     }
+
+    pub fn clone_for_switch(&self) -> Self {
+        Self {
+            session: self.session.clone(),
+            last_width: self.last_width.clone(),
+            last_height: self.last_height.clone(),
+        }
+    }
 }
 
 /// Single seam for Android overlay bind phase (mirrors [`super::ios_session::IosOverlaySession`]).

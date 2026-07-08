@@ -15,7 +15,7 @@ IOS_FRAMEWORKS="GStreamer UIKit QuartzCore CoreGraphics IOSurface Metal OpenGLES
 
 # CARGO_ENCODED_RUSTFLAGS uses ASCII unit separator (0x1f) between rustc args so
 # framework names are not split on spaces (RUSTFLAGS would treat "GStreamer UIKit" as two args).
-_sep=''
+_sep=$(printf '\037')
 encoded=""
 
 append_flag() {
