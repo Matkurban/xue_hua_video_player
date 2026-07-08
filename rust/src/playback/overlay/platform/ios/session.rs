@@ -460,13 +460,11 @@ impl IosOverlaySession {
 
         let overlay_ready = self.is_bound();
 
-        let mut guard = work.shell.lock();
         let mut effects = IosBindPrerollEffects {
-            shell_arc: work.shell.clone(),
             play_intent: work.play_intent.clone_for_async(),
             surface: work.surface.clone_for_switch(),
         };
-        run_bind_preroll_loop(&mut guard, want_play, overlay_ready, &mut effects)?;
+        run_bind_preroll_loop(&work.shell, want_play, overlay_ready, &mut effects)?;
 
         Ok(())
     }
@@ -667,7 +665,6 @@ impl OverlaySession for IosOverlaySession {
 }
 
 struct IosBindPrerollEffects {
-    shell_arc: Arc<Mutex<PipelineShell>>,
     play_intent: OverlayPlayIntent,
     surface: VideoSurface,
 }
@@ -675,16 +672,16 @@ struct IosBindPrerollEffects {
 impl PrerollEffects for IosBindPrerollEffects {
     fn pause_preroll(
         &mut self,
-        shell: &mut PipelineShell,
+        shell: &Arc<Mutex<PipelineShell>>,
         _snapshot: PipelineSnapshot,
     ) -> Result<()> {
         log::info!("gst: overlay bound — starting Paused preroll");
-        shell.set_state_sync(gst::State::Paused)
+        shell.lock().set_state_sync(gst::State::Paused)
     }
 
     fn resume_playing(
         &mut self,
-        shell: &mut PipelineShell,
+        shell: &Arc<Mutex<PipelineShell>>,
         snapshot: PipelineSnapshot,
     ) -> Result<PrerollResumeOutcome> {
         if snapshot.pending != gst::State::VoidPending {
@@ -698,7 +695,7 @@ impl PrerollEffects for IosBindPrerollEffects {
             log::info!("gst: overlay bound — resuming play (desired_playing=true)");
         }
         resume_playing(
-            self.shell_arc.clone(),
+            shell.clone(),
             &self.play_intent.replay,
             &self.play_intent.swap,
             &self.surface,

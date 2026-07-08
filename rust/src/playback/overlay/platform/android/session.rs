@@ -167,21 +167,22 @@ impl AndroidOverlaySession {
         surface: &VideoSurface,
         play_intent: &OverlayPlayIntent,
     ) -> Result<()> {
-        let mut guard = shell.lock();
-        refresh_mobile_overlay_on_gst(&guard, handle, width, height, "surface bind")?;
-        self.set_bound(true);
-        let snap = guard.snapshot();
-        crate::diag::logcat_info(&format!(
-            "gst: overlay applied on Gst thread — pipeline {:?} pending {:?}",
-            snap.current, snap.pending
-        ));
+        {
+            let guard = shell.lock();
+            refresh_mobile_overlay_on_gst(&guard, handle, width, height, "surface bind")?;
+            self.set_bound(true);
+            let snap = guard.snapshot();
+            crate::diag::logcat_info(&format!(
+                "gst: overlay applied on Gst thread — pipeline {:?} pending {:?}",
+                snap.current, snap.pending
+            ));
+        }
         let want_play = play_intent.replay.desired_playing.load(Ordering::SeqCst);
         let mut effects = AndroidBindPrerollEffects {
-            shell: Arc::clone(&shell),
             play_intent: play_intent.clone_for_async(),
             surface: surface.clone_for_switch(),
         };
-        run_bind_preroll_loop(&mut guard, want_play, true, &mut effects)
+        run_bind_preroll_loop(&shell, want_play, true, &mut effects)
     }
 }
 
@@ -290,7 +291,6 @@ impl OverlaySession for AndroidOverlaySession {
 }
 
 struct AndroidBindPrerollEffects {
-    shell: Arc<Mutex<PipelineShell>>,
     play_intent: OverlayPlayIntent,
     surface: VideoSurface,
 }
@@ -298,11 +298,11 @@ struct AndroidBindPrerollEffects {
 impl PrerollEffects for AndroidBindPrerollEffects {
     fn pause_preroll(
         &mut self,
-        shell: &mut PipelineShell,
+        shell: &Arc<Mutex<PipelineShell>>,
         _snapshot: PipelineSnapshot,
     ) -> Result<()> {
         android_pause_preroll_with_refresh(
-            shell,
+            &shell.lock(),
             &self.surface,
             Some("gst: overlay bound — starting Paused preroll"),
         )
@@ -310,7 +310,7 @@ impl PrerollEffects for AndroidBindPrerollEffects {
 
     fn resume_playing(
         &mut self,
-        _shell: &mut PipelineShell,
+        shell: &Arc<Mutex<PipelineShell>>,
         snapshot: PipelineSnapshot,
     ) -> Result<PrerollResumeOutcome> {
         if snapshot.pending != gst::State::VoidPending {
@@ -323,7 +323,7 @@ impl PrerollEffects for AndroidBindPrerollEffects {
             crate::diag::logcat_info("gst: overlay bound — resuming play (desired_playing=true)");
         }
         resume_playing(
-            self.shell.clone(),
+            shell.clone(),
             &self.play_intent.replay,
             &self.play_intent.swap,
             &self.surface,
