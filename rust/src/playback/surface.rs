@@ -208,17 +208,31 @@ impl VideoSurface {
     }
 
     pub fn mark_shell_rebuilt(&self) {
+        #[cfg(target_os = "ios")]
+        self.detach_ios_sink_layers();
         self.session.mark_shell_rebuilt();
+    }
+
+    /// Removes the previous sink's CALayer from the host view on the main thread
+    /// before the shell (and its sink) is torn down, so a stale display layer
+    /// with an in-flight data-request block cannot outlive the freed sink.
+    #[cfg(target_os = "ios")]
+    fn detach_ios_sink_layers(&self) {
+        if let Some(host) = *self.stored.lock() {
+            crate::platform::ios::detach_sink_layers_on_main_thread(host);
+        }
     }
 
     #[cfg(target_os = "ios")]
     pub fn mark_media_changed(&self) {
+        self.detach_ios_sink_layers();
         self.session.bump_overlay_generation();
         self.session.reset_for_media_change();
     }
 
     #[cfg(target_os = "ios")]
     pub fn cancel_ios_overlay_work(&self) {
+        self.detach_ios_sink_layers();
         self.session.bump_overlay_generation();
         self.session.reset_for_shell_rebuild();
     }

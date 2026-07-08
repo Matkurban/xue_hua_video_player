@@ -28,6 +28,36 @@ extern "C" {
         complete_ctx: *mut std::ffi::c_void,
     );
     fn xhvp_ios_attach_layer_to_host_sync(host_view: usize, layer: usize) -> bool;
+    fn xhvp_ios_release_layer_main(layer: usize);
+    fn xhvp_ios_detach_sink_layers(host_view: usize);
+    fn xhvp_ios_layer_status(
+        layer: usize,
+        out_status: *mut i32,
+        out_error_code: *mut i32,
+    );
+}
+
+/// Releases a +1 retained sink layer on the main thread (dealloc must be main).
+pub fn release_layer_on_main_thread(layer: usize) {
+    if layer != 0 {
+        unsafe { xhvp_ios_release_layer_main(layer) }
+    }
+}
+
+/// Removes the sink CALayer(s) from the host view on the main thread.
+pub fn detach_sink_layers_on_main_thread(host_view: usize) {
+    if host_view != 0 {
+        unsafe { xhvp_ios_detach_sink_layers(host_view) }
+    }
+}
+
+/// Reads the `AVSampleBufferDisplayLayer` status (0 unknown, 1 rendering, 2
+/// failed, -1 not a display layer) and error code for on-device diagnostics.
+pub fn layer_status(layer: usize) -> (i32, i32) {
+    let mut status: i32 = -1;
+    let mut error_code: i32 = 0;
+    unsafe { xhvp_ios_layer_status(layer, &mut status, &mut error_code) }
+    (status, error_code)
 }
 
 thread_local! {

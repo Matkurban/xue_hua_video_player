@@ -1,3 +1,4 @@
+#import <AVFoundation/AVFoundation.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <Foundation/Foundation.h>
 #import <dispatch/dispatch.h>
@@ -93,6 +94,79 @@ bool xhvp_ios_host_view_has_bounds(uintptr_t host_view) {
     dispatch_sync(dispatch_get_main_queue(), check);
   }
   return result;
+}
+
+/// Releases a +1 CFRetain (from Rust read_sink_layer) on the main thread.
+/// AVSampleBufferDisplayLayer must only be deallocated on the main thread.
+void xhvp_ios_release_layer_main(uintptr_t layer) {
+  if (layer == 0) {
+    return;
+  }
+  void (^release)(void) = ^{
+    CFRelease((CFTypeRef)(void *)layer);
+  };
+  if ([NSThread isMainThread]) {
+    release();
+  } else {
+    dispatch_async(dispatch_get_main_queue(), release);
+  }
+}
+
+/// Removes the GStreamer sink CALayer(s) from the host view on the main thread.
+/// Called on shell teardown / rebuild so a stale display layer (whose owning
+/// sink is being freed) cannot outlive the sink in the render tree.
+void xhvp_ios_detach_sink_layers(uintptr_t host_view) {
+  if (host_view == 0) {
+    return;
+  }
+  void (^detach)(void) = ^{
+    UIView *host = (__bridge UIView *)(void *)host_view;
+    NSArray<CALayer *> *sublayers = [host.layer.sublayers copy];
+    for (CALayer *sublayer in sublayers) {
+      [sublayer removeFromSuperlayer];
+    }
+  };
+  if ([NSThread isMainThread]) {
+    detach();
+  } else {
+    dispatch_async(dispatch_get_main_queue(), detach);
+  }
+}
+
+/// Reads the AVSampleBufferDisplayLayer status/error on the main thread (diag).
+/// `out_status`: 0 unknown, 1 rendering, 2 failed, -1 not a display layer.
+void xhvp_ios_layer_status(uintptr_t layer, int32_t *out_status,
+                           int32_t *out_error_code) {
+  int32_t status = -1;
+  int32_t error_code = 0;
+  if (layer != 0) {
+    CALayer *raw = (__bridge CALayer *)(void *)layer;
+    if ([raw isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
+      AVSampleBufferDisplayLayer *display = (AVSampleBufferDisplayLayer *)raw;
+      __block AVQueuedSampleBufferRenderingStatus s;
+      __block NSError *err;
+      void (^read)(void) = ^{
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        s = display.status;
+        err = display.error;
+#pragma clang diagnostic pop
+      };
+      if ([NSThread isMainThread]) {
+        read();
+      } else {
+        dispatch_sync(dispatch_get_main_queue(), read);
+      }
+      status = (int32_t)s;
+      error_code = err != nil ? (int32_t)err.code : 0;
+    }
+  }
+  if (out_status != NULL) {
+    *out_status = status;
+  }
+  if (out_error_code != NULL) {
+    *out_error_code = error_code;
+  }
 }
 
 void xhvp_ios_attach_layer_to_host_async(uintptr_t host_view, uintptr_t layer,

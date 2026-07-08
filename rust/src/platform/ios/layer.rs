@@ -13,7 +13,6 @@ use crate::playback::shell::PipelineShell;
 #[cfg(target_os = "ios")]
 extern "C" {
     fn CFRetain(cf: *const std::ffi::c_void) -> *const std::ffi::c_void;
-    fn CFRelease(cf: *const std::ffi::c_void);
 }
 
 /// Outcome of attempting to schedule an iOS CALayer attach.
@@ -28,13 +27,13 @@ pub enum IosLayerAttachOutcome {
 }
 
 /// Releases +1 retain from [`read_sink_layer`] when attach is skipped or deferred.
+///
+/// The `CFRelease` is marshaled to the main thread: releasing the last reference
+/// deallocates the `AVSampleBufferDisplayLayer`, which must happen on the main
+/// thread (Apple requires all display-layer operations there).
 #[cfg(target_os = "ios")]
 pub fn release_sink_layer(layer: usize) {
-    if layer != 0 {
-        unsafe {
-            CFRelease(layer as *const std::ffi::c_void);
-        }
-    }
+    crate::platform::ios::release_layer_on_main_thread(layer);
 }
 
 #[cfg(not(target_os = "ios"))]

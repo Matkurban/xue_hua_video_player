@@ -127,16 +127,41 @@ fn link_video_branch(
     video_sink: &gst::Element,
 ) -> Result<()> {
     let queue = gst::ElementFactory::make("queue").build()?;
-    let convert = gst::ElementFactory::make("videoconvert").build()?;
-    pipeline.add_many([&queue, &convert])?;
-    gst::Element::link_many([&queue, &convert, video_sink])?;
+    pipeline.add(&queue)?;
+
+    // iOS: link `queue -> avsamplebufferlayersink` directly so VideoToolbox
+    // (`vtdec`) CVPixelBuffers stay IOSurface-backed. A `videoconvert` here would
+    // download frames to system memory, which `AVSampleBufferDisplayLayer` refuses
+    // to render on real devices (black frame). vtdec (NV12) and software decoders
+    // (I420) both emit formats the sink accepts. If the direct link fails, fall
+    // back to inserting `videoconvert`.
+    #[cfg(target_os = "ios")]
+    let convert = if gst::Element::link_many([&queue, video_sink]).is_ok() {
+        None
+    } else {
+        let convert = gst::ElementFactory::make("videoconvert").build()?;
+        pipeline.add(&convert)?;
+        gst::Element::link_many([&queue, &convert, video_sink])?;
+        Some(convert)
+    };
+
+    #[cfg(not(target_os = "ios"))]
+    let convert = {
+        let convert = gst::ElementFactory::make("videoconvert").build()?;
+        pipeline.add(&convert)?;
+        gst::Element::link_many([&queue, &convert, video_sink])?;
+        Some(convert)
+    };
+
     let sink_pad = queue
         .static_pad("sink")
         .ok_or_else(|| anyhow!("queue has no sink pad"))?;
     src_pad.link(&sink_pad)?;
-    for el in [&queue, &convert, video_sink] {
-        el.sync_state_with_parent()?;
+    queue.sync_state_with_parent()?;
+    if let Some(convert) = convert.as_ref() {
+        convert.sync_state_with_parent()?;
     }
+    video_sink.sync_state_with_parent()?;
     Ok(())
 }
 

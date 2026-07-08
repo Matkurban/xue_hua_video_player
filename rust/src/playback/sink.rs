@@ -104,6 +104,13 @@ pub fn attach_video_probe(
                     let mut ls = last_size.lock();
                     if *ls != (width, height) {
                         let first = ls.0 == 0 && ls.1 == 0;
+                        if first {
+                            // Diagnostic: negotiated sink caps reveal the pixel
+                            // format and any memory feature (e.g. system memory vs
+                            // IOSurface/CVPixelBuffer), which decides whether iOS
+                            // `avsamplebufferlayersink` can render on device.
+                            log::info!("gst: video sink negotiated caps: {}", caps.caps());
+                        }
                         *ls = (width, height);
                         if let Some(cb) = emitter.lock().as_ref() {
                             use crate::player_events::PlayerEvent;

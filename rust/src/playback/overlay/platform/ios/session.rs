@@ -466,6 +466,8 @@ impl IosOverlaySession {
         };
         run_bind_preroll_loop(&work.shell, want_play, overlay_ready, &mut effects)?;
 
+        log_ios_layer_status(&work.shell, "after resume");
+
         Ok(())
     }
 
@@ -702,6 +704,23 @@ impl PrerollEffects for IosBindPrerollEffects {
             true,
         )?;
         Ok(PrerollResumeOutcome::Finished)
+    }
+}
+
+/// Diagnostic: logs the sink `AVSampleBufferDisplayLayer` status/error so device
+/// runs reveal whether it is Rendering (1) or Failed (2, e.g. non-IOSurface
+/// buffers). The read layer is released on the main thread.
+fn log_ios_layer_status(shell: &Arc<Mutex<PipelineShell>>, context: &str) {
+    let sink = {
+        let guard = shell.lock();
+        guard.clone_video_sink()
+    };
+    if let Ok(layer) = crate::platform::ios::layer::read_sink_layer(&sink) {
+        let (status, error_code) = crate::platform::ios::layer_status(layer);
+        log::info!(
+            "gst: ios display layer status={status} error={error_code} ({context})"
+        );
+        crate::platform::ios::layer::release_sink_layer(layer);
     }
 }
 

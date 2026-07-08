@@ -31,6 +31,15 @@ pub fn setup_sandbox_writable_env() {
 #[cfg(target_os = "ios")]
 pub fn setup_ios_env() {
     setup_sandbox_writable_env();
+
+    // Prefer VideoToolbox hardware decode so decoded frames are IOSurface-backed
+    // CVPixelBuffers. `avsamplebufferlayersink`'s `AVSampleBufferDisplayLayer`
+    // only renders IOSurface-backed buffers on real devices (software `avdec_*`
+    // output is plain system memory -> black frame on device). Mirrors macOS.
+    std::env::set_var(
+        "GST_PLUGIN_FEATURE_RANK",
+        "vtdec:PRIMARY,vtdec_hw:PRIMARY,vtdemux:PRIMARY,avdec_h264:SECONDARY,avdec_h265:SECONDARY",
+    );
 }
 
 /// Locates GStreamer libraries inside the app bundle, or the system framework.
