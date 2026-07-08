@@ -34,7 +34,7 @@ pub fn ensure_gst_runtime() {
 
 fn gst_runtime_thread_main(ready_tx: mpsc::SyncSender<()>) {
     #[cfg(target_os = "android")]
-    let _ = crate::platform_view_android::attach_java_vm();
+    let _ = crate::platform::android::attach_java_vm();
 
     if let Err(e) = gstreamer::init() {
         crate::diag::logcat_error(&format!(

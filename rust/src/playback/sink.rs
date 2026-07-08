@@ -7,7 +7,7 @@ use gstreamer_video as gst_video;
 use parking_lot::Mutex;
 
 use crate::playback::bus::Emitter;
-use crate::video::{expose_overlay, info::InternalVideoMetadata};
+use crate::playback::gst::{expose_overlay, InternalVideoMetadata};
 
 /// Configures an HTTP(S) source element for permissive TLS and a mobile user-agent.
 pub fn configure_http_source(element: &gst::Element) {

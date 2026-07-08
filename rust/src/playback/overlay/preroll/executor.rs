@@ -2,9 +2,7 @@
 
 use anyhow::Result;
 
-use crate::playback::overlay::preroll_gate::{
-    decide_preroll_action, PipelineSnapshot, PrerollAction,
-};
+use super::gate::{decide_preroll_action, PipelineSnapshot, PrerollAction};
 use crate::playback::shell::PipelineShell;
 
 const MAX_BIND_PREROLL_STEPS: usize = 4;

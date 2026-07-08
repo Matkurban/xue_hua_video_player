@@ -25,7 +25,7 @@ use jni::objects::{JClass, JObject};
 use jni::{jni_mangle, Env, EnvUnowned};
 
 #[cfg(target_os = "android")]
-use crate::platform_view_android::{native_window_handle_from_surface, store_java_vm};
+use crate::platform::android::{native_window_handle_from_surface, store_java_vm};
 
 /// Caches the process JavaVM when the native library loads (before Platform View surface).
 #[cfg(target_os = "android")]
@@ -273,7 +273,7 @@ pub extern "system" fn native_bind_asset_helper_class<'caller>(
     class: JClass<'caller>,
 ) {
     env.with_env(|env| {
-        crate::platform_view_android::bind_flutter_asset_helper_class(env, class);
+        crate::platform::android::bind_flutter_asset_helper_class(env, class);
         Ok::<(), jni::errors::Error>(())
     })
     .resolve::<LogErrorAndDefault>();

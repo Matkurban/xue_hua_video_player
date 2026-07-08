@@ -78,8 +78,8 @@ impl Default for VideoMetadata {
     }
 }
 
-impl From<crate::video::info::InternalVideoMetadata> for VideoMetadata {
-    fn from(m: crate::video::info::InternalVideoMetadata) -> Self {
+impl From<crate::playback::gst::InternalVideoMetadata> for VideoMetadata {
+    fn from(m: crate::playback::gst::InternalVideoMetadata) -> Self {
         Self {
             width: m.width,
             height: m.height,
@@ -122,7 +122,7 @@ pub struct VideoOrientationConfig {
     pub rotate_degrees: i32,
 }
 
-impl From<VideoOrientationConfig> for crate::video::orientation::InternalVideoOrientationConfig {
+impl From<VideoOrientationConfig> for crate::playback::gst::InternalVideoOrientationConfig {
     fn from(c: VideoOrientationConfig) -> Self {
         Self {
             flip_horizontal: c.flip_horizontal,
@@ -132,8 +132,8 @@ impl From<VideoOrientationConfig> for crate::video::orientation::InternalVideoOr
     }
 }
 
-impl From<crate::video::orientation::InternalVideoOrientationConfig> for VideoOrientationConfig {
-    fn from(c: crate::video::orientation::InternalVideoOrientationConfig) -> Self {
+impl From<crate::playback::gst::InternalVideoOrientationConfig> for VideoOrientationConfig {
+    fn from(c: crate::playback::gst::InternalVideoOrientationConfig) -> Self {
         Self {
             flip_horizontal: c.flip_horizontal,
             flip_vertical: c.flip_vertical,
@@ -150,7 +150,7 @@ pub enum AspectRatioMode {
     Stretch,
 }
 
-impl From<AspectRatioMode> for crate::video::orientation::InternalAspectRatioMode {
+impl From<AspectRatioMode> for crate::playback::gst::InternalAspectRatioMode {
     fn from(m: AspectRatioMode) -> Self {
         match m {
             AspectRatioMode::Fit => Self::Fit,
@@ -245,7 +245,7 @@ impl PlayerEvent {
         }
     }
 
-    pub(crate) fn metadata(meta: crate::video::info::InternalVideoMetadata) -> Self {
+    pub(crate) fn metadata(meta: crate::playback::gst::InternalVideoMetadata) -> Self {
         Self {
             kind: PlayerEventKind::MetadataChanged,
             width: meta.width,

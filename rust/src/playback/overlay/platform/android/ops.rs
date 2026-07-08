@@ -5,19 +5,19 @@ use gstreamer as gst;
 use parking_lot::Mutex;
 
 use crate::playback::shell::PipelineShell;
-use crate::video::expose_overlay;
+use crate::playback::gst::expose_overlay;
 
 pub fn cache_android_native_window(stored: &Mutex<Option<usize>>, handle: usize) -> Result<()> {
     if handle == 0 {
         if let Some(old) = stored.lock().take() {
-            crate::platform_view_android::release_native_window(old);
+            crate::platform::android::release_native_window(old);
         }
         return Ok(());
     }
     let mut guard = stored.lock();
     if let Some(old) = *guard {
         if old != handle {
-            crate::platform_view_android::release_native_window(old);
+            crate::platform::android::release_native_window(old);
         }
     }
     *guard = Some(handle);

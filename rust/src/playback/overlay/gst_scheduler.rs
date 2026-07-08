@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-/// Schedules work on the Gst runtime thread (prod: [`crate::gst_runtime::spawn_on_gst_thread`]).
+/// Schedules work on the Gst runtime thread (prod: [`crate::gst::spawn_on_gst_thread`]).
 pub trait GstTaskScheduler: Send + Sync {
     fn spawn(&self, task: Box<dyn FnOnce() + Send + 'static>);
 }
@@ -14,7 +14,7 @@ pub struct SpawnOnGstThreadScheduler;
 
 impl GstTaskScheduler for SpawnOnGstThreadScheduler {
     fn spawn(&self, task: Box<dyn FnOnce() + Send + 'static>) {
-        crate::gst_runtime::spawn_on_gst_thread(task);
+        crate::gst::spawn_on_gst_thread(task);
     }
 }
 

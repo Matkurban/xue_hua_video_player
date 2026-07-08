@@ -50,7 +50,7 @@ fn try_optional_gio_module_load(symbol: &str) -> bool {
 
 #[cfg(target_os = "macos")]
 pub fn register_gio_tls_backend() {
-    crate::macos_gio_tls::register_gio_tls_backend(
+    super::tls_macos::register_gio_tls_backend(
         super::env::bundled_gstreamer_lib_dir().as_deref(),
     );
 }

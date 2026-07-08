@@ -8,19 +8,18 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::gst_runtime::{gst_main_context, spawn_on_gst_thread};
+use crate::gst::{gst_main_context, spawn_on_gst_thread};
 use crate::playback::overlay::overlay_session::{load_preroll, OverlaySession};
-use crate::playback::overlay::preroll_executor::{
-    run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
+use crate::playback::overlay::preroll::{
+    run_bind_preroll_loop, PipelineSnapshot, PrerollEffects, PrerollResumeOutcome,
 };
-use crate::playback::overlay::preroll_gate::PipelineSnapshot;
-use crate::playback::overlay::IosLayerBackend;
+use super::bus_backend::IosLayerBackend;
 use crate::playback::play_resume::resume_playing;
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
 
-use crate::video::ios_layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
+use crate::platform::ios::layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
 
 /// Work context for idle `apply_target_state` / attach retries.
 pub struct IosIdleWork {
@@ -536,11 +535,11 @@ impl IosOverlaySession {
                             let guard = shell.lock();
                             guard.clone_video_sink()
                         };
-                        if let Ok(layer) = crate::video::ios_layer::read_sink_layer(&sink) {
-                            if !crate::platform_view_ios::attach_layer_on_main_thread_sync(
+                        if let Ok(layer) = crate::platform::ios::layer::read_sink_layer(&sink) {
+                            if !crate::platform::ios::attach_layer_on_main_thread_sync(
                                 host_view, layer,
                             ) {
-                                crate::video::ios_layer::release_sink_layer(layer);
+                                crate::platform::ios::layer::release_sink_layer(layer);
                             }
                         }
                     }

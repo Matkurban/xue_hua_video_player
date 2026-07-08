@@ -10,20 +10,17 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::playback::overlay::android::{
+use super::ops::{
     android_pause_preroll_with_refresh, cache_android_native_window, refresh_mobile_overlay_on_gst,
 };
 use crate::playback::overlay::gst_scheduler::{GstTaskScheduler, SpawnOnGstThreadScheduler};
 use crate::playback::overlay::overlay_session::{load_preroll, OverlaySession};
-use crate::playback::overlay::preroll_executor::{
-    run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
-};
-use crate::playback::overlay::preroll_gate::PipelineSnapshot;
+use crate::playback::overlay::preroll::{run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome, PipelineSnapshot};
 use crate::playback::play_resume::resume_playing;
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
-use crate::video::clear_overlay_window_handle;
+use crate::playback::gst::clear_overlay_window_handle;
 
 /// Single seam for Android overlay bind phase (mirrors [`super::ios_session::IosOverlaySession`]).
 #[derive(Clone)]
@@ -178,7 +175,7 @@ impl AndroidOverlaySession {
         ));
         let want_play = play_intent.replay.desired_playing.load(Ordering::SeqCst);
         let mut effects = AndroidBindPrerollEffects {
-            shell,
+            shell: Arc::clone(&shell),
             play_intent: play_intent.clone_for_async(),
             surface: surface.clone_for_switch(),
         };

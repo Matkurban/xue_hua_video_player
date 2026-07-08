@@ -15,9 +15,8 @@ use crate::playback::shell::{
 };
 use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::TrackCache;
-use crate::video::{
-    info::InternalVideoMetadata,
-    orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig},
+use crate::playback::gst::{
+    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
 };
 
 /// Pipeline-only metadata for URI ↔ asset shell swaps (no replay atomics, no surface).

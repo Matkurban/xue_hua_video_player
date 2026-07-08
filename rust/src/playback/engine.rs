@@ -8,8 +8,11 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::gst_init::ensure_gst_init;
-use crate::gst_runtime::{spawn_on_gst_thread, spawn_on_gst_thread_and_wait};
+use crate::gst::{
+    ensure_gst_init, spawn_on_gst_thread, spawn_on_gst_thread_and_wait,
+};
+#[cfg(target_os = "android")]
+use crate::gst::ensure_java_gstreamer_for_network;
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
@@ -24,9 +27,8 @@ use crate::playback::surface::VideoSurface;
 use crate::playback::switch::switch_shell;
 use crate::playback::tracks::{read_cached_tracks, TrackCache};
 use crate::player_events::{MediaTrack, PlayerEvent, PlayerState, TrackType};
-use crate::video::{
-    info::InternalVideoMetadata, orientation::InternalAspectRatioMode,
-    orientation::InternalVideoOrientationConfig,
+use crate::playback::gst::{
+    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
 };
 
 /// GStreamer-backed player rendering into a Platform View via VideoOverlay.
@@ -187,7 +189,7 @@ impl PlaybackEngine {
         self.track_cache.lock().clear();
         #[cfg(target_os = "android")]
         if let ResolvedSource::Uri(ref uri) = resolved {
-            crate::android_gst::ensure_java_gstreamer_for_network(uri)?;
+            ensure_java_gstreamer_for_network(uri)?;
         }
         self.gst_context.surface.ensure_overlay_ready()?;
         #[cfg(target_os = "ios")]

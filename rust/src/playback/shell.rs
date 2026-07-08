@@ -13,7 +13,7 @@ use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
-use crate::playback::overlay::preroll_gate::PipelineSnapshot;
+use crate::playback::overlay::PipelineSnapshot;
 use crate::playback::replay::PlayReplayContext;
 use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::{
@@ -21,12 +21,11 @@ use crate::playback::tracks::{
 };
 use crate::playback::uri_pipeline::build_uri_playbin;
 use crate::player_events::TrackType;
-use crate::video::attach_overlay_bus_sync_handler;
-use crate::video::orientation::apply_orientation_to_playbin;
-use crate::video::{
-    expose_overlay,
-    orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig},
-    set_overlay_render_rectangle, set_overlay_window_handle,
+use crate::playback::gst::attach_overlay_bus_sync_handler;
+use crate::playback::gst::apply_orientation_to_playbin;
+use crate::playback::gst::{
+    expose_overlay, InternalAspectRatioMode, InternalVideoMetadata,
+    InternalVideoOrientationConfig, set_overlay_render_rectangle, set_overlay_window_handle,
 };
 
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
@@ -180,7 +179,7 @@ impl PipelineShell {
     }
 
     pub fn sync_overlay_sink_slot(&self, slot: &Arc<Mutex<gst::Element>>) {
-        crate::playback::overlay::assign_overlay_sink(slot, &self.video_sink);
+        *slot.lock() = self.video_sink().clone();
     }
 
     pub fn disable_subtitles(&self, cache: &TrackCache) {
@@ -196,7 +195,7 @@ impl PipelineShell {
         if !self.has_pending_media() {
             return Ok(());
         }
-        crate::video::ios_layer::preroll_pipeline_for_ios_layer(&self.pipeline)
+        crate::platform::ios::layer::preroll_pipeline_for_ios_layer(&self.pipeline)
     }
 
     pub(crate) fn clone_video_sink(&self) -> gst::Element {
@@ -287,7 +286,7 @@ pub fn install_uri_shell(
     emitter: &Arc<Mutex<Option<Emitter>>>,
     looping: &Arc<AtomicBool>,
     replay: &PlayReplayContext,
-    metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
+    metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
     surface: &VideoSurface,
 ) -> Result<PipelineShell> {
@@ -321,7 +320,7 @@ pub fn install_asset_shell(
     emitter: &Arc<Mutex<Option<Emitter>>>,
     looping: &Arc<AtomicBool>,
     replay: &PlayReplayContext,
-    metadata_cache: Option<Arc<Mutex<crate::video::info::InternalVideoMetadata>>>,
+    metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     surface: &VideoSurface,
 ) -> Result<PipelineShell> {
     let (pipeline, video_sink, feed) = build_asset_pipeline(asset_key, emitter, metadata_cache)?;

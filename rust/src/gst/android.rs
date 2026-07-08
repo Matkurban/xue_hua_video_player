@@ -12,7 +12,7 @@ pub fn ensure_gst_init_android() -> Result<()> {
     crate::diag::logcat_info("gst: ensure_gst_init_android enter");
 
     #[cfg(target_os = "android")]
-    crate::gst_runtime::ensure_gst_runtime();
+    super::runtime::ensure_gst_runtime();
 
     let c_initialized = unsafe { gst::ffi::gst_is_initialized() != gst::glib::ffi::GFALSE };
     crate::diag::logcat_info(&format!(

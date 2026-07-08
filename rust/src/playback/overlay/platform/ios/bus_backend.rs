@@ -9,9 +9,9 @@ use gstreamer as gst;
 use parking_lot::Mutex;
 
 use crate::playback::gst_context::PlaybackGstContext;
-use crate::playback::overlay::ios_session::{IosIdleWork, IosOverlaySession};
+use super::session::{IosIdleWork, IosOverlaySession};
 use crate::playback::shell::PipelineShell;
-use crate::video::ios_layer::IosLayerAttachOutcome;
+use crate::platform::ios::layer::IosLayerAttachOutcome;
 
 /// Shared state for iOS layer attach retries on the Gst bus (`READY → PAUSED`).
 pub struct IosLayerBackend {

@@ -119,7 +119,7 @@ pub fn attach_gst_bus_handlers(
         .map_err(|e| anyhow!("bus watch failed: {e}"))?;
 
     let pipeline_pos = pipeline.clone();
-    let ctx = crate::gst_runtime::gst_main_context()?.clone();
+    let ctx = crate::gst::gst_main_context()?.clone();
     let position_source = source::timeout_source_new(
         Duration::from_millis(200),
         Some("xhvp-position"),

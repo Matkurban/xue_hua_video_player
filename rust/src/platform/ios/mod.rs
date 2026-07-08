@@ -5,8 +5,16 @@ use std::cell::RefCell;
 use anyhow::Result;
 use gstreamer as gst;
 
-use crate::gst_runtime::spawn_on_gst_thread;
-use crate::video::{clear_overlay_window_handle, set_overlay_window_handle};
+use crate::gst::spawn_on_gst_thread;
+use crate::playback::gst::{clear_overlay_window_handle, set_overlay_window_handle};
+
+pub mod layer;
+
+pub use layer::{
+    attach_ios_video_layer_with_completion, preroll_for_ios_layer,
+    preroll_pipeline_for_ios_layer, read_sink_layer, release_sink_layer,
+    IosLayerAttachOutcome,
+};
 
 extern "C" {
     fn xhvp_dispatch_sync_main_fn(

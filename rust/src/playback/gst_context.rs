@@ -10,8 +10,8 @@ use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::PipelineSwapConfig;
 use crate::playback::tracks::TrackCache;
-use crate::video::info::InternalVideoMetadata;
-use crate::video::orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig};
+use crate::playback::gst::InternalVideoMetadata;
+use crate::playback::gst::{InternalAspectRatioMode, InternalVideoOrientationConfig};
 
 /// Live engine-owned Gst bundle — `shell` and `surface` are canonical.
 pub struct PlaybackGstContext {

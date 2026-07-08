@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 
 use crate::frb_generated::StreamSink;
 use crate::playback::PlaybackEngine;
-pub use crate::player_events::{
+pub use crate::api::types::{
     AspectRatioMode, MediaSourceDto, MediaTrack, PipelineCapabilitiesDto, PlayerEvent,
     PlayerEventKind, PlayerState, TrackType, VideoMetadata, VideoOrientationConfig,
 };

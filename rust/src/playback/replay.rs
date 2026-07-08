@@ -61,8 +61,7 @@ mod tests {
     use crate::playback::bus::Emitter;
     use crate::playback::surface::VideoSurface;
     use crate::playback::tracks::TrackCache;
-    use crate::video::info::InternalVideoMetadata;
-    use crate::video::orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig};
+    use crate::playback::gst::{InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig};
 
     fn sample_intent() -> OverlayPlayIntent {
         let desired = Arc::new(AtomicBool::new(true));

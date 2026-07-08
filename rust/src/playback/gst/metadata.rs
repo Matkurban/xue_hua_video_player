@@ -1,7 +1,7 @@
 use gstreamer as gst;
 use gstreamer_video as gst_video;
 
-/// Internal decoded video metadata (converted to [`crate::player_events::VideoMetadata`] for Dart).
+/// Internal decoded video metadata (converted to [`crate::api::types::VideoMetadata`] for Dart).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct InternalVideoMetadata {
     pub width: i32,

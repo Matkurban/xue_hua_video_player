@@ -15,8 +15,8 @@ pub fn open_asset_fd(asset_key: &str) -> Result<AssetByteSource> {
     use std::fs::File;
     use std::os::unix::io::FromRawFd;
 
-    let (fd, start, length) = crate::platform_view_android::with_jni_env(|env| {
-        crate::platform_view_android::call_open_asset_fd(env, asset_key)
+    let (fd, start, length) = crate::platform::android::with_jni_env(|env| {
+        crate::platform::android::call_open_asset_fd(env, asset_key)
     })
     .map_err(|e| {
         crate::diag::logcat_error(&format!("open_asset_fd JNI failed for {asset_key}: {e:#}"));

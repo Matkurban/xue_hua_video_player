@@ -6,7 +6,7 @@ use gstreamer::glib;
 use gstreamer::prelude::*;
 
 #[cfg(target_os = "ios")]
-use crate::platform_view_ios::{attach_layer_on_main_thread_async, host_view_ready_for_attach};
+use crate::platform::ios::{attach_layer_on_main_thread_async, host_view_ready_for_attach};
 use crate::playback::shell::set_element_state_sync;
 use crate::playback::shell::PipelineShell;
 

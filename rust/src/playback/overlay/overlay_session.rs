@@ -6,7 +6,7 @@ use anyhow::Result;
 use gstreamer as gst;
 use parking_lot::Mutex;
 
-use crate::playback::overlay::preroll_gate::{decide_preroll_action, PrerollAction};
+use crate::playback::overlay::preroll::{decide_preroll_action, PrerollAction};
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
@@ -85,7 +85,7 @@ pub(crate) mod load_preroll {
         surface: &VideoSurface,
         defer_log: &str,
     ) -> Result<()> {
-        use crate::playback::overlay::android::android_pause_preroll_with_refresh;
+        use crate::playback::overlay::platform::android::android_pause_preroll_with_refresh;
 
         let snapshot = shell.snapshot();
         match decide_preroll_action(snapshot, false, gate_ready) {
@@ -263,7 +263,7 @@ mod tests {
     #[cfg(target_os = "android")]
     #[test]
     fn android_gate_passes_surface_ready() {
-        use crate::playback::overlay::android_session::AndroidOverlaySession;
+        use crate::playback::overlay::AndroidOverlaySession;
         let session = AndroidOverlaySession::new();
         assert!(session.gate_ready_for_load(true));
         assert!(!session.gate_ready_for_load(false));
@@ -274,7 +274,7 @@ mod tests {
     fn ios_gate_always_false() {
         use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
 
-        use crate::playback::overlay::ios_session::IosOverlaySession;
+        use crate::playback::overlay::IosOverlaySession;
         let session = IosOverlaySession::new(
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicUsize::new(0)),
