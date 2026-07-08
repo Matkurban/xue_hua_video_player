@@ -26,12 +26,13 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | `VideoSurface` | Thin delegate (`playback/surface.rs`): `stored` handle + platform `OverlaySession`; FRB/engine entry points delegate to session |
 | `OverlaySession` | Unified Rust trait (`playback/overlay/overlay_session.rs`): load preroll + `cache_notify` + `apply_gstreamer` + lifecycle; **`apply_load_preroll`** calls **`gate_ready_for_load(surface.overlay_ready_for_preroll())`** internally |
 | `resume_playing` | Unified play/EOS resume (`playback/play_resume.rs`): `resume_playing(shell, replay, swap, surface, overlay_ready)` — engine, Android/iOS bind preroll, macOS/desktop `pipeline_play` |
-| `overlay_ready_for_play` | Platform gate helper for `resume_playing`: Android/iOS `is_overlay_bound_on_gst()`; macOS/desktop always `true` |
+| `maybe_resume_after_overlay_bind` | Bind-complete resume (`playback/play_resume.rs`): if `desired_playing`, Ready→Paused preroll when needed then `resume_playing(..., true)` — macOS `apply_gstreamer`, Win/Linux `set_window_handle_on_gst` |
+| `overlay_ready_for_play` | Platform gate for `resume_playing`: all platforms use `surface.is_overlay_bound_on_gst()` (real bind flag, not handle cache alone) |
 | `VideoOverlayBackend` | Desktop-only stored-handle trait for tests; mobile/desktop sessions implement **`OverlaySession`** |
 | `AndroidOverlaySession` | Android overlay attach phase (`playback/overlay/platform/android/session.rs`): JNI `notify_surface_with_shell`, `schedule_apply_after_bind`, `overlay_generation`, bind-path **`PrerollExecutor`** |
 | `IosOverlaySession` | iOS CALayer attach + idle `apply_target_state` (`playback/overlay/platform/ios/session.rs`); owns `ios_layer_bus_slot`, dimensions, `apply_gstreamer` (Swift layout apply) |
-| `MacosOverlaySession` | macOS window overlay session (`playback/overlay/platform/window/session.rs`) over merged **`window/backend`** |
-| `DesktopOverlaySession` | Win/Linux window overlay session (`playback/overlay/platform/window/session.rs`) over merged **`window/backend`** |
+| `MacosOverlaySession` | macOS window overlay (`playback/overlay/platform/window/session.rs`): `overlay_bound` after main-thread `apply_gstreamer`; schedules **`maybe_resume_after_overlay_bind`** on `xhvp-gst` |
+| `DesktopOverlaySession` | Win/Linux window overlay: `overlay_bound` after `set_window_handle`; bind path calls **`maybe_resume_after_overlay_bind`** |
 | `IosLayerBackend` | Thin iOS bus-facing adapter; holds **`Arc<PlaybackGstContext>`**; delegates to **`IosOverlaySession`**; **`OverlayPlayIntent`** via **`ctx.overlay_intent()`** |
 | `PlaybackGstContext` | Engine-owned Gst bundle (`shell`, `surface`, `replay`, swap sources) in `playback/gst_context.rs`; **`clone_for_async()`** snapshots orientation/aspect; **`overlay_intent()`** for mobile overlay |
 | `PrerollExecutor` | Shared 4-step `decide_preroll_action` loop (`playback/overlay/preroll/executor.rs`); GStreamer I/O via injected **`PrerollEffects`** adapter per platform (**bind path only**) |
@@ -63,9 +64,9 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 |----------|------|---------------------|
 | Android | `glimagesink` | `PlatformViewLink` + `SurfaceView` → `ANativeWindow` |
 | iOS | `avsamplebufferlayersink` | `UiKitView` → host `UIView` + sink `CALayer` sublayer |
-| macOS | `osxvideosink` | `AppKitView` → child `NSView` via VideoOverlay subview |
-| Windows | `d3d11videosink` | Platform view → HWND |
-| Linux | `glimagesink` | Platform view → X11 window id |
+| macOS | `osxvideosink` | `AppKitView` → child `NSView` via VideoOverlay; `MacosOverlaySession.overlay_bound` after main-thread `apply_gstreamer` + `maybe_resume_after_overlay_bind` |
+| Windows | `d3d11videosink` | Platform view → HWND; `DesktopOverlaySession.overlay_bound` after `set_window_handle` + resume |
+| Linux | `glimagesink` | Platform view → X11 window id; same desktop bind + resume |
 
 ## Rendering model
 
@@ -186,7 +187,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - Cache the `NSView*` handle synchronously in `native_window` from Swift C ABI entry points (`player_set_video_overlay_window`, `player_sync_macos_video_layer`).
 - Apply the GStreamer overlay bind on the **main thread** via `DispatchQueue.main.async` (`player_apply_macos_overlay_gstreamer`). `osxvideosink` calls `setView:` directly on the main thread; calling from a background thread blocks with `performSelector:waitUntilDone:YES` and deadlocks with Flutter's merged UI/platform thread.
 - `player_apply_macos_overlay_gstreamer` must call `set_window_handle` **directly on the main thread** using a cached `overlay_sink` clone — it must **not** use `spawn_on_gst_thread_and_wait` (pipeline ops stay on xhvp-gst; VideoOverlay apply is the exception).
-- `play()` / `set_uri()` verify the overlay handle is cached; GStreamer bind runs on the main thread (Swift `DispatchQueue.main.async`) or via the bus `prepare-window-handle` sync handler. Do not call `apply_macos_overlay_gstreamer` from the FRB thread pool.
+- `play()` / `set_uri()` verify the overlay handle is cached and **bound** (`overlay_bound`); if cached but unbound, `apply_macos_overlay_gstreamer` binds on the main thread then resumes on `xhvp-gst` via `maybe_resume_after_overlay_bind`. Do not call `apply_macos_overlay_gstreamer` from the FRB thread pool for VideoOverlay I/O itself — the apply entry is main-thread (Swift) / discpatches main sync for rebind.
 - Do **not** use a dedicated overlay background thread combined with `drain_overlay_queue()` — that creates a circular wait with `osxvideosink`'s main-thread dispatch.
 - HTTPS requires the GIO OpenSSL TLS backend (`register_gio_tls_backend()` after `gst::init()`); without it `souphttpsrc` delivers zero bytes.
 - Use a child `NSView` (`wantsLayer = false`) as the VideoOverlay target inside the Flutter platform view.

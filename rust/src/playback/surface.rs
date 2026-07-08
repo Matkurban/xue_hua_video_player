@@ -11,12 +11,6 @@ use parking_lot::Mutex;
 use crate::gst::spawn_on_gst_thread;
 #[cfg(target_os = "ios")]
 use crate::platform::ios::layer::IosLayerAttachOutcome;
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
-use crate::playback::overlay::apply_overlay_handle;
 #[cfg(target_os = "android")]
 use crate::playback::overlay::refresh_mobile_overlay_on_gst;
 #[cfg(target_os = "android")]
@@ -34,8 +28,17 @@ use crate::playback::overlay::IosOverlaySession;
 use crate::playback::overlay::OverlaySession;
 use crate::playback::overlay::VideoOverlayBackend;
 #[cfg(target_os = "macos")]
-use crate::playback::overlay::{MacosOverlayBackend, MacosOverlaySession};
-#[cfg(any(target_os = "android", target_os = "ios"))]
+use crate::playback::overlay::MacosOverlaySession;
+#[cfg(any(
+    target_os = "android",
+    target_os = "ios",
+    target_os = "macos",
+    all(
+        not(target_os = "android"),
+        not(target_os = "macos"),
+        not(target_os = "ios")
+    )
+))]
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 
@@ -164,14 +167,7 @@ impl VideoSurface {
     }
 
     pub fn is_overlay_bound_on_gst(&self) -> bool {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        {
-            return self.session.is_bound();
-        }
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        {
-            self.has_cached_handle()
-        }
+        self.session.is_bound()
     }
 
     pub fn overlay_ready_for_preroll(&self) -> bool {
@@ -274,11 +270,21 @@ impl VideoSurface {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn apply_macos_overlay_gstreamer(&self, width: i32, height: i32) -> Result<()> {
-        let Some(slot) = self.session.overlay_sink_slot() else {
-            return Ok(());
-        };
-        MacosOverlayBackend::apply_gstreamer(&self.stored, &slot.lock(), width, height)
+    pub fn apply_macos_overlay_gstreamer(
+        &self,
+        shell: Arc<Mutex<PipelineShell>>,
+        width: i32,
+        height: i32,
+        play_intent: OverlayPlayIntent,
+    ) -> Result<()> {
+        self.session.apply_gstreamer(
+            shell,
+            self.stored.clone(),
+            self.clone_for_switch(),
+            width,
+            height,
+            play_intent,
+        )
     }
 
     #[cfg(target_os = "macos")]
@@ -347,10 +353,24 @@ impl VideoSurface {
     ))]
     pub fn set_window_handle_on_gst(
         &self,
-        shell: &mut PipelineShell,
+        shell: Arc<Mutex<PipelineShell>>,
         window_handle: i64,
+        play_intent: OverlayPlayIntent,
     ) -> Result<()> {
-        apply_overlay_handle(shell.video_sink(), window_handle as usize, &self.stored)
+        {
+            let guard = shell.lock();
+            self.session
+                .apply_window_handle(&guard, &self.stored, window_handle)?;
+        }
+        if window_handle != 0 {
+            crate::playback::play_resume::maybe_resume_after_overlay_bind(
+                shell,
+                &play_intent.replay,
+                &play_intent.swap,
+                self,
+            )?;
+        }
+        Ok(())
     }
 
     #[cfg(not(any(target_os = "android", target_os = "macos", target_os = "ios")))]

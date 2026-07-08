@@ -44,7 +44,9 @@ fn video_surface_delegates_overlay_ready_to_session() {
     let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
     assert!(!surface.overlay_ready_for_preroll());
     surface.cache_handle(99);
-    assert!(surface.overlay_ready_for_preroll());
+    // Cache alone is not a GStreamer bind — ready requires overlay_bound.
+    assert!(!surface.overlay_ready_for_preroll());
+    assert!(!surface.is_overlay_bound_on_gst());
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! Unified play / EOS resume — single interface for all platforms.
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::Ordering,
     Arc,
 };
 
@@ -61,7 +61,7 @@ pub fn resume_playing(
     let action = plan_resume_action(overlay_ready, at_eos, kind);
 
     if action == ResumeAction::DeferOverlay {
-        log::debug!("gst: deferring play until overlay is ready");
+        log::info!("gst: deferring play until overlay is ready");
         return Ok(());
     }
 
@@ -105,17 +105,47 @@ fn android_refresh_after_playing(
     Ok(())
 }
 
+/// After an overlay bind completes, resume if the user already requested play.
+///
+/// Bind paths must call this (or [`resume_playing`] with `overlay_ready: true`) so
+/// macOS / Win / Linux recover the same way Android / iOS do when `desired_playing`
+/// was set before the native surface existed.
+///
+/// If load deferred PAUSED preroll (overlay was unbound), the pipeline may still be
+/// at Ready — transition through Paused then Playing so sinks finish prepare-window-handle.
+pub fn maybe_resume_after_overlay_bind(
+    shell: Arc<Mutex<PipelineShell>>,
+    replay: &PlayReplayContext,
+    swap: &PipelineSwapConfig,
+    surface: &VideoSurface,
+) -> Result<()> {
+    if !replay.desired_playing.load(Ordering::SeqCst) {
+        log::debug!("gst: overlay bound — desired_playing=false, skip resume");
+        return Ok(());
+    }
+    {
+        let guard = shell.lock();
+        let snap = guard.snapshot();
+        if snap.current == gst::State::Ready
+            && snap.pending == gst::State::VoidPending
+            && snap.has_pending_media
+        {
+            log::info!("gst: overlay bound — PAUSED preroll before play");
+            guard.set_state_sync(gst::State::Paused)?;
+        }
+    }
+    log::info!("gst: overlay bound — resuming play (desired_playing=true)");
+    resume_playing(shell, replay, swap, surface, true)
+}
+
+/// Pure gate: whether bind-complete should call [`resume_playing`].
+pub(crate) fn should_resume_after_overlay_bind(desired_playing: bool) -> bool {
+    desired_playing
+}
+
 /// Computes whether the surface is ready for play resume on the active platform.
 pub fn overlay_ready_for_play(surface: &VideoSurface) -> bool {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        return surface.is_overlay_bound_on_gst();
-    }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        let _ = surface;
-        true
-    }
+    surface.is_overlay_bound_on_gst()
 }
 
 #[cfg(test)]
@@ -163,10 +193,19 @@ mod tests {
     }
 
     #[test]
-    fn overlay_ready_for_play_desktop_always_true() {
+    fn should_resume_after_bind_follows_desired_playing() {
+        assert!(!should_resume_after_overlay_bind(false));
+        assert!(should_resume_after_overlay_bind(true));
+    }
+
+    #[test]
+    fn overlay_ready_for_play_requires_bound_handle() {
         use parking_lot::Mutex;
 
         let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
-        assert!(overlay_ready_for_play(&surface));
+        assert!(!overlay_ready_for_play(&surface));
+        surface.cache_handle(0x1000);
+        // Cache alone is not a GStreamer bind on any platform; bind flags stay false.
+        assert!(!overlay_ready_for_play(&surface));
     }
 }

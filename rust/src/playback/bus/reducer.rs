@@ -278,7 +278,10 @@ fn reduce_state_changed(
     let effects = Vec::new();
 
     let mut events = Vec::new();
-    if !(current == BusPlaybackState::Paused && snapshot.desired_playing) {
+    if current == BusPlaybackState::Paused && snapshot.desired_playing {
+        // Preroll / waiting for overlay: surface as Buffering so Dart is not stuck on Idle.
+        events.push(PlayerEvent::state(PlayerState::Buffering));
+    } else {
         events.push(PlayerEvent::state(current.to_player_state()));
     }
     if current == BusPlaybackState::Playing && snapshot.desired_playing {
@@ -457,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn state_changed_suppresses_paused_when_desired_playing() {
+    fn state_changed_maps_paused_to_buffering_when_desired_playing() {
         let r = reduce_bus_message(
             BusMessage::StateChanged {
                 is_pipeline: true,
@@ -468,6 +471,7 @@ mod tests {
             snap(true, false, true, true),
         );
         assert!(!r.events.iter().any(|e| e.state == PlayerState::Paused));
+        assert!(r.events.iter().any(|e| e.state == PlayerState::Buffering));
         assert!(r.events.iter().any(|e| e.duration_ms == 5000));
     }
 

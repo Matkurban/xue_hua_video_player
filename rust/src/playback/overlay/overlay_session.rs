@@ -244,20 +244,20 @@ mod tests {
         not(target_os = "macos")
     ))]
     #[test]
-    fn desktop_gate_inverts_ready() {
+    fn desktop_gate_passes_surface_ready() {
         use crate::playback::overlay::DesktopOverlaySession;
         let session = DesktopOverlaySession::new();
-        assert!(session.gate_ready_for_load(false));
-        assert!(!session.gate_ready_for_load(true));
+        assert!(session.gate_ready_for_load(true));
+        assert!(!session.gate_ready_for_load(false));
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn macos_gate_inverts_ready() {
+    fn macos_gate_passes_surface_ready() {
         use crate::playback::overlay::MacosOverlaySession;
         let session = MacosOverlaySession::new();
-        assert!(session.gate_ready_for_load(false));
-        assert!(!session.gate_ready_for_load(true));
+        assert!(session.gate_ready_for_load(true));
+        assert!(!session.gate_ready_for_load(false));
     }
 
     #[cfg(target_os = "android")]

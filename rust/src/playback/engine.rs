@@ -10,7 +10,9 @@ use parking_lot::Mutex;
 
 #[cfg(target_os = "android")]
 use crate::gst::ensure_java_gstreamer_for_network;
-use crate::gst::{ensure_gst_init, spawn_on_gst_thread, spawn_on_gst_thread_and_wait};
+use crate::gst::{ensure_gst_init, spawn_on_gst_thread_and_wait};
+#[cfg(target_os = "ios")]
+use crate::gst::spawn_on_gst_thread;
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
@@ -221,11 +223,32 @@ impl PlaybackEngine {
                 log::info!("gst: deferring play until iOS host view is cached");
             }
         }
-        #[cfg(not(target_os = "ios"))]
+        #[cfg(target_os = "macos")]
+        {
+            if auto_play {
+                if self.gst_context.surface.is_overlay_bound_on_gst() {
+                    let ctx = self.gst_context.clone_for_async();
+                    self.run_on_gst(move |_shell| pipeline_play(&ctx))?;
+                } else if self.gst_context.surface.has_cached_handle() {
+                    let (width, height) = self.gst_context.surface.cached_dimensions();
+                    log::info!(
+                        "gst: load autoPlay — applying macOS overlay then resume ({width}x{height})"
+                    );
+                    self.apply_macos_overlay_gstreamer(width, height)?;
+                } else {
+                    log::info!(
+                        "gst: deferring autoPlay until macOS overlay handle is cached"
+                    );
+                }
+            }
+        }
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
         {
             let ctx = self.gst_context.clone_for_async();
             if auto_play && self.gst_context.surface.overlay_ready_for_preroll() {
                 self.run_on_gst(move |_shell| pipeline_play(&ctx))?;
+            } else if auto_play {
+                log::info!("gst: deferring autoPlay until overlay is bound");
             }
         }
         Ok(())
@@ -255,6 +278,11 @@ impl PlaybackEngine {
             log::info!("gst: deferring play until iOS host view is cached");
             return Ok(());
         }
+        #[cfg(target_os = "macos")]
+        if !self.gst_context.surface.has_cached_handle() {
+            log::info!("gst: deferring play until macOS overlay handle is cached");
+            return Ok(());
+        }
 
         #[cfg(target_os = "ios")]
         {
@@ -276,14 +304,34 @@ impl PlaybackEngine {
             log::info!("gst: deferring play until iOS layer is attached");
             return Ok(());
         }
+
+        #[cfg(target_os = "macos")]
+        {
+            if !self.gst_context.surface.is_overlay_bound_on_gst() {
+                // Handle cached but GStreamer not yet bound — apply on main thread;
+                // apply_and_maybe_resume schedules Playing on xhvp-gst afterward.
+                let (width, height) = self.gst_context.surface.cached_dimensions();
+                log::info!(
+                    "gst: deferring play until macOS overlay bind completes ({width}x{height})"
+                );
+                return self.apply_macos_overlay_gstreamer(width, height);
+            }
+        }
+
         let ctx = self.gst_context.clone_for_async();
         self.run_on_gst(move |shell| {
             #[cfg(target_os = "android")]
             if !ctx.surface.is_overlay_bound_on_gst() {
                 ctx.surface.rebind_cached_overlay(shell)?;
             }
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(any(target_os = "android", target_os = "macos")))]
             ctx.surface.rebind_cached_overlay(shell)?;
+            #[cfg(target_os = "macos")]
+            {
+                // Already bound — rebind is a no-op safety net on the main thread
+                // only when shell was rebuilt; avoid sync main from FRB wait path.
+                let _ = shell;
+            }
             pipeline_play(&ctx)
         })
     }
@@ -424,8 +472,12 @@ impl PlaybackEngine {
         }
         #[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
         {
+            let shell = self.gst_context.shell.clone();
             let surface = self.gst_context.surface.clone_for_switch();
-            self.run_on_gst(move |shell| surface.set_window_handle_on_gst(shell, window_handle))
+            let play_intent = self.gst_context.overlay_intent();
+            spawn_on_gst_thread_and_wait(move || {
+                surface.set_window_handle_on_gst(shell, window_handle, play_intent)
+            })
         }
     }
 
@@ -433,10 +485,7 @@ impl PlaybackEngine {
     pub fn sync_video_overlay_rectangle(&self, width: i32, height: i32) -> Result<()> {
         #[cfg(target_os = "macos")]
         {
-            return self
-                .gst_context
-                .surface
-                .apply_macos_overlay_gstreamer(width, height);
+            return self.apply_macos_overlay_gstreamer(width, height);
         }
         #[cfg(any(target_os = "android", target_os = "ios"))]
         {
@@ -512,9 +561,13 @@ impl PlaybackEngine {
 
     #[cfg(target_os = "macos")]
     pub fn apply_macos_overlay_gstreamer(&self, width: i32, height: i32) -> Result<()> {
-        self.gst_context
-            .surface
-            .apply_macos_overlay_gstreamer(width, height)
+        let play_intent = self.gst_context.overlay_intent();
+        self.gst_context.surface.apply_macos_overlay_gstreamer(
+            self.gst_context.shell.clone(),
+            width,
+            height,
+            play_intent,
+        )
     }
 }
 
