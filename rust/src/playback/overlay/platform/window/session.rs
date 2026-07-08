@@ -76,11 +76,7 @@ impl DesktopOverlaySession {
         stored: &Mutex<Option<usize>>,
         window_handle: i64,
     ) -> Result<()> {
-        super::backend::apply_overlay_handle(
-            shell.video_sink(),
-            window_handle as usize,
-            stored,
-        )?;
+        super::backend::apply_overlay_handle(shell.video_sink(), window_handle as usize, stored)?;
         self.set_bound(window_handle != 0);
         Ok(())
     }

@@ -30,11 +30,7 @@ extern "C" {
     fn xhvp_ios_attach_layer_to_host_sync(host_view: usize, layer: usize) -> bool;
     fn xhvp_ios_release_layer_main(layer: usize);
     fn xhvp_ios_detach_sink_layers(host_view: usize);
-    fn xhvp_ios_layer_status(
-        layer: usize,
-        out_status: *mut i32,
-        out_error_code: *mut i32,
-    );
+    fn xhvp_ios_layer_status(layer: usize, out_status: *mut i32, out_error_code: *mut i32);
 }
 
 /// Releases a +1 retained sink layer on the main thread (dealloc must be main).

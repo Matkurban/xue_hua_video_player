@@ -111,7 +111,12 @@ impl FrameSink {
 /// Wired into `create_platform_video_sink` on the appsink platforms (iOS today;
 /// macOS/Windows/Linux in later phases).
 #[cfg_attr(
-    not(any(target_os = "ios", target_os = "macos", target_os = "windows", target_os = "linux")),
+    not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )),
     allow(dead_code)
 )]
 pub fn build_frame_appsink(sink: Arc<FrameSink>) -> Result<gst::Element> {
@@ -132,9 +137,7 @@ pub fn build_frame_appsink(sink: Arc<FrameSink>) -> Result<gst::Element> {
     appsink.set_callbacks(
         AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                let sample = appsink
-                    .pull_sample()
-                    .map_err(|_| gst::FlowError::Eos)?;
+                let sample = appsink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
                 if let Some(frame) = sample_to_frame(&sample) {
                     sink.store_frame(frame);
                 }

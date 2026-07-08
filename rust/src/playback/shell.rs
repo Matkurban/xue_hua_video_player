@@ -21,13 +21,13 @@ use crate::playback::gst::{
 };
 use crate::playback::overlay::PipelineSnapshot;
 use crate::playback::replay::PlayReplayContext;
+#[cfg(target_os = "android")]
+use crate::playback::sink::OverlaySizeSync;
 use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::{
     disable_subtitles_on_pipeline, select_track_on_pipeline, TrackCache,
 };
 use crate::playback::uri_pipeline::build_uri_playbin;
-#[cfg(target_os = "android")]
-use crate::playback::sink::OverlaySizeSync;
 use crate::player_events::TrackType;
 
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
@@ -514,7 +514,9 @@ mod tests {
             bus_watch: None,
             position_source: None,
         };
-        shell.set_state_sync(gst::State::Playing).expect("to playing");
+        shell
+            .set_state_sync(gst::State::Playing)
+            .expect("to playing");
         shell
     }
 

@@ -10,11 +10,11 @@ use crate::playback::gst::InternalVideoMetadata;
 use crate::playback::gst::{InternalAspectRatioMode, InternalVideoOrientationConfig};
 use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::PipelineShell;
+#[cfg(target_os = "android")]
+use crate::playback::sink::OverlaySizeSync;
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::PipelineSwapConfig;
 use crate::playback::tracks::TrackCache;
-#[cfg(target_os = "android")]
-use crate::playback::sink::OverlaySizeSync;
 
 /// Live engine-owned Gst bundle — `shell` and `surface` are canonical.
 pub struct PlaybackGstContext {

@@ -230,20 +230,27 @@ void main() {
       expect(session.aspectRatio.value, closeTo(4 / 3, 0.001));
     });
 
-    test('metadataChanged does not clobber isSeekable from capabilities', () async {
-      port = FakePlayerCommandPort(seekable: false);
-      session = PlaybackSession(port: port);
-      await session.initialize();
-      await session.open(VideoSource.network('https://example.com/asset'));
-      expect(session.isSeekable.value, isFalse);
+    test(
+      'metadataChanged does not clobber isSeekable from capabilities',
+      () async {
+        port = FakePlayerCommandPort(seekable: false);
+        session = PlaybackSession(port: port);
+        await session.initialize();
+        await session.open(VideoSource.network('https://example.com/asset'));
+        expect(session.isSeekable.value, isFalse);
 
-      port.emit(
-        event(kind: PlayerEventKind.metadataChanged, width: 1920, height: 1080),
-      );
-      await Future<void>.delayed(Duration.zero);
+        port.emit(
+          event(
+            kind: PlayerEventKind.metadataChanged,
+            width: 1920,
+            height: 1080,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
 
-      expect(session.isSeekable.value, isFalse);
-    });
+        expect(session.isSeekable.value, isFalse);
+      },
+    );
 
     test('open resets transport state from previous playback', () async {
       await session.initialize();
@@ -255,7 +262,9 @@ void main() {
           durationMs: 10000,
         ),
       );
-      port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 10000));
+      port.emit(
+        event(kind: PlayerEventKind.durationChanged, durationMs: 10000),
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(session.state.value, PlayerState.playing);
@@ -303,45 +312,59 @@ void main() {
     // and the slider stayed disabled. This guards the end-to-end contract that
     // once engine events flow, the controls become live and controllable.
     group('controls stay live when engine playback events flow', () {
-      test('playing + duration + position events drive controls model',
-          () async {
-        await session.initialize();
-        await session.open(VideoSource.network('https://example.com/a.mp4'));
+      test(
+        'playing + duration + position events drive controls model',
+        () async {
+          await session.initialize();
+          await session.open(VideoSource.network('https://example.com/a.mp4'));
 
-        // Before any playback event the player is not "playing".
-        expect(session.isPlaying.value, isFalse);
+          // Before any playback event the player is not "playing".
+          expect(session.isPlaying.value, isFalse);
 
-        port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
-        port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 10000));
-        port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 3000));
-        await Future<void>.delayed(Duration.zero);
+          port.emit(
+            PlayerEventFixtures.stateChanged(state: PlayerState.playing),
+          );
+          port.emit(
+            event(kind: PlayerEventKind.durationChanged, durationMs: 10000),
+          );
+          port.emit(
+            event(kind: PlayerEventKind.positionChanged, positionMs: 3000),
+          );
+          await Future<void>.delayed(Duration.zero);
 
-        // Controls now reflect a live, seekable player.
-        expect(session.isPlaying.value, isTrue);
-        expect(session.duration.value, const Duration(seconds: 10));
-        expect(session.position.value, const Duration(seconds: 3));
+          // Controls now reflect a live, seekable player.
+          expect(session.isPlaying.value, isTrue);
+          expect(session.duration.value, const Duration(seconds: 10));
+          expect(session.position.value, const Duration(seconds: 3));
 
-        // A later position event advances the progress (not frozen at 0).
-        port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 4000));
-        await Future<void>.delayed(Duration.zero);
-        expect(session.position.value, const Duration(seconds: 4));
-      });
+          // A later position event advances the progress (not frozen at 0).
+          port.emit(
+            event(kind: PlayerEventKind.positionChanged, positionMs: 4000),
+          );
+          await Future<void>.delayed(Duration.zero);
+          expect(session.position.value, const Duration(seconds: 4));
+        },
+      );
 
-      test('togglePlayPause issues pause once a playing event has arrived',
-          () async {
-        await session.initialize();
-        await session.open(VideoSource.network('https://example.com/a.mp4'));
+      test(
+        'togglePlayPause issues pause once a playing event has arrived',
+        () async {
+          await session.initialize();
+          await session.open(VideoSource.network('https://example.com/a.mp4'));
 
-        port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
-        await Future<void>.delayed(Duration.zero);
+          port.emit(
+            PlayerEventFixtures.stateChanged(state: PlayerState.playing),
+          );
+          await Future<void>.delayed(Duration.zero);
 
-        await session.togglePlayPause();
+          await session.togglePlayPause();
 
-        // The bug made isPlaying stuck false, so toggle always called play;
-        // with events flowing it must pause instead ("按暂停视频不停" fix).
-        expect(port.pauseCallCount, 1);
-        expect(port.playCallCount, 0);
-      });
+          // The bug made isPlaying stuck false, so toggle always called play;
+          // with events flowing it must pause instead ("按暂停视频不停" fix).
+          expect(port.pauseCallCount, 1);
+          expect(port.playCallCount, 0);
+        },
+      );
     });
   });
 }

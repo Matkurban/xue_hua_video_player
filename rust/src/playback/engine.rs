@@ -1,17 +1,15 @@
+#[cfg(target_os = "android")]
+use std::sync::atomic::AtomicI64;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-#[cfg(target_os = "android")]
-use std::sync::atomic::AtomicI64;
 
 use anyhow::Result;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-#[cfg(target_os = "android")]
-use crate::playback::sink::{android_overlay_size_sync, OverlaySizeSync};
 #[cfg(target_os = "android")]
 use crate::gst::ensure_java_gstreamer_for_network;
 use crate::gst::{ensure_gst_init, spawn_on_gst_thread_and_wait};
@@ -29,6 +27,8 @@ use crate::playback::overlay::IosLayerBackend;
 use crate::playback::play_resume::{overlay_ready_for_play, resume_playing};
 use crate::playback::replay::PlayReplayContext;
 use crate::playback::shell::{install_uri_shell, teardown_shell, wire_overlay_sync, PipelineShell};
+#[cfg(target_os = "android")]
+use crate::playback::sink::{android_overlay_size_sync, OverlaySizeSync};
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::switch_shell;
 use crate::playback::tracks::{read_cached_tracks, TrackCache};

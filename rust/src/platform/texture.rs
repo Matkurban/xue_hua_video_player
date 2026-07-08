@@ -18,11 +18,7 @@ use crate::playback::frame::{frame_sink_for, FrameReadyFn};
 /// `ctx` must remain valid until [`xhvp_texture_unregister`] is called for the
 /// same `player_id`.
 #[no_mangle]
-pub extern "C" fn xhvp_texture_register(
-    player_id: i64,
-    ctx: *mut c_void,
-    on_frame: FrameReadyFn,
-) {
+pub extern "C" fn xhvp_texture_register(player_id: i64, ctx: *mut c_void, on_frame: FrameReadyFn) {
     if let Some(sink) = frame_sink_for(player_id) {
         sink.set_callback(ctx, on_frame);
     }

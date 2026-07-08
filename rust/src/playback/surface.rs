@@ -25,10 +25,10 @@ use crate::playback::overlay::DesktopOverlaySession;
 use crate::playback::overlay::IosLayerBackend;
 #[cfg(target_os = "ios")]
 use crate::playback::overlay::IosOverlaySession;
-use crate::playback::overlay::OverlaySession;
-use crate::playback::overlay::VideoOverlayBackend;
 #[cfg(target_os = "macos")]
 use crate::playback::overlay::MacosOverlaySession;
+use crate::playback::overlay::OverlaySession;
+use crate::playback::overlay::VideoOverlayBackend;
 #[cfg(any(
     target_os = "android",
     target_os = "ios",

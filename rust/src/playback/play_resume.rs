@@ -1,9 +1,6 @@
 //! Unified play / EOS resume — single interface for all platforms.
 
-use std::sync::{
-    atomic::Ordering,
-    Arc,
-};
+use std::sync::{atomic::Ordering, Arc};
 
 use anyhow::Result;
 use gstreamer as gst;

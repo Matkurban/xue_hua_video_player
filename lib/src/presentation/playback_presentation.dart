@@ -72,10 +72,7 @@ class _VideoAspectLayout extends StatelessWidget {
     switch (mode) {
       case AspectRatioMode.fit:
         return Center(
-          child: AspectRatio(
-            aspectRatio: ratio,
-            child: child,
-          ),
+          child: AspectRatio(aspectRatio: ratio, child: child),
         );
       case AspectRatioMode.fill:
         return Center(
@@ -85,11 +82,7 @@ class _VideoAspectLayout extends StatelessWidget {
               fit: BoxFit.cover,
               alignment: Alignment.center,
               clipBehavior: Clip.hardEdge,
-              child: SizedBox(
-                width: ratio,
-                height: 1,
-                child: child,
-              ),
+              child: SizedBox(width: ratio, height: 1, child: child),
             ),
           ),
         );

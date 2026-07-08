@@ -717,9 +717,7 @@ fn log_ios_layer_status(shell: &Arc<Mutex<PipelineShell>>, context: &str) {
     };
     if let Ok(layer) = crate::platform::ios::layer::read_sink_layer(&sink) {
         let (status, error_code) = crate::platform::ios::layer_status(layer);
-        log::info!(
-            "gst: ios display layer status={status} error={error_code} ({context})"
-        );
+        log::info!("gst: ios display layer status={status} error={error_code} ({context})");
         crate::platform::ios::layer::release_sink_layer(layer);
     }
 }
