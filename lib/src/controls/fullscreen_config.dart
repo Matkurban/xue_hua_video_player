@@ -38,6 +38,67 @@ class AspectRatioModeLabels {
   int get hashCode => Object.hash(fit, fill, stretch);
 }
 
+/// 视频方向面板的显示文案 / Display labels for the video orientation panel.
+class VideoOrientationLabels {
+  /// 创建方向面板文案 / Creates orientation panel labels.
+  const VideoOrientationLabels({
+    this.flipHorizontal = '水平翻转',
+    this.flipVertical = '垂直翻转',
+    this.rotate0 = '0°',
+    this.rotate90 = '90°',
+    this.rotate180 = '180°',
+    this.rotate270 = '270°',
+  });
+
+  /// 水平翻转 / Horizontal flip.
+  final String flipHorizontal;
+
+  /// 垂直翻转 / Vertical flip.
+  final String flipVertical;
+
+  /// 顺时针 0° / Clockwise 0 degrees.
+  final String rotate0;
+
+  /// 顺时针 90° / Clockwise 90 degrees.
+  final String rotate90;
+
+  /// 顺时针 180° / Clockwise 180 degrees.
+  final String rotate180;
+
+  /// 顺时针 270° / Clockwise 270 degrees.
+  final String rotate270;
+
+  /// 返回 [degrees] 对应文案 / Returns label for [degrees].
+  String rotateLabel(int degrees) => switch (degrees) {
+    0 => rotate0,
+    90 => rotate90,
+    180 => rotate180,
+    270 => rotate270,
+    _ => '$degrees°',
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VideoOrientationLabels &&
+          flipHorizontal == other.flipHorizontal &&
+          flipVertical == other.flipVertical &&
+          rotate0 == other.rotate0 &&
+          rotate90 == other.rotate90 &&
+          rotate180 == other.rotate180 &&
+          rotate270 == other.rotate270;
+
+  @override
+  int get hashCode => Object.hash(
+    flipHorizontal,
+    flipVertical,
+    rotate0,
+    rotate90,
+    rotate180,
+    rotate270,
+  );
+}
+
 /// 全屏沉浸控件配置 / Configuration for fullscreen immersive controls.
 class VideoControlsFullscreenConfig {
   /// 创建沉浸控件配置 / Creates immersive controls configuration.
@@ -47,11 +108,15 @@ class VideoControlsFullscreenConfig {
   /// - `desktopImmersive` — 桌面端是否默认开启沉浸能力 / immersive features on desktop
   /// - `aspectRatioLabels` — 铺满模式菜单文案 / labels for aspect ratio menu
   /// - `overlaySlots` — 沉浸顶栏 leading/title/actions 插槽 / top bar slots
+  /// - `showOrientationMenu` — 是否显示方向设置按钮（移动端仅全屏；桌面端顶栏可见时）/ orientation button visibility
+  /// - `orientationLabels` — 方向面板文案 / labels for orientation panel
   const VideoControlsFullscreenConfig({
     this.seekStep = const Duration(seconds: 5),
     this.desktopImmersive = true,
     this.aspectRatioLabels = const AspectRatioModeLabels(),
     this.overlaySlots = const VideoControlsOverlaySlots(),
+    this.showOrientationMenu = true,
+    this.orientationLabels = const VideoOrientationLabels(),
   });
 
   /// 单次进退时长 / Seek step per gesture or arrow key.
@@ -66,6 +131,12 @@ class VideoControlsFullscreenConfig {
   /// 沉浸顶栏插槽 / AppBar-style overlay slots for immersive controls.
   final VideoControlsOverlaySlots overlaySlots;
 
+  /// 是否显示视频方向设置按钮；移动端仅全屏，桌面端在顶栏可见时显示 / Orientation button; mobile fullscreen only, desktop when top bar shows.
+  final bool showOrientationMenu;
+
+  /// 视频方向面板文案 / Labels for video orientation panel.
+  final VideoOrientationLabels orientationLabels;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -73,9 +144,17 @@ class VideoControlsFullscreenConfig {
           seekStep == other.seekStep &&
           desktopImmersive == other.desktopImmersive &&
           aspectRatioLabels == other.aspectRatioLabels &&
-          overlaySlots == other.overlaySlots;
+          overlaySlots == other.overlaySlots &&
+          showOrientationMenu == other.showOrientationMenu &&
+          orientationLabels == other.orientationLabels;
 
   @override
-  int get hashCode =>
-      Object.hash(seekStep, desktopImmersive, aspectRatioLabels, overlaySlots);
+  int get hashCode => Object.hash(
+    seekStep,
+    desktopImmersive,
+    aspectRatioLabels,
+    overlaySlots,
+    showOrientationMenu,
+    orientationLabels,
+  );
 }

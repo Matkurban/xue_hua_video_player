@@ -67,9 +67,6 @@ class BufferingIndicator extends StatelessWidget {
       return centered;
     }
 
-    return ColoredBox(
-      color: theme.bufferingScrimColor,
-      child: centered,
-    );
+    return ColoredBox(color: theme.bufferingScrimColor, child: centered);
   }
 }

@@ -60,10 +60,7 @@ class PlaybackPresentation extends StatelessWidget {
                     child: TextureVideoSurface(handle: handle),
                   ),
                 ),
-                _BufferingOverlay(
-                  model: model,
-                  controlsStyle: controlsStyle,
-                ),
+                _BufferingOverlay(model: model, controlsStyle: controlsStyle),
               ],
             );
           },
@@ -105,11 +102,7 @@ class _VideoAspectLayout extends StatelessWidget {
         fit: _boxFitForMode(mode),
         alignment: Alignment.center,
         clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: ratio,
-          height: 1,
-          child: child,
-        ),
+        child: SizedBox(width: ratio, height: 1, child: child),
       ),
     );
   }
@@ -117,10 +110,7 @@ class _VideoAspectLayout extends StatelessWidget {
 
 /// 缓冲中主题化指示器 / Themed buffering indicator while loading or rebuffering.
 class _BufferingOverlay extends StatelessWidget {
-  const _BufferingOverlay({
-    required this.model,
-    required this.controlsStyle,
-  });
+  const _BufferingOverlay({required this.model, required this.controlsStyle});
 
   final PlaybackPresentationModel model;
   final VideoControlsStyle controlsStyle;

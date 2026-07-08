@@ -135,7 +135,9 @@ void main() {
       }
     });
 
-    testWidgets('desktopImmersive false still handles arrow keys', (tester) async {
+    testWidgets('desktopImmersive false still handles arrow keys', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         immersive.dispose();

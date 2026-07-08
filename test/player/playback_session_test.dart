@@ -315,6 +315,20 @@ void main() {
       expect(session.state.value, PlayerState.buffering);
     });
 
+    test('setVideoOrientation updates videoOrientation signal', () async {
+      await session.initialize();
+      const config = VideoOrientationConfig(
+        flipHorizontal: true,
+        flipVertical: false,
+        rotateDegrees: 90,
+      );
+
+      await session.setVideoOrientation(config);
+
+      expect(session.videoOrientation.value, config);
+      expect(port.lastVideoOrientation, config);
+    });
+
     // Regression: a macOS overlay-apply deadlock (overlay_sink locked on a
     // background thread while osxvideosink marshalled set_window_handle to the
     // main thread) froze the whole Dart isolate, so no PlayerEvent ever reached

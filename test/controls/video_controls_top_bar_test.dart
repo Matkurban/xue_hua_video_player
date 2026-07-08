@@ -108,9 +108,7 @@ void main() {
           fullscreen: const VideoControlsFullscreenConfig(
             desktopImmersive: true,
             aspectRatioLabels: AspectRatioModeLabels(fit: '适应'),
-            overlaySlots: VideoControlsOverlaySlots(
-              title: Text('Episode 1'),
-            ),
+            overlaySlots: VideoControlsOverlaySlots(title: Text('Episode 1')),
           ),
         );
 

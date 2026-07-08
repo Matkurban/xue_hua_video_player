@@ -50,6 +50,13 @@ class PlaybackSession
   final FlutterSignal<bool> _supportsTracks = signal(true);
   final FlutterSignal<bool> _supportsOrientation = signal(true);
   final FlutterSignal<int> _mediaGeneration = signal(0);
+  final FlutterSignal<VideoOrientationConfig> _videoOrientation = signal(
+    const VideoOrientationConfig(
+      flipHorizontal: false,
+      flipVertical: false,
+      rotateDegrees: 0,
+    ),
+  );
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   late final ReadonlySignal<int> mediaGeneration = _mediaGeneration;
@@ -108,7 +115,11 @@ class PlaybackSession
   @override
   ReadonlySignal<bool> get isSeekable => _isSeekable;
   ReadonlySignal<bool> get supportsTracks => _supportsTracks;
+  @override
   ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
+  @override
+  ReadonlySignal<VideoOrientationConfig> get videoOrientation =>
+      _videoOrientation;
 
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
@@ -215,8 +226,11 @@ class PlaybackSession
   Future<void> selectTrack(MediaTrack track, {bool enable = true}) =>
       _guard(() => _port.selectTrack(track, enable: enable));
 
-  Future<void> setVideoOrientation(VideoOrientationConfig config) =>
-      _guard(() => _port.setVideoOrientation(config));
+  @override
+  Future<void> setVideoOrientation(VideoOrientationConfig config) async {
+    _videoOrientation.value = config;
+    await _guard(() => _port.setVideoOrientation(config));
+  }
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) =>
@@ -248,6 +262,7 @@ class PlaybackSession
     _isSeekable.dispose();
     _supportsTracks.dispose();
     _supportsOrientation.dispose();
+    _videoOrientation.dispose();
     _mediaGeneration.dispose();
   }
 
@@ -274,6 +289,11 @@ class PlaybackSession
       _volume.value = 1.0;
       _muted.value = false;
       _looping.value = false;
+      _videoOrientation.value = const VideoOrientationConfig(
+        flipHorizontal: false,
+        flipVertical: false,
+        rotateDegrees: 0,
+      );
       _mediaGeneration.value++;
     });
   }

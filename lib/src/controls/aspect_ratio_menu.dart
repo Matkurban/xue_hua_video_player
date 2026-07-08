@@ -89,42 +89,6 @@ class AspectRatioMenuButton extends StatelessWidget {
   }
 }
 
-/// 沉浸态铺满模式切换按钮（右上角定位，已弃用）/ Positioned aspect ratio menu; prefer [AspectRatioMenuButton] in [VideoControlsTopBar].
-@Deprecated('Use AspectRatioMenuButton inside VideoControlsTopBar instead.')
-class AspectRatioMenu extends StatelessWidget {
-  /// 创建铺满模式菜单 / Creates the aspect ratio menu button.
-  const AspectRatioMenu({
-    super.key,
-    required this.immersive,
-    required this.theme,
-    required this.labels,
-  });
-
-  /// 沉浸 signals / Immersive signals.
-  final ImmersiveControlsState immersive;
-
-  /// 控件主题 / Controls theme.
-  final VideoControlsTheme theme;
-
-  /// 选项文案 / Option labels.
-  final AspectRatioModeLabels labels;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: 8,
-      right: 8,
-      child: SafeArea(
-        child: AspectRatioMenuButton(
-          immersive: immersive,
-          theme: theme,
-          labels: labels,
-        ),
-      ),
-    );
-  }
-}
-
 class _ModeTile extends StatelessWidget {
   const _ModeTile({
     required this.label,

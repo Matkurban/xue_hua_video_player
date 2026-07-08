@@ -18,6 +18,12 @@ abstract class PlaybackControlsModel {
   ReadonlySignal<bool> get looping;
   ReadonlySignal<double> get speed;
 
+  /// 当前 pipeline 是否支持视频方向变换 / Whether orientation transforms are supported.
+  ReadonlySignal<bool> get supportsOrientation;
+
+  /// 当前视频方向配置 / Current video orientation configuration.
+  ReadonlySignal<VideoOrientationConfig> get videoOrientation;
+
   Future<void> togglePlayPause();
   Future<void> toggleMuted();
   Future<void> setLooping(bool looping);
@@ -29,4 +35,7 @@ abstract class PlaybackControlsModel {
 
   /// 设置铺满模式并同步至 pipeline / Sets aspect ratio mode and syncs to pipeline.
   Future<void> setAspectRatioMode(AspectRatioMode mode);
+
+  /// 设置视频翻转/旋转（需 [supportsOrientation]）/ Sets flip/rotate when [supportsOrientation].
+  Future<void> setVideoOrientation(VideoOrientationConfig config);
 }

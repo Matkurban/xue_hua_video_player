@@ -9,15 +9,25 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     Duration initialPosition = Duration.zero,
     Duration initialDuration = const Duration(seconds: 100),
     bool initialSeekable = true,
+    bool supportsOrientation = true,
+    VideoOrientationConfig initialOrientation = const VideoOrientationConfig(
+      flipHorizontal: false,
+      flipVertical: false,
+      rotateDegrees: 0,
+    ),
   }) : _state = signal(initialState),
        _position = signal(initialPosition),
        _duration = signal(initialDuration),
-       _isSeekable = signal(initialSeekable);
+       _isSeekable = signal(initialSeekable),
+       _supportsOrientation = signal(supportsOrientation),
+       _videoOrientation = signal(initialOrientation);
 
   final FlutterSignal<PlayerState> _state;
   final FlutterSignal<Duration> _position;
   final FlutterSignal<Duration> _duration;
   final FlutterSignal<bool> _isSeekable;
+  final FlutterSignal<bool> _supportsOrientation;
+  final FlutterSignal<VideoOrientationConfig> _videoOrientation;
   final FlutterSignal<bool> _muted = signal(false);
   final FlutterSignal<double> _volume = signal(1.0);
   final FlutterSignal<bool> _looping = signal(false);
@@ -32,6 +42,7 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
   Duration? lastSeek;
   int seekCallCount = 0;
   int togglePlayPauseCallCount = 0;
+  VideoOrientationConfig? lastVideoOrientation;
 
   @override
   ReadonlySignal<PlayerState> get state => _state;
@@ -59,6 +70,13 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
 
   @override
   ReadonlySignal<double> get speed => _speed;
+
+  @override
+  ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
+
+  @override
+  ReadonlySignal<VideoOrientationConfig> get videoOrientation =>
+      _videoOrientation;
 
   @override
   Future<void> togglePlayPause() async {
@@ -98,6 +116,12 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     lastAspectRatioMode = mode;
   }
 
+  @override
+  Future<void> setVideoOrientation(VideoOrientationConfig config) async {
+    lastVideoOrientation = config;
+    _videoOrientation.value = config;
+  }
+
   void setPosition(Duration position) {
     _position.value = position;
   }
@@ -108,6 +132,8 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     _position.dispose();
     _duration.dispose();
     _isSeekable.dispose();
+    _supportsOrientation.dispose();
+    _videoOrientation.dispose();
     _muted.dispose();
     _volume.dispose();
     _looping.dispose();

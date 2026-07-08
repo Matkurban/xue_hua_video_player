@@ -219,8 +219,7 @@ void main() {
       expect(
         find.byWidgetPredicate(
           (widget) =>
-              widget is ColoredBox &&
-              widget.color == const Color(0x61000000),
+              widget is ColoredBox && widget.color == const Color(0x61000000),
         ),
         findsNothing,
       );
@@ -262,8 +261,7 @@ void main() {
 
       expect(
         find.byWidgetPredicate(
-          (widget) =>
-              widget is ColoredBox && widget.color == Colors.black38,
+          (widget) => widget is ColoredBox && widget.color == Colors.black38,
         ),
         findsOneWidget,
       );
@@ -292,11 +290,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(FittedBox), findsOneWidget);
-      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.contain);
+      expect(
+        tester.widget<FittedBox>(find.byType(FittedBox)).fit,
+        BoxFit.contain,
+      );
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testWidgets('aspect ratio modes map to distinct BoxFit values', (tester) async {
+    testWidgets('aspect ratio modes map to distinct BoxFit values', (
+      tester,
+    ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
       aspectRatioMode = signal(AspectRatioMode.fit);
@@ -316,11 +319,17 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.contain);
+      expect(
+        tester.widget<FittedBox>(find.byType(FittedBox)).fit,
+        BoxFit.contain,
+      );
 
       aspectRatioMode.value = AspectRatioMode.fill;
       await tester.pumpAndSettle();
-      expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.cover);
+      expect(
+        tester.widget<FittedBox>(find.byType(FittedBox)).fit,
+        BoxFit.cover,
+      );
 
       aspectRatioMode.value = AspectRatioMode.stretch;
       await tester.pumpAndSettle();

@@ -14,7 +14,10 @@ library;
 export 'src/controls/controls_overlay_slots.dart'
     show VideoControlsOverlaySlots;
 export 'src/controls/fullscreen_config.dart'
-    show AspectRatioModeLabels, VideoControlsFullscreenConfig;
+    show
+        AspectRatioModeLabels,
+        VideoControlsFullscreenConfig,
+        VideoOrientationLabels;
 export 'src/controls/playback_controls_model.dart' show PlaybackControlsModel;
 export 'src/presentation/playback_presentation_model.dart'
     show PlaybackPresentationModel;

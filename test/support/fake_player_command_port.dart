@@ -28,6 +28,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   double? lastVolume;
   bool? lastMute;
   AspectRatioMode? lastAspectRatioMode;
+  VideoOrientationConfig? lastVideoOrientation;
   int setAspectRatioModeCallCount = 0;
   int playCallCount = 0;
   int pauseCallCount = 0;
@@ -120,7 +121,9 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   Future<void> selectTrack(MediaTrack track, {required bool enable}) async {}
 
   @override
-  Future<void> setVideoOrientation(VideoOrientationConfig config) async {}
+  Future<void> setVideoOrientation(VideoOrientationConfig config) async {
+    lastVideoOrientation = config;
+  }
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) async {

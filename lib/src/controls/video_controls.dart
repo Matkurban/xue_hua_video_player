@@ -276,9 +276,14 @@ class _VideoControlsState extends State<VideoControls> {
             ),
           VideoControlsTopBar(
             immersive: widget.immersive,
+            model: widget.model,
             theme: theme,
             slots: widget.immersive.fullscreen.value.overlaySlots,
             labels: widget.immersive.fullscreen.value.aspectRatioLabels,
+            orientationLabels:
+                widget.immersive.fullscreen.value.orientationLabels,
+            showOrientationMenu:
+                widget.immersive.fullscreen.value.showOrientationMenu,
           ),
           ImmersiveHud(immersive: widget.immersive),
           SignalBuilder(

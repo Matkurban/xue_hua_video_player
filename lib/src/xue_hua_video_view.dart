@@ -69,6 +69,7 @@ class _XueHuaVideoViewState extends State<XueHuaVideoView> {
       initialAspectRatioMode: widget.aspectRatioMode,
       fullscreen: widget.fullscreen,
     );
+    widget.controller.attachImmersive(_immersive);
     _disposeOpenEffect = effect(() {
       final generation = widget.controller.mediaGeneration.value;
       if (generation == _lastMediaGeneration) return;
@@ -93,6 +94,7 @@ class _XueHuaVideoViewState extends State<XueHuaVideoView> {
   @override
   void dispose() {
     _disposeOpenEffect();
+    widget.controller.detachImmersive();
     _immersive.dispose();
     super.dispose();
   }

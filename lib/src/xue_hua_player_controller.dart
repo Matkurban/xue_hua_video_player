@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
+import 'controls/immersive_controls_state.dart';
 import 'controls/playback_controls_model.dart';
 import 'presentation/playback_presentation_model.dart';
 import 'media/media_source_resolver.dart';
@@ -8,6 +9,7 @@ import 'model/video_source.dart';
 import 'player/command_port.dart';
 import 'player/playback_session.dart';
 import 'rust/player_events.dart';
+import 'utils/platform_util.dart';
 
 export 'rust/player_events.dart'
     show
@@ -31,6 +33,10 @@ export 'model/video_source.dart';
 ///
 /// Reactive 状态均为 [ReadonlySignal]，请在 [SignalBuilder] 或 `effect` 内读取 `.value`。
 /// All reactive state is exposed as [ReadonlySignal]s; read `.value` inside [SignalBuilder] or `effect`.
+///
+/// 全屏 API（[isFullscreen]、[enterFullscreen]、[exitFullscreen]）须在 [XueHuaVideoView] 内
+/// 通过 [attachImmersive] 绑定后生效，供顶栏插槽返回按钮先退出全屏再导航。
+/// Fullscreen API requires [attachImmersive] from [XueHuaVideoView] before use.
 class XueHuaPlayerController
     implements PlaybackControlsModel, PlaybackPresentationModel {
   /// 创建控制器；可注入测试用 [port]、[mediaSourceResolver] 或 [session] / Creates a controller with optional test doubles.
@@ -46,6 +52,10 @@ class XueHuaPlayerController
            );
 
   final PlaybackSession _session;
+
+  ImmersiveControlsState? _immersive;
+  Computed<bool>? _isFullscreenAttached;
+  final FlutterSignal<bool> _isFullscreenDetached = signal(false);
 
   /// 是否已完成 [initialize]（原生 player 已创建且事件流已订阅）/ Whether [initialize] completed.
   @override
@@ -107,7 +117,20 @@ class XueHuaPlayerController
   ReadonlySignal<bool> get supportsTracks => _session.supportsTracks;
 
   /// 当前 pipeline 是否支持视频方向变换 / Whether video orientation transforms are supported.
+  @override
   ReadonlySignal<bool> get supportsOrientation => _session.supportsOrientation;
+
+  /// 当前视频方向配置 / Current video flip/rotate configuration.
+  @override
+  ReadonlySignal<VideoOrientationConfig> get videoOrientation =>
+      _session.videoOrientation;
+
+  /// 是否处于移动端全屏（横屏锁定）/ Whether mobile landscape fullscreen is active.
+  ///
+  /// 未 [attachImmersive] 或桌面端恒为 `false`。
+  /// Always `false` on desktop or before [attachImmersive].
+  ReadonlySignal<bool> get isFullscreen =>
+      _isFullscreenAttached ?? _isFullscreenDetached;
 
   /// 是否正在播放（`state == playing`）/ Whether playback is active.
   @override
@@ -122,6 +145,35 @@ class XueHuaPlayerController
 
   /// 媒体打开代数；每次 [open] 递增 / Media open generation; increments on each [open].
   ReadonlySignal<int> get mediaGeneration => _session.mediaGeneration;
+
+  /// 绑定 [XueHuaVideoView] 的沉浸状态，供全屏 API 读写横屏锁定 / Binds immersive state for fullscreen API.
+  void attachImmersive(ImmersiveControlsState immersive) {
+    detachImmersive();
+    _immersive = immersive;
+    _isFullscreenAttached = computed(() {
+      if (!isMobilePlatform) return false;
+      return immersive.landscapeLocked.value;
+    });
+  }
+
+  /// 解除沉浸绑定 / Detaches immersive state.
+  void detachImmersive() {
+    _isFullscreenAttached?.dispose();
+    _isFullscreenAttached = null;
+    _immersive = null;
+  }
+
+  /// 进入移动端全屏（横屏锁定）/ Enters mobile landscape fullscreen.
+  void enterFullscreen() {
+    if (!isMobilePlatform) return;
+    _immersive?.landscapeLocked.value = true;
+  }
+
+  /// 退出移动端全屏 / Exits mobile landscape fullscreen.
+  void exitFullscreen() {
+    if (!isMobilePlatform) return;
+    _immersive?.landscapeLocked.value = false;
+  }
 
   /// 创建原生 player 并订阅 Rust 事件流 / Creates the native player and subscribes to the Rust event stream.
   Future<void> initialize() => _session.initialize();
@@ -174,6 +226,7 @@ class XueHuaPlayerController
       _session.selectTrack(track, enable: enable);
 
   /// 设置视频方向/旋转（需 [supportsOrientation]）/ Sets video orientation when [supportsOrientation].
+  @override
   Future<void> setVideoOrientation(VideoOrientationConfig config) =>
       _session.setVideoOrientation(config);
 
@@ -183,5 +236,9 @@ class XueHuaPlayerController
       _session.setAspectRatioMode(mode);
 
   /// 释放 player 与事件订阅 / Disposes the player and event subscription.
-  Future<void> dispose() => _session.dispose();
+  Future<void> dispose() async {
+    detachImmersive();
+    _isFullscreenDetached.dispose();
+    await _session.dispose();
+  }
 }
