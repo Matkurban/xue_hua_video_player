@@ -1,7 +1,23 @@
-## 1.4.0
+## 1.2.0
 
 ### Breaking
 
+- Removed Cargokit precompiled Rust binary support. The plugin now always
+  compiles `libxue_hua_video_player` from source during the app build. Consumers
+  need the Rust toolchain (`rustup`) on the machine that builds the app.
+  Precompiled release downloads, `rust/cargokit.yaml`, `cargokit_options.yaml`
+  (`use_precompiled_binaries`), and the `precompile_binaries` CI workflow are
+  gone.
+- **`XueHuaVideoView`**: removed `BoxFit fit`; use `AspectRatioMode aspectRatioMode`
+  (default `AspectRatioMode.fit`). Maps to the Rust pipeline sink (`force-aspect-ratio`).
+
+  ```dart
+  // Before
+  XueHuaVideoView(controller: c, fit: BoxFit.cover)
+
+  // After
+  XueHuaVideoView(controller: c, aspectRatioMode: AspectRatioMode.fill)
+  ```
 - **All platforms** now render through Flutter external **`Texture`** widgets
   instead of Platform Views or desktop overlay windows.
 - Removed `VideoSurfaceKind.platformView` and `VideoSurfaceKind.desktopOverlay`.
@@ -19,43 +35,29 @@
   (`createTexture` / `disposeTexture`).
 - Rust C-ABI frame pull API (`xhvp_texture_*`) for desktop/Apple pixel-buffer
   textures.
-
-## 1.3.0
-
-### Breaking
-
-- **`XueHuaVideoView`**: removed `BoxFit fit`; use `AspectRatioMode aspectRatioMode`
-  (default `AspectRatioMode.fit`). Maps to the Rust pipeline sink (`force-aspect-ratio`).
-
-  ```dart
-  // Before
-  XueHuaVideoView(controller: c, fit: BoxFit.cover)
-
-  // After
-  XueHuaVideoView(controller: c, aspectRatioMode: AspectRatioMode.fill)
-  ```
-
-### Added
-
-- **`lib/src/surface/`** (package-private): `VideoSurfaceHandle`, `VideoSurfaceKind`
-  (`platformView` / `desktopOverlay` / `unsupported`), mobile PlatformView builders,
-  and Windows/Linux `DesktopVideoOverlay` with injectable `DesktopOverlayClient`.
-- Widget/unit tests for handle routing, desktop bounds geometry, and overlay lifecycle.
+- **`lib/src/surface/`** (package-private): `VideoSurfaceHandle`, `VideoSurfaceKind`,
+  and `Texture` surface builders.
+- **`XueHuaPlayerController`** implements **`PlaybackControlsModel`** for the
+  built-in control bar.
+- Widget/unit tests for surface handle routing, aspect-ratio sync, and overlay
+  lifecycle.
 - **`test/support/`** test seam: `FakePlayerCommandPort`, `PlayerEventFixtures`, and
   `FakePlaybackControlsModel`. Dart/Rust boundary tests mock **`PlayerCommandPort`**
-  (not `RustLib.initMock`). Added controller command coverage and `XueHuaVideoView`
-  aspect-ratio sync widget tests.
+  (not `RustLib.initMock`).
 
-## 1.2.0
+### Bug fixes
 
-### Breaking
-
-- Removed Cargokit precompiled Rust binary support. The plugin now always
-  compiles `libxue_hua_video_player` from source during the app build. Consumers
-  need the Rust toolchain (`rustup`) on the machine that builds the app.
-  Precompiled release downloads, `rust/cargokit.yaml`, `cargokit_options.yaml`
-  (`use_precompiled_binaries`), and the `precompile_binaries` CI workflow are
-  gone.
+- **Android black screen (audio only)**: sync `SurfaceProducer` content size from
+  decoded video caps via `setContentSize` so `ImageReader` is not stuck at 1×1;
+  JNI surface bind no longer passes stale default dimensions to GStreamer.
+- **Android playback never starting**: restore eager `bindSurfaceIfAvailable()`
+  after `setCallback` on texture create (Flutter does not always fire
+  `onSurfaceAvailable` on first attach).
+- **iOS network URL — loading spinner / controls stuck**: treat the texture/appsink
+  path as overlay-ready so playbin re-buffering at 100% emits `Playing` instead
+  of leaving UI in `Buffering` forever (assets were unaffected).
+- **Playback engine deadlocks** during overlay session attach and shell locking.
+- **EOS replay / loop**: preserve playback rate when restarting from end-of-stream.
 
 ## 1.1.0
 
