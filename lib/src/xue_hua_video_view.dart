@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import 'controls/video_controls.dart';
 import 'enum/video_controls_style.dart';
-import 'surface/build_video_surface.dart';
-import 'surface/video_surface_handle.dart';
+import 'presentation/playback_presentation.dart';
 import 'xue_hua_player_controller.dart';
 
 export 'controls/video_controls.dart';
@@ -45,57 +43,9 @@ class XueHuaVideoView extends StatelessWidget {
           fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
-            SignalBuilder(
-              builder: (context) {
-                final playerId = controller.playerId.value;
-                if (playerId == null) return const SizedBox.expand();
-                final handle = VideoSurfaceHandle.fromPlayerId(playerId);
-                return _AspectRatioModeSync(
-                  controller: controller,
-                  aspectRatioMode: aspectRatioMode,
-                  child: AspectRatio(
-                    aspectRatio: controller.aspectRatio.value,
-                    child: ClipRect(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          if (constraints.maxWidth <= 0 ||
-                              constraints.maxHeight <= 0) {
-                            return const SizedBox.expand();
-                          }
-                          return Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              buildVideoSurface(handle),
-                              SignalBuilder(
-                                builder: (context) {
-                                  final buffering =
-                                      controller.bufferingPercent.value;
-                                  final state = controller.state.value;
-                                  final showLoading =
-                                      state == PlayerState.buffering;
-                                  if (!showLoading) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return ColoredBox(
-                                    color: Colors.black38,
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        value: buffering < 100
-                                            ? buffering / 100
-                                            : null,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
+            PlaybackPresentation(
+              model: controller,
+              aspectRatioMode: aspectRatioMode,
             ),
             if (showControls)
               VideoControls(model: controller, style: controlsStyle),
@@ -104,46 +54,4 @@ class XueHuaVideoView extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Pushes [aspectRatioMode] to the Rust pipeline when the player is ready.
-class _AspectRatioModeSync extends StatefulWidget {
-  const _AspectRatioModeSync({
-    required this.controller,
-    required this.aspectRatioMode,
-    required this.child,
-  });
-
-  final XueHuaPlayerController controller;
-  final AspectRatioMode aspectRatioMode;
-  final Widget child;
-
-  @override
-  State<_AspectRatioModeSync> createState() => _AspectRatioModeSyncState();
-}
-
-class _AspectRatioModeSyncState extends State<_AspectRatioModeSync> {
-  @override
-  void initState() {
-    super.initState();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AspectRatioModeSync oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.aspectRatioMode != widget.aspectRatioMode ||
-        oldWidget.controller != widget.controller) {
-      _sync();
-    }
-  }
-
-  void _sync() {
-    if (widget.controller.playerId.value == null) return;
-    if (!widget.controller.initialized.value) return;
-    widget.controller.setAspectRatioMode(widget.aspectRatioMode);
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }

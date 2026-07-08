@@ -1,6 +1,8 @@
 library;
 
 export 'src/controls/playback_controls_model.dart' show PlaybackControlsModel;
+export 'src/presentation/playback_presentation_model.dart'
+    show PlaybackPresentationModel;
 export 'src/controls/video_controls.dart' show VideoControls;
 export 'src/enum/video_controls_style.dart';
 export 'src/xue_hua_player_controller.dart';

@@ -13,7 +13,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<PlayerHandle> createPlayer() =>
     RustLib.instance.api.crateApiPlayerCreatePlayer();
 
-/// macOS: synchronously records the NSView handle for bus sync / rebind.
+/// Darwin: synchronously records the native view handle for bus sync / rebind (macOS only).
 Future<void> cacheMacosOverlayHandle({
   required PlatformInt64 playerId,
   required PlatformInt64 viewPtr,
@@ -22,12 +22,34 @@ Future<void> cacheMacosOverlayHandle({
   viewPtr: viewPtr,
 );
 
+Future<void> notifyIosOverlay({
+  required PlatformInt64 playerId,
+  required PlatformInt64 handle,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerNotifyIosOverlay(
+  playerId: playerId,
+  handle: handle,
+  width: width,
+  height: height,
+);
+
 /// macOS: applies the cached NSView handle to the GStreamer sink (main thread).
 Future<void> applyMacosOverlayGstreamer({
   required PlatformInt64 playerId,
   required int width,
   required int height,
 }) => RustLib.instance.api.crateApiPlayerApplyMacosOverlayGstreamer(
+  playerId: playerId,
+  width: width,
+  height: height,
+);
+
+Future<void> applyIosOverlayGstreamer({
+  required PlatformInt64 playerId,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerApplyIosOverlayGstreamer(
   playerId: playerId,
   width: width,
   height: height,

@@ -10,13 +10,17 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | `PipelineShell` | Shared sinks, bus handlers, and overlay sync wiring for both source adapters |
 | `MediaSource` | Unified load descriptor: `Uri` or `FlutterAsset`, resolved in `media/` |
 | `GstPlayer` | Type alias for `PlaybackEngine` (backward compatible) |
-| `XueHuaPlayerController` | Dart public facade; wires command port + state store; implements [PlaybackControlsModel] |
-| `PlaybackControlsModel` | Narrow controls seam: readonly playback signals + transport commands (play/seek/mute/…) |
-| `ScrubController` | Drag/seek settle logic for built-in sliders; depends on [PlaybackControlsModel] |
-| `PlayerCommandPort` | Dart/Rust seam adapter: create/dispose, event stream, all FRB playback commands |
-| `PlayerStateStore` | Dart playback state: event reducer, readonly signals, computed (`isPlaying`, `aspectRatio`, …) |
+| `XueHuaPlayerController` | Dart **public facade** (thin): delegates to **`PlaybackSession`**; implements [PlaybackControlsModel] + presentation extras (`playerId`, `tracks`, `setAspectRatioMode`, …); **does not** hold `PlayerCommandPort` directly |
+| `PlaybackSession` | Dart **deep orchestration module** (`lib/src/player/playback_session.dart`): owns signals, event dispatch, `open()` lifecycle, `_guard`, optimistic transport commands, `tracksChanged` refresh; inward seam **`PlayerCommandPort`**; outward implements **`PlaybackControlsModel`** transport + exposes full readonly signals |
+| `PlaybackControlsModel` | Narrow controls seam: readonly transport signals + commands (play/seek/mute/…); widgets / **`ScrubController`** depend on this — **not** on `XueHuaPlayerController` concrete type (workstream C) |
+| `ScrubController` | Drag/seek settle logic for built-in sliders; depends on [PlaybackControlsModel] only — **unchanged in workstream B** |
+| `TransportCommand` | Private transport helpers on **`PlaybackSession`** (B2): optimistic preview → port call → error/`PlayerEvent` settle; seek/volume/mute/speed/looping — replaces scattered `preview*` + `_guard` in controller |
+| `PlayerCommandPort` | Dart/Rust seam adapter: create/dispose, event stream, FRB playback commands — **implementation detail of `PlaybackSession`** (B3); prod + **`FakePlayerCommandPort`** adapters retained |
+| `PlayerStateStore` | **Removed** (workstream B1) — logic lives in **`PlaybackSession`** |
 | `MediaSourceResolver` | Dart: `VideoSource` → `MediaSourceDto` before crossing the Rust seam |
-| `XueHuaVideoView` | Flutter widget embedding a native Platform View for video |
+| `PlaybackPresentationModel` | Narrow presentation seam: `playerId`, `aspectRatio`, buffering/loading signals, `setAspectRatioMode` — widgets bind this instead of `XueHuaPlayerController` concrete type |
+| `PlaybackPresentation` | Deep presentation widget (`lib/src/presentation/`): `VideoSurfaceHandle` routing + aspect layout + buffering chrome + **`AspectRatioMode`** pipeline sync |
+| `XueHuaVideoView` | Thin layout shell: `PlaybackPresentation` + optional `VideoControls`; background color + controls style only |
 | `playbin3` | GStreamer high-level playback element (URI in, A/V out) |
 | `VideoOverlay` | GStreamer interface for rendering into an application-provided native window/surface |
 | `VideoSurface` | Shared `stored` handle + per-platform nested overlay state (`AndroidOverlayState`, `IosOverlayState`); owns overlay sessions and `ios_layer_bus_slot`; thin delegate (~150 LOC target) |
@@ -104,16 +108,36 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 
 ## Dart rendering surface
 
-- **`lib/src/surface/`** (not exported): routes a player's `playerId` into the correct Flutter embedding path via **`VideoSurfaceHandle`** + **`VideoSurfaceKind`** — `platformView` (Android/iOS/macOS PlatformView), `desktopOverlay` (Windows/Linux MethodChannel bounds sync), or `unsupported`.
-- **`buildXueHuaVideoPlatformView(playerId:)`** remains a thin wrapper over internal `buildVideoSurface(handle)` for README/custom layouts; prefer **`XueHuaVideoView`** for playback UI.
+- **`lib/src/presentation/`** (partial export): **`PlaybackPresentation`** deep widget + **`PlaybackPresentationModel`** seam; owns surface embed, aspect sync, loading chrome.
+- **`lib/src/surface/`** (not exported): platform IO primitives — **`VideoSurfaceHandle`** routing, mobile PlatformView, desktop overlay bounds sync.
+- **`buildXueHuaVideoPlatformView(playerId:)`** remains surface-only for README/custom layouts (no aspect sync / loading chrome); full UI prefers **`XueHuaVideoView`** or **`PlaybackPresentation`** + custom chrome.
 - Win/Linux overlay IO goes through injectable **`DesktopOverlayClient`**; bounds come from **`DesktopOverlayBounds.fromRenderBox`**.
-- **`XueHuaVideoView.aspectRatioMode`** syncs **`AspectRatioMode`** to the Rust pipeline (`setAspectRatioMode`); letterbox/crop/stretch is applied on the GStreamer sink, not via Flutter `BoxFit`.
+- **`PlaybackPresentation.aspectRatioMode`** (and **`XueHuaVideoView.aspectRatioMode`**) sync **`AspectRatioMode`** to the Rust pipeline; letterbox/crop/stretch is on the GStreamer sink, not Flutter `BoxFit`.
+
+## Dart playback presentation (workstream C)
+
+- **Before:** surface routing, aspect sync, loading overlay lived in **`XueHuaVideoView`**; presentation logic bound to controller concrete type.
+- **After (C1 landed):** **`PlaybackPresentation`** owns embed + sync + chrome; **`XueHuaVideoView`** is a thin shell (~40 LOC).
+- **`PlaybackSession`** / **`XueHuaPlayerController`** implement **`PlaybackPresentationModel`** alongside **`PlaybackControlsModel`**.
+- **`buildXueHuaVideoPlatformView`** unchanged (surface-only); integrators needing aspect sync use **`PlaybackPresentation`**.
+
+## Dart playback orchestration (workstream B)
+
+- **Before:** shallow **`XueHuaPlayerController`** + **`PlayerStateStore`** + **`PlayerCommandPort`** — command orchestration, optimistic UI, `open()` lifecycle, and `tracksChanged` refresh split across three modules; seek spans controller → store → port → **`ScrubController`**.
+- **After (B1–B3 landed):** **`PlaybackSession`** owns signals, reducer, transport, and port; **`XueHuaPlayerController`** is a thin delegate (~100 LOC).
+- **B1:** event reducer + `initialize()` subscription + `open()` (`resetForOpen` → `loadSource` → capabilities → tracks) + `_guard` + **`tracksChanged` → `_refreshTracks()` inside session** (remove dead reducer arm + controller special-case).
+- **B2:** **`TransportCommand`** private helpers on session (`_seekWithPreview`, `_setVolumeWithPreview`, …) — no separate file unless session exceeds ~400 LOC.
+- **B3:** only **`PlaybackSession`** talks to **`PlayerCommandPort`**; controller ctor injects `PlaybackSession?` / port for tests — drop direct `PlayerStateStore?` injection.
+- **B4 (deferred):** **`MediaSourceResolver`** stays honest shallow injectable; deepen only if `open()` gains Dart-side policy (validation/cache).
+- **Workstream C dependency:** satisfied — presentation binds **`PlaybackPresentationModel`**; controls bind **`PlaybackControlsModel`**.
 
 ## Testing
 
-- **Dart/Rust seam**: mock **`PlayerCommandPort`** via **`test/support/fake_player_command_port.dart`**; do **not** use `RustLib.initMock` for controller tests.
-- **Event boilerplate**: **`test/support/player_event_fixtures.dart`** builds `PlayerEvent` values for reducer/controller tests.
+- **Dart orchestration**: primary test surface is **`PlaybackSession`** with **`FakePlayerCommandPort`**; migrate existing controller tests to `test/player/playback_session_test.dart`; keep thin controller smoke tests.
+- **Dart/Rust seam**: mock **`PlayerCommandPort`** via **`test/support/fake_player_command_port.dart`**; do **not** use `RustLib.initMock` for session/controller tests.
+- **Event boilerplate**: **`test/support/player_event_fixtures.dart`** builds `PlayerEvent` values for reducer/session tests.
 - **Controls seam**: **`FakePlaybackControlsModel`** for widget tests under `test/controls/`.
+- **Presentation seam**: **`FakePlaybackPresentationModel`** + `test/presentation/playback_presentation_test.dart` (aspect sync, loading chrome — no PlatformView embed).
 - **Rust pure logic**: `preroll_gate`, `preroll_executor` (+ `RecordingPrerollEffects`), `LoadPrerollPolicy` gate-mapping tests, overlay session scheduling (+ injectable `GstTaskScheduler`), `replay`, overlay mock backends, resolver/shell/tracks — run with `cd rust && cargo test`.
 - **Out of scope for unit tests**: real GStreamer pipelines, PlatformView native embed, device/integration playback (use manual QA or future `integration_test` work).
 

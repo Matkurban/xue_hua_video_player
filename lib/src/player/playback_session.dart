@@ -1,10 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
+import '../controls/playback_controls_model.dart';
+import '../presentation/playback_presentation_model.dart';
+import '../media/media_source_resolver.dart';
+import '../model/video_source.dart';
 import '../rust/player_events.dart';
+import 'command_port.dart';
 
-/// Playback state driven by [PlayerEvent] reducers and facade-coordinated previews.
-class PlayerStateStore {
+/// Deep orchestration module: signals, event dispatch, open lifecycle, transport.
+class PlaybackSession
+    implements PlaybackControlsModel, PlaybackPresentationModel {
+  PlaybackSession({
+    PlayerCommandPort? port,
+    MediaSourceResolver? mediaSourceResolver,
+  }) : _port = port ?? ProductionPlayerCommandPort(),
+       _mediaSourceResolver =
+           mediaSourceResolver ?? const MediaSourceResolver();
+
+  final PlayerCommandPort _port;
+  final MediaSourceResolver _mediaSourceResolver;
+
   final FlutterSignal<PlayerState> _state = signal(PlayerState.idle);
   final FlutterSignal<Duration> _position = signal(Duration.zero);
   final FlutterSignal<Duration> _duration = signal(Duration.zero);
@@ -23,6 +41,7 @@ class PlayerStateStore {
   final FlutterSignal<bool> _supportsTracks = signal(true);
   final FlutterSignal<bool> _supportsOrientation = signal(true);
 
+  @override
   late final ReadonlySignal<bool> isPlaying = computed(
     () => _state.value == PlayerState.playing,
   );
@@ -31,6 +50,7 @@ class PlayerStateStore {
     () => _state.value == PlayerState.completed,
   );
 
+  @override
   late final ReadonlySignal<double> aspectRatio = computed(() {
     final meta = _videoMetadata.value;
     if (meta != null &&
@@ -42,30 +62,171 @@ class PlayerStateStore {
     return (s.width > 0 && s.height > 0) ? s.width / s.height : 16 / 9;
   });
 
+  StreamSubscription<PlayerEvent>? _sub;
+  bool _disposed = false;
+
+  @override
   ReadonlySignal<bool> get initialized => _initialized;
+  @override
   ReadonlySignal<int?> get playerId => _playerId;
+  @override
   ReadonlySignal<PlayerState> get state => _state;
+  @override
   ReadonlySignal<Duration> get position => _position;
+  @override
   ReadonlySignal<Duration> get duration => _duration;
   ReadonlySignal<Size> get videoSize => _videoSize;
+  @override
   ReadonlySignal<int> get bufferingPercent => _bufferingPercent;
+  @override
   ReadonlySignal<double> get volume => _volume;
+  @override
   ReadonlySignal<double> get speed => _speed;
+  @override
   ReadonlySignal<bool> get looping => _looping;
+  @override
   ReadonlySignal<bool> get muted => _muted;
   ReadonlySignal<String?> get error => _error;
   ReadonlySignal<List<MediaTrack>> get tracks => _tracks;
   ReadonlySignal<VideoMetadata?> get videoMetadata => _videoMetadata;
+  @override
   ReadonlySignal<bool> get isSeekable => _isSeekable;
   ReadonlySignal<bool> get supportsTracks => _supportsTracks;
   ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
 
-  void markInitialized({required int playerId}) {
-    _playerId.value = playerId;
+  Future<void> initialize() async {
+    if (_initialized.value) return;
+    await _port.create();
+    final id = _port.playerId;
+    if (id == null) {
+      throw StateError('PlayerCommandPort.create() did not assign playerId');
+    }
+    _playerId.value = id;
     _initialized.value = true;
+    _sub = _port.events.listen(
+      _onEvent,
+      onError: (Object e) => _applyError(e.toString()),
+    );
   }
 
-  void resetForOpen() {
+  void _onEvent(PlayerEvent event) {
+    if (_disposed) return;
+    if (event.kind == PlayerEventKind.tracksChanged) {
+      unawaited(_refreshTracksFromPort());
+      return;
+    }
+    _applyEvent(event);
+  }
+
+  Future<void> _guard(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (e) {
+      _applyError(e.toString());
+    }
+  }
+
+  /// Loads [source] via the unified Rust media resolver.
+  Future<void> open(VideoSource source, {bool autoPlay = false}) async {
+    _resetForOpen();
+    await _guard(() async {
+      await _port.loadSource(
+        _mediaSourceResolver.resolve(source),
+        autoPlay: autoPlay,
+      );
+      _setPipelineCapabilities(await _port.getPipelineCapabilities());
+      await _refreshTracksFromPort();
+    });
+  }
+
+  Future<void> play() => _guard(_port.play);
+
+  Future<void> pause() => _guard(_port.pause);
+
+  Future<void> stop() => _guard(_port.stop);
+
+  @override
+  Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
+
+  @override
+  Future<void> seek(Duration position) async {
+    _previewSeek(position, showBuffering: isPlaying.value);
+    await _guard(() => _port.seek(position));
+  }
+
+  Future<void> setVolume(double volume) async {
+    _previewVolume(volume);
+    await _guard(() => _port.setVolume(_volume.value));
+  }
+
+  Future<void> setMuted(bool muted) async {
+    _previewMuted(muted);
+    await _guard(() => _port.setMute(muted));
+  }
+
+  @override
+  Future<void> toggleMuted() => setMuted(!_muted.value);
+
+  @override
+  Future<void> setSpeed(double speed) async {
+    _previewSpeed(speed);
+    await _guard(() => _port.setSpeed(_speed.value));
+  }
+
+  @override
+  Future<void> setLooping(bool looping) async {
+    _previewLooping(looping);
+    await _guard(() => _port.setLooping(looping));
+  }
+
+  Future<void> refreshTracks() => _refreshTracksFromPort();
+
+  Future<void> selectTrack(MediaTrack track, {bool enable = true}) =>
+      _guard(() => _port.selectTrack(track, enable: enable));
+
+  Future<void> setVideoOrientation(VideoOrientationConfig config) =>
+      _guard(() => _port.setVideoOrientation(config));
+
+  @override
+  Future<void> setAspectRatioMode(AspectRatioMode mode) =>
+      _guard(() => _port.setAspectRatioMode(mode));
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await _sub?.cancel();
+    await _port.dispose();
+    isPlaying.dispose();
+    isCompleted.dispose();
+    aspectRatio.dispose();
+    _state.dispose();
+    _position.dispose();
+    _duration.dispose();
+    _videoSize.dispose();
+    _bufferingPercent.dispose();
+    _volume.dispose();
+    _speed.dispose();
+    _looping.dispose();
+    _muted.dispose();
+    _error.dispose();
+    _playerId.dispose();
+    _initialized.dispose();
+    _tracks.dispose();
+    _videoMetadata.dispose();
+    _isSeekable.dispose();
+    _supportsTracks.dispose();
+    _supportsOrientation.dispose();
+  }
+
+  Future<void> _refreshTracksFromPort() async {
+    try {
+      _tracks.value = await _port.getTracks();
+    } catch (e) {
+      _applyError(e.toString());
+    }
+  }
+
+  void _resetForOpen() {
     batch(() {
       _error.value = null;
       _bufferingPercent.value = 100;
@@ -76,7 +237,7 @@ class PlayerStateStore {
     });
   }
 
-  void apply(PlayerEvent event) {
+  void _applyEvent(PlayerEvent event) {
     switch (event.kind) {
       case PlayerEventKind.durationChanged:
         _duration.value = Duration(milliseconds: event.durationMs);
@@ -124,31 +285,27 @@ class PlayerStateStore {
     }
   }
 
-  void applyError(String message) {
+  void _applyError(String message) {
     batch(() {
       _error.value = message;
       _state.value = PlayerState.error;
     });
   }
 
-  void setPipelineCapabilities(PipelineCapabilitiesDto caps) {
+  void _setPipelineCapabilities(PipelineCapabilitiesDto caps) {
     _isSeekable.value = caps.seek;
     _supportsTracks.value = caps.tracks;
     _supportsOrientation.value = caps.orientation;
   }
 
-  void setTracks(List<MediaTrack> tracks) {
-    _tracks.value = tracks;
-  }
-
-  void previewSeek(Duration position, {required bool showBuffering}) {
+  void _previewSeek(Duration position, {required bool showBuffering}) {
     _position.value = position;
     if (showBuffering) {
       _state.value = PlayerState.buffering;
     }
   }
 
-  void previewVolume(double volume) {
+  void _previewVolume(double volume) {
     final v = volume.clamp(0.0, 1.0);
     _volume.value = v;
     if (v > 0 && _muted.value) {
@@ -156,38 +313,15 @@ class PlayerStateStore {
     }
   }
 
-  void previewMuted(bool muted) {
+  void _previewMuted(bool muted) {
     _muted.value = muted;
   }
 
-  void previewSpeed(double speed) {
+  void _previewSpeed(double speed) {
     _speed.value = speed <= 0 ? 1.0 : speed;
   }
 
-  void previewLooping(bool looping) {
+  void _previewLooping(bool looping) {
     _looping.value = looping;
-  }
-
-  void dispose() {
-    isPlaying.dispose();
-    isCompleted.dispose();
-    aspectRatio.dispose();
-    _state.dispose();
-    _position.dispose();
-    _duration.dispose();
-    _videoSize.dispose();
-    _bufferingPercent.dispose();
-    _volume.dispose();
-    _speed.dispose();
-    _looping.dispose();
-    _muted.dispose();
-    _error.dispose();
-    _playerId.dispose();
-    _initialized.dispose();
-    _tracks.dispose();
-    _videoMetadata.dispose();
-    _isSeekable.dispose();
-    _supportsTracks.dispose();
-    _supportsOrientation.dispose();
   }
 }

@@ -22,7 +22,6 @@ use crate::playback::surface::VideoSurface;
 use crate::video::ios_layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
 
 /// Work context for idle `apply_target_state` / attach retries.
-#[derive(Clone)]
 pub struct IosIdleWork {
     pub work_generation: u64,
     pub shell: Arc<Mutex<PipelineShell>>,

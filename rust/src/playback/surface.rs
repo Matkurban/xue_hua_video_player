@@ -448,6 +448,8 @@ impl VideoSurface {
             let dimensions_changed = prev_w != width || prev_h != height;
             if dimensions_changed || play_intent.replay.desired_playing.load(Ordering::SeqCst) {
                 let session = self.ios.session.clone();
+                let stored = self.stored.clone();
+                let surface_for_work = self.clone_for_switch();
                 let running = play_intent.replay.running.clone();
                 let work_generation = session.overlay_generation().load(Ordering::SeqCst);
                 let ios_intent = play_intent.clone_for_async();
@@ -476,7 +478,13 @@ impl VideoSurface {
                     {
                         return;
                     }
-                    session.drain_pending_play(shell, &ios_intent, work_generation, ios_slot);
+                    session.drain_pending_play(session.idle_work(
+                        shell,
+                        stored,
+                        surface_for_work,
+                        ios_intent,
+                        ios_slot,
+                    ));
                 });
             }
             return Ok(());
@@ -484,6 +492,7 @@ impl VideoSurface {
 
         let session = self.ios.session.clone();
         let stored = self.stored.clone();
+        let surface_for_attach = self.clone_for_switch();
         let running = play_intent.replay.running.clone();
         let work_generation = session.overlay_generation().load(Ordering::SeqCst);
         let ios_intent = play_intent.clone_for_async();
@@ -497,6 +506,7 @@ impl VideoSurface {
             let _ = session.request_attach(
                 shell,
                 stored,
+                surface_for_attach,
                 ios_intent,
                 "Swift apply",
                 work_generation,

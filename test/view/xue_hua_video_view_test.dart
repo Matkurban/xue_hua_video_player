@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xue_hua_video_player/src/player/state_store.dart';
 import 'package:xue_hua_video_player/src/xue_hua_player_controller.dart';
 import 'package:xue_hua_video_player/src/xue_hua_video_view.dart';
 
@@ -12,13 +11,11 @@ void main() {
 
   group('XueHuaVideoView', () {
     late FakePlayerCommandPort port;
-    late PlayerStateStore store;
     late XueHuaPlayerController controller;
 
     setUp(() {
       port = FakePlayerCommandPort();
-      store = PlayerStateStore();
-      controller = XueHuaPlayerController(port: port, store: store);
+      controller = XueHuaPlayerController(port: port);
     });
 
     tearDown(() async {

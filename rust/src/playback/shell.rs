@@ -75,7 +75,7 @@ pub fn install_uri_shell(
         true,
         track_cache,
         #[cfg(target_os = "ios")]
-        Some(&surface.ios_layer_bus_slot()),
+        Some(surface.ios_layer_bus_slot()),
     )?;
     Ok(PipelineShell {
         pipeline,
@@ -108,7 +108,7 @@ pub fn install_asset_shell(
         false,
         None,
         #[cfg(target_os = "ios")]
-        Some(&surface.ios_layer_bus_slot()),
+        Some(surface.ios_layer_bus_slot()),
     )?;
     Ok(PipelineShell {
         pipeline,
