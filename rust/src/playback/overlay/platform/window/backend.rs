@@ -6,11 +6,11 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::gst::spawn_on_gst_thread;
-use crate::playback::shell::PipelineShell;
 use crate::playback::gst::{
     clear_overlay_window_handle, expose_overlay, set_overlay_render_rectangle,
     set_overlay_window_handle,
 };
+use crate::playback::shell::PipelineShell;
 
 use crate::playback::overlay::video_overlay::VideoOverlayBackend;
 

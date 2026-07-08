@@ -8,15 +8,16 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::gst::{
-    ensure_gst_init, spawn_on_gst_thread, spawn_on_gst_thread_and_wait,
-};
 #[cfg(target_os = "android")]
 use crate::gst::ensure_java_gstreamer_for_network;
+use crate::gst::{ensure_gst_init, spawn_on_gst_thread, spawn_on_gst_thread_and_wait};
 #[cfg(target_os = "android")]
 use crate::media::ResolvedSource;
 use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
+use crate::playback::gst::{
+    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+};
 use crate::playback::gst_context::PlaybackGstContext;
 #[cfg(target_os = "ios")]
 use crate::playback::overlay::IosLayerBackend;
@@ -27,9 +28,6 @@ use crate::playback::surface::VideoSurface;
 use crate::playback::switch::switch_shell;
 use crate::playback::tracks::{read_cached_tracks, TrackCache};
 use crate::player_events::{MediaTrack, PlayerEvent, PlayerState, TrackType};
-use crate::playback::gst::{
-    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
-};
 
 /// GStreamer-backed player rendering into a Platform View via VideoOverlay.
 pub struct PlaybackEngine {

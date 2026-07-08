@@ -4,8 +4,8 @@ use anyhow::Result;
 use gstreamer as gst;
 use parking_lot::Mutex;
 
-use crate::playback::shell::PipelineShell;
 use crate::playback::gst::expose_overlay;
+use crate::playback::shell::PipelineShell;
 
 pub fn cache_android_native_window(stored: &Mutex<Option<usize>>, handle: usize) -> Result<()> {
     if handle == 0 {

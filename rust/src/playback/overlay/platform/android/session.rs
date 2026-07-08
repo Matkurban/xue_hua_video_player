@@ -13,14 +13,16 @@ use parking_lot::Mutex;
 use super::ops::{
     android_pause_preroll_with_refresh, cache_android_native_window, refresh_mobile_overlay_on_gst,
 };
+use crate::playback::gst::clear_overlay_window_handle;
 use crate::playback::overlay::gst_scheduler::{GstTaskScheduler, SpawnOnGstThreadScheduler};
 use crate::playback::overlay::overlay_session::{load_preroll, OverlaySession};
-use crate::playback::overlay::preroll::{run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome, PipelineSnapshot};
+use crate::playback::overlay::preroll::{
+    run_bind_preroll_loop, PipelineSnapshot, PrerollEffects, PrerollResumeOutcome,
+};
 use crate::playback::play_resume::resume_playing;
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
-use crate::playback::gst::clear_overlay_window_handle;
 
 /// Single seam for Android overlay bind phase (mirrors [`super::ios_session::IosOverlaySession`]).
 #[derive(Clone)]

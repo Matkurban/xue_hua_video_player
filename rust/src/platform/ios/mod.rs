@@ -11,9 +11,8 @@ use crate::playback::gst::{clear_overlay_window_handle, set_overlay_window_handl
 pub mod layer;
 
 pub use layer::{
-    attach_ios_video_layer_with_completion, preroll_for_ios_layer,
-    preroll_pipeline_for_ios_layer, read_sink_layer, release_sink_layer,
-    IosLayerAttachOutcome,
+    attach_ios_video_layer_with_completion, preroll_for_ios_layer, preroll_pipeline_for_ios_layer,
+    read_sink_layer, release_sink_layer, IosLayerAttachOutcome,
 };
 
 extern "C" {

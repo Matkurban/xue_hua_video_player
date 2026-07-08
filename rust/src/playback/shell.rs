@@ -13,6 +13,12 @@ use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
+use crate::playback::gst::apply_orientation_to_playbin;
+use crate::playback::gst::attach_overlay_bus_sync_handler;
+use crate::playback::gst::{
+    expose_overlay, set_overlay_render_rectangle, set_overlay_window_handle,
+    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+};
 use crate::playback::overlay::PipelineSnapshot;
 use crate::playback::replay::PlayReplayContext;
 use crate::playback::surface::VideoSurface;
@@ -21,12 +27,6 @@ use crate::playback::tracks::{
 };
 use crate::playback::uri_pipeline::build_uri_playbin;
 use crate::player_events::TrackType;
-use crate::playback::gst::attach_overlay_bus_sync_handler;
-use crate::playback::gst::apply_orientation_to_playbin;
-use crate::playback::gst::{
-    expose_overlay, InternalAspectRatioMode, InternalVideoMetadata,
-    InternalVideoOrientationConfig, set_overlay_render_rectangle, set_overlay_window_handle,
-};
 
 const DEFAULT_STATE_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(10);
 

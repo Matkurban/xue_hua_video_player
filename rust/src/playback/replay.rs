@@ -59,9 +59,11 @@ pub fn replay_asset_shell(
 mod tests {
     use super::*;
     use crate::playback::bus::Emitter;
+    use crate::playback::gst::{
+        InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+    };
     use crate::playback::surface::VideoSurface;
     use crate::playback::tracks::TrackCache;
-    use crate::playback::gst::{InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig};
 
     fn sample_intent() -> OverlayPlayIntent {
         let desired = Arc::new(AtomicBool::new(true));

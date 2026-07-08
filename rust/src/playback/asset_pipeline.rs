@@ -8,8 +8,8 @@ use parking_lot::Mutex;
 
 use crate::media::AppSrcFeedState;
 use crate::playback::bus::Emitter;
-use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
 use crate::playback::gst::{create_platform_video_sink, InternalVideoMetadata};
+use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
 
 const APPSRC_CHUNK: usize = 64 * 1024;
 

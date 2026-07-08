@@ -6,12 +6,12 @@ use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
-use crate::frb_generated::StreamSink;
-use crate::playback::PlaybackEngine;
 pub use crate::api::types::{
     AspectRatioMode, MediaSourceDto, MediaTrack, PipelineCapabilitiesDto, PlayerEvent,
     PlayerEventKind, PlayerState, TrackType, VideoMetadata, VideoOrientationConfig,
 };
+use crate::frb_generated::StreamSink;
+use crate::playback::PlaybackEngine;
 
 static PLAYERS: Lazy<Mutex<HashMap<i64, Arc<PlaybackEngine>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));

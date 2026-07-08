@@ -9,6 +9,16 @@ use parking_lot::Mutex;
 
 #[cfg(target_os = "android")]
 use crate::gst::spawn_on_gst_thread;
+#[cfg(target_os = "ios")]
+use crate::platform::ios::layer::IosLayerAttachOutcome;
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "macos"),
+    not(target_os = "ios")
+))]
+use crate::playback::overlay::apply_overlay_handle;
+#[cfg(target_os = "android")]
+use crate::playback::overlay::refresh_mobile_overlay_on_gst;
 #[cfg(target_os = "android")]
 use crate::playback::overlay::AndroidOverlaySession;
 #[cfg(all(
@@ -16,28 +26,18 @@ use crate::playback::overlay::AndroidOverlaySession;
     not(target_os = "macos"),
     not(target_os = "ios")
 ))]
-use crate::playback::overlay::apply_overlay_handle;
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
 use crate::playback::overlay::DesktopOverlaySession;
 #[cfg(target_os = "ios")]
-use crate::playback::overlay::IosOverlaySession;
-#[cfg(target_os = "android")]
-use crate::playback::overlay::refresh_mobile_overlay_on_gst;
-#[cfg(target_os = "ios")]
 use crate::playback::overlay::IosLayerBackend;
-use crate::playback::overlay::VideoOverlayBackend;
+#[cfg(target_os = "ios")]
+use crate::playback::overlay::IosOverlaySession;
 use crate::playback::overlay::OverlaySession;
+use crate::playback::overlay::VideoOverlayBackend;
 #[cfg(target_os = "macos")]
 use crate::playback::overlay::{MacosOverlayBackend, MacosOverlaySession};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
-#[cfg(target_os = "ios")]
-use crate::platform::ios::layer::IosLayerAttachOutcome;
 
 /// Cached native overlay handle — thin delegate to platform [`OverlaySession`].
 pub struct VideoSurface {

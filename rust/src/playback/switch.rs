@@ -8,6 +8,9 @@ use parking_lot::Mutex;
 
 use crate::media::ResolvedSource;
 use crate::playback::bus::Emitter;
+use crate::playback::gst::{
+    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+};
 use crate::playback::overlay::OverlaySession;
 use crate::playback::replay::PlayReplayContext;
 use crate::playback::shell::{
@@ -15,9 +18,6 @@ use crate::playback::shell::{
 };
 use crate::playback::surface::VideoSurface;
 use crate::playback::tracks::TrackCache;
-use crate::playback::gst::{
-    InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
-};
 
 /// Pipeline-only metadata for URI ↔ asset shell swaps (no replay atomics, no surface).
 #[derive(Clone)]

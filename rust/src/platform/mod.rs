@@ -2,9 +2,9 @@
 
 #[cfg(target_os = "android")]
 pub mod android;
-pub mod jni;
 #[cfg(target_os = "ios")]
 pub mod ios;
+pub mod jni;
 
 #[cfg(target_os = "android")]
 pub use android::{
@@ -13,6 +13,5 @@ pub use android::{
 };
 #[cfg(target_os = "ios")]
 pub use ios::{
-    attach_layer_on_main_thread_async, attach_layer_on_main_thread_sync,
-    host_view_ready_for_attach,
+    attach_layer_on_main_thread_async, attach_layer_on_main_thread_sync, host_view_ready_for_attach,
 };

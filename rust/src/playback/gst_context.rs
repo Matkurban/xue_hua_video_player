@@ -5,13 +5,13 @@ use std::sync::{atomic::AtomicBool, Arc};
 use parking_lot::Mutex;
 
 use crate::playback::bus::Emitter;
+use crate::playback::gst::InternalVideoMetadata;
+use crate::playback::gst::{InternalAspectRatioMode, InternalVideoOrientationConfig};
 use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::PipelineShell;
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::PipelineSwapConfig;
 use crate::playback::tracks::TrackCache;
-use crate::playback::gst::InternalVideoMetadata;
-use crate::playback::gst::{InternalAspectRatioMode, InternalVideoOrientationConfig};
 
 /// Live engine-owned Gst bundle — `shell` and `surface` are canonical.
 pub struct PlaybackGstContext {

@@ -8,10 +8,10 @@ use std::sync::{
 use gstreamer as gst;
 use parking_lot::Mutex;
 
-use crate::playback::gst_context::PlaybackGstContext;
 use super::session::{IosIdleWork, IosOverlaySession};
-use crate::playback::shell::PipelineShell;
 use crate::platform::ios::layer::IosLayerAttachOutcome;
+use crate::playback::gst_context::PlaybackGstContext;
+use crate::playback::shell::PipelineShell;
 
 /// Shared state for iOS layer attach retries on the Gst bus (`READY → PAUSED`).
 pub struct IosLayerBackend {

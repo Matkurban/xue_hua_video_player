@@ -12,8 +12,8 @@ mod tests;
 pub use gst_scheduler::{GstTaskScheduler, SpawnOnGstThreadScheduler};
 pub use overlay_session::OverlaySession;
 pub use preroll::{
-    decide_preroll_action, run_bind_preroll_loop, PipelineSnapshot, PrerollAction,
-    PrerollEffects, PrerollResumeOutcome,
+    decide_preroll_action, run_bind_preroll_loop, PipelineSnapshot, PrerollAction, PrerollEffects,
+    PrerollResumeOutcome,
 };
 pub use video_overlay::VideoOverlayBackend;
 
