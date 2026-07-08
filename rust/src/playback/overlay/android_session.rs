@@ -10,17 +10,18 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
-use crate::playback::overlay::android::{cache_android_native_window, refresh_mobile_overlay_on_gst};
+use crate::playback::overlay::android::{
+    android_pause_preroll_with_refresh, cache_android_native_window, refresh_mobile_overlay_on_gst,
+};
 use crate::playback::overlay::gst_scheduler::{GstTaskScheduler, SpawnOnGstThreadScheduler};
 use crate::playback::overlay::overlay_session::{load_preroll, OverlaySession};
 use crate::playback::overlay::preroll_executor::{
     run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
 };
 use crate::playback::overlay::preroll_gate::PipelineSnapshot;
+use crate::playback::play_resume::resume_playing;
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
-use crate::playback::play_resume::resume_playing;
-use crate::playback::state::set_state_sync;
 use crate::playback::surface::VideoSurface;
 use crate::video::clear_overlay_window_handle;
 
@@ -106,7 +107,7 @@ impl AndroidOverlaySession {
                 return;
             }
             let guard = shell.lock();
-            if let Err(e) = clear_overlay_window_handle(&guard.video_sink) {
+            if let Err(e) = clear_overlay_window_handle(guard.video_sink()) {
                 log::warn!("android overlay clear: {e:#}");
             }
             overlay_bound.store(false, Ordering::SeqCst);
@@ -149,14 +150,9 @@ impl AndroidOverlaySession {
                 session.set_bound(false);
                 return;
             };
-            if let Err(e) = session.apply_on_gst(
-                shell,
-                handle,
-                width,
-                height,
-                &surface,
-                &play_intent,
-            ) {
+            if let Err(e) =
+                session.apply_on_gst(shell, handle, width, height, &surface, &play_intent)
+            {
                 session.set_bound(false);
                 crate::diag::logcat_error(&format!("mobile overlay apply: {e:#}"));
             }
@@ -175,14 +171,12 @@ impl AndroidOverlaySession {
         let mut guard = shell.lock();
         refresh_mobile_overlay_on_gst(&guard, handle, width, height, "surface bind")?;
         self.set_bound(true);
-        let (_, current, pending) = guard.pipeline.state(gst::ClockTime::ZERO);
+        let snap = guard.snapshot();
         crate::diag::logcat_info(&format!(
-            "gst: overlay applied on Gst thread — pipeline {current:?} pending {pending:?}"
+            "gst: overlay applied on Gst thread — pipeline {:?} pending {:?}",
+            snap.current, snap.pending
         ));
-        let want_play = play_intent
-            .replay
-            .desired_playing
-            .load(Ordering::SeqCst);
+        let want_play = play_intent.replay.desired_playing.load(Ordering::SeqCst);
         let mut effects = AndroidBindPrerollEffects {
             shell,
             play_intent: play_intent.clone_for_async(),
@@ -200,11 +194,11 @@ impl OverlaySession for AndroidOverlaySession {
     fn apply_load_preroll(
         &self,
         shell: &PipelineShell,
-        surface_overlay_ready: bool,
         surface: &VideoSurface,
         defer_log: &str,
     ) -> Result<()> {
-        load_preroll::android_apply_load_preroll(shell, surface_overlay_ready, surface, defer_log)
+        let gate_ready = self.gate_ready_for_load(surface.overlay_ready_for_preroll());
+        load_preroll::android_apply_load_preroll(shell, gate_ready, surface, defer_log)
     }
 
     fn is_bound(&self) -> bool {
@@ -291,15 +285,7 @@ impl OverlaySession for AndroidOverlaySession {
         }
         self.cache_surface_notify(&stored, handle, width, height)?;
         let (w, h) = self.cached_dimensions();
-        self.schedule_apply_after_bind(
-            shell,
-            stored,
-            w,
-            h,
-            surface,
-            play_intent,
-            &scheduler,
-        );
+        self.schedule_apply_after_bind(shell, stored, w, h, surface, play_intent, &scheduler);
         Ok(())
     }
 }
@@ -316,19 +302,11 @@ impl PrerollEffects for AndroidBindPrerollEffects {
         shell: &mut PipelineShell,
         _snapshot: PipelineSnapshot,
     ) -> Result<()> {
-        crate::diag::logcat_info("gst: overlay bound — starting Paused preroll");
-        set_state_sync(&shell.pipeline, gst::State::Paused)?;
-        if let Some(handle) = *self.surface.stored_handle().lock() {
-            let (width, height) = self.surface.cached_dimensions();
-            refresh_mobile_overlay_on_gst(
-                shell,
-                handle,
-                width,
-                height,
-                "after Paused preroll",
-            )?;
-        }
-        Ok(())
+        android_pause_preroll_with_refresh(
+            shell,
+            &self.surface,
+            Some("gst: overlay bound — starting Paused preroll"),
+        )
     }
 
     fn resume_playing(

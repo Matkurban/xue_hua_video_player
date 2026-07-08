@@ -7,8 +7,8 @@ use gstreamer::prelude::*;
 
 #[cfg(target_os = "ios")]
 use crate::platform_view_ios::{attach_layer_on_main_thread_async, host_view_ready_for_attach};
+use crate::playback::shell::set_element_state_sync;
 use crate::playback::shell::PipelineShell;
-use crate::playback::state::set_state_sync;
 
 #[cfg(target_os = "ios")]
 extern "C" {
@@ -74,12 +74,12 @@ pub fn preroll_pipeline_for_ios_layer(pipeline: &gst::Pipeline) -> Result<()> {
     let (_, mut current, mut pending) = pipeline.state(gst::ClockTime::ZERO);
     log::info!("gst: ios preroll enter current={current:?} pending={pending:?}");
     if current < gst::State::Ready {
-        set_state_sync(pipeline, gst::State::Ready)?;
+        set_element_state_sync(pipeline, gst::State::Ready)?;
         (_, current, pending) = pipeline.state(gst::ClockTime::ZERO);
     }
 
     if current == gst::State::Ready && pending == gst::State::VoidPending {
-        set_state_sync(pipeline, gst::State::Paused)?;
+        set_element_state_sync(pipeline, gst::State::Paused)?;
         let (_, after, _) = pipeline.state(gst::ClockTime::ZERO);
         log::info!("gst: ios preroll reached {after:?}");
     }
@@ -91,7 +91,7 @@ pub fn preroll_pipeline_for_ios_layer(pipeline: &gst::Pipeline) -> Result<()> {
 fn rollback_pipeline_from_ios_preroll(pipeline: &gst::Pipeline) {
     let (_, current, _) = pipeline.state(gst::ClockTime::ZERO);
     if current >= gst::State::Paused {
-        if let Err(e) = set_state_sync(pipeline, gst::State::Ready) {
+        if let Err(e) = set_element_state_sync(pipeline, gst::State::Ready) {
             log::warn!("gst: ios layer attach rollback to READY: {e:#}");
         } else {
             log::info!("gst: ios layer attach preroll rolled back to READY");
@@ -103,11 +103,14 @@ fn rollback_pipeline_from_ios_preroll(pipeline: &gst::Pipeline) {
 fn rollback_pipeline_from_ios_preroll(_pipeline: &gst::Pipeline) {}
 
 /// Prerolls the pipeline to PAUSED when media is pending.
+#[cfg(target_os = "ios")]
 pub fn preroll_for_ios_layer(shell: &PipelineShell) -> Result<()> {
-    if !shell.has_pending_media() {
-        return Ok(());
-    }
-    preroll_pipeline_for_ios_layer(&shell.pipeline)
+    shell.preroll_for_ios_layer()
+}
+
+#[cfg(not(target_os = "ios"))]
+pub fn preroll_for_ios_layer(_shell: &PipelineShell) -> Result<()> {
+    Ok(())
 }
 
 #[cfg(target_os = "ios")]

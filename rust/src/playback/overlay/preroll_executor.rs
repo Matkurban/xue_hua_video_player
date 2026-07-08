@@ -41,7 +41,7 @@ pub fn run_bind_preroll_loop<E: PrerollEffects>(
     effects: &mut E,
 ) -> Result<()> {
     for _ in 0..MAX_BIND_PREROLL_STEPS {
-        let snapshot = PipelineSnapshot::from_shell(shell);
+        let snapshot = shell.snapshot();
         let action = decide_preroll_action(snapshot, want_play, overlay_ready);
         match action {
             PrerollAction::Noop | PrerollAction::Defer => break,

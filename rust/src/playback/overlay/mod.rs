@@ -61,13 +61,11 @@ pub use sink_slot::assign_overlay_sink;
 mod gst_scheduler;
 mod overlay_session;
 mod preroll_executor;
-mod preroll_gate;
+pub(crate) mod preroll_gate;
 
 pub use gst_scheduler::{GstTaskScheduler, SpawnOnGstThreadScheduler};
 pub use overlay_session::OverlaySession;
-pub use preroll_executor::{
-    run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome,
-};
+pub use preroll_executor::{run_bind_preroll_loop, PrerollEffects, PrerollResumeOutcome};
 pub use preroll_gate::{decide_preroll_action, PipelineSnapshot, PrerollAction};
 
 mod video_overlay;

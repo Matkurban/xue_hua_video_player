@@ -6,10 +6,9 @@ use anyhow::Result;
 use gstreamer as gst;
 use parking_lot::Mutex;
 
-use crate::playback::overlay::preroll_gate::{decide_preroll_action, PipelineSnapshot, PrerollAction};
+use crate::playback::overlay::preroll_gate::{decide_preroll_action, PrerollAction};
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
-use crate::playback::state::set_state_sync;
 use crate::playback::surface::VideoSurface;
 
 /// Platform overlay session — load preroll, notify cache, and Gst apply/attach.
@@ -19,7 +18,6 @@ pub trait OverlaySession: Send + Sync {
     fn apply_load_preroll(
         &self,
         shell: &PipelineShell,
-        surface_overlay_ready: bool,
         surface: &VideoSurface,
         defer_log: &str,
     ) -> Result<()>;
@@ -83,26 +81,16 @@ pub(crate) mod load_preroll {
     #[cfg(target_os = "android")]
     pub fn android_apply_load_preroll(
         shell: &PipelineShell,
-        surface_overlay_ready: bool,
+        gate_ready: bool,
         surface: &VideoSurface,
         defer_log: &str,
     ) -> Result<()> {
-        use crate::playback::overlay::refresh_mobile_overlay_on_gst;
+        use crate::playback::overlay::android::android_pause_preroll_with_refresh;
 
-        let snapshot = PipelineSnapshot::from_shell(shell);
-        match decide_preroll_action(snapshot, false, surface_overlay_ready) {
+        let snapshot = shell.snapshot();
+        match decide_preroll_action(snapshot, false, gate_ready) {
             PrerollAction::PausePreroll => {
-                set_state_sync(&shell.pipeline, gst::State::Paused)?;
-                if let Some(handle) = *surface.stored_handle().lock() {
-                    let (width, height) = surface.cached_dimensions();
-                    refresh_mobile_overlay_on_gst(
-                        shell,
-                        handle,
-                        width,
-                        height,
-                        "after Paused preroll",
-                    )?;
-                }
+                android_pause_preroll_with_refresh(shell, surface, None)?;
             }
             PrerollAction::Defer => {
                 crate::diag::logcat_info(defer_log);
@@ -112,11 +100,8 @@ pub(crate) mod load_preroll {
         Ok(())
     }
 
-    pub fn ios_apply_load_preroll(
-        surface_overlay_ready: bool,
-        defer_log: &str,
-    ) -> Result<()> {
-        if surface_overlay_ready {
+    pub fn ios_apply_load_preroll(gate_ready: bool, defer_log: &str) -> Result<()> {
+        if gate_ready {
             log::debug!("gst: ios layer attach deferred to IosOverlaySession after load");
         } else {
             log::info!("{defer_log}");
@@ -124,14 +109,10 @@ pub(crate) mod load_preroll {
         Ok(())
     }
 
-    pub fn desktop_apply_load_preroll(
-        shell: &PipelineShell,
-        surface_overlay_ready: bool,
-    ) -> Result<()> {
-        let gate_ready = !surface_overlay_ready;
-        let snapshot = PipelineSnapshot::from_shell(shell);
+    pub fn desktop_apply_load_preroll(shell: &PipelineShell, gate_ready: bool) -> Result<()> {
+        let snapshot = shell.snapshot();
         if decide_preroll_action(snapshot, false, gate_ready) == PrerollAction::PausePreroll {
-            set_state_sync(&shell.pipeline, gst::State::Paused)?;
+            shell.set_state_sync(gst::State::Paused)?;
         }
         Ok(())
     }
@@ -172,7 +153,6 @@ pub mod fake {
         fn apply_load_preroll(
             &self,
             _shell: &PipelineShell,
-            _surface_overlay_ready: bool,
             _surface: &VideoSurface,
             _defer_log: &str,
         ) -> Result<()> {
@@ -258,7 +238,11 @@ mod tests {
         assert!(session.overlay_ready_for_preroll(true));
     }
 
-    #[cfg(all(not(target_os = "android"), not(target_os = "ios"), not(target_os = "macos")))]
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_os = "macos")
+    ))]
     #[test]
     fn desktop_gate_inverts_ready() {
         use crate::playback::overlay::DesktopOverlaySession;

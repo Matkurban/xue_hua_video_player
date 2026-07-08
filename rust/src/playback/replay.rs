@@ -10,7 +10,6 @@ use gstreamer as gst;
 use parking_lot::Mutex;
 
 use crate::playback::shell::PipelineShell;
-use crate::playback::state::set_state_sync;
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::{switch_asset_shell, PipelineSwapConfig};
 
@@ -46,11 +45,11 @@ pub fn replay_asset_shell(
     surface: &VideoSurface,
 ) -> Result<()> {
     let key = shell
-        .asset_key
-        .clone()
-        .ok_or_else(|| anyhow!("asset replay requested but asset_key missing"))?;
+        .asset_key()
+        .ok_or_else(|| anyhow!("asset replay requested but asset_key missing"))?
+        .to_string();
     switch_asset_shell(shell, &key, swap, replay, surface)?;
-    set_state_sync(&shell.pipeline, gst::State::Playing)?;
+    shell.set_state_sync(gst::State::Playing)?;
     #[cfg(target_os = "android")]
     crate::diag::logcat_info("gst: AppSrc replay from EOS (shell reload)");
     Ok(())
@@ -63,9 +62,7 @@ mod tests {
     use crate::playback::surface::VideoSurface;
     use crate::playback::tracks::TrackCache;
     use crate::video::info::InternalVideoMetadata;
-    use crate::video::orientation::{
-        InternalAspectRatioMode, InternalVideoOrientationConfig,
-    };
+    use crate::video::orientation::{InternalAspectRatioMode, InternalVideoOrientationConfig};
 
     fn sample_intent() -> OverlayPlayIntent {
         let desired = Arc::new(AtomicBool::new(true));

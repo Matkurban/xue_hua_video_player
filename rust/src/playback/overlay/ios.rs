@@ -8,45 +8,35 @@ use std::sync::{
 use gstreamer as gst;
 use parking_lot::Mutex;
 
+use crate::playback::gst_context::PlaybackGstContext;
 use crate::playback::overlay::ios_session::{IosIdleWork, IosOverlaySession};
-use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::PipelineShell;
-use crate::playback::surface::VideoSurface;
-use crate::playback::switch::PipelineSwapConfig;
 use crate::video::ios_layer::IosLayerAttachOutcome;
 
 /// Shared state for iOS layer attach retries on the Gst bus (`READY → PAUSED`).
 pub struct IosLayerBackend {
-    pub shell: Arc<Mutex<PipelineShell>>,
+    ctx: Arc<PlaybackGstContext>,
     ios_session: IosOverlaySession,
-    pub stored: Arc<Mutex<Option<usize>>>,
     pub overlay_sink: Arc<Mutex<gst::Element>>,
-    replay: PlayReplayContext,
-    swap: PipelineSwapConfig,
-    surface: VideoSurface,
     ios_layer_bus_slot: Arc<Mutex<Option<IosLayerBackend>>>,
 }
 
 impl IosLayerBackend {
-    pub fn from_engine(
-        surface: &VideoSurface,
-        shell: Arc<Mutex<PipelineShell>>,
-        replay: PlayReplayContext,
-        swap: PipelineSwapConfig,
-    ) -> Self {
+    pub fn from_context(ctx: Arc<PlaybackGstContext>) -> Self {
+        let surface = &ctx.surface;
         Self {
-            shell,
             ios_session: surface.ios_session(),
-            stored: surface.stored_handle(),
             overlay_sink: surface
                 .overlay_sink_slot()
                 .expect("ios overlay sink slot")
                 .clone(),
-            replay,
-            swap,
-            surface: surface.clone_for_switch(),
             ios_layer_bus_slot: surface.ios_layer_bus_slot(),
+            ctx,
         }
+    }
+
+    pub fn shell(&self) -> Arc<Mutex<PipelineShell>> {
+        self.ctx.shell.clone()
     }
 
     pub fn is_overlay_bound(&self) -> bool {
@@ -61,19 +51,12 @@ impl IosLayerBackend {
         self.ios_session.set_buffering_active(active);
     }
 
-    fn overlay_play_intent(&self) -> OverlayPlayIntent {
-        OverlayPlayIntent {
-            replay: self.replay.clone(),
-            swap: self.swap.clone_for_async(),
-        }
-    }
-
     fn idle_work(&self) -> IosIdleWork {
-        let play_intent = self.overlay_play_intent();
+        let play_intent = self.ctx.overlay_intent().clone_for_async();
         self.ios_session.idle_work(
-            self.shell.clone(),
-            self.stored.clone(),
-            self.surface.clone_for_switch(),
+            self.ctx.shell.clone(),
+            self.ctx.surface.stored_handle(),
+            self.ctx.surface.clone_for_switch(),
             play_intent,
             self.ios_layer_bus_slot.clone(),
         )
@@ -93,11 +76,11 @@ impl IosLayerBackend {
     }
 
     pub fn try_attach(&self) {
-        let play_intent = self.overlay_play_intent();
+        let play_intent = self.ctx.overlay_intent().clone_for_async();
         match self.ios_session.request_attach(
-            self.shell.clone(),
-            self.stored.clone(),
-            self.surface.clone_for_switch(),
+            self.ctx.shell.clone(),
+            self.ctx.surface.stored_handle(),
+            self.ctx.surface.clone_for_switch(),
             play_intent,
             "READY→PAUSED",
             self.ios_session.overlay_generation().load(Ordering::SeqCst),
@@ -112,9 +95,5 @@ impl IosLayerBackend {
                 log::debug!("gst: ios layer attach on READY→PAUSED: {e:#}");
             }
         }
-    }
-
-    pub fn update_swap(&mut self, swap: PipelineSwapConfig) {
-        self.swap = swap;
     }
 }

@@ -50,7 +50,7 @@ impl DesktopOverlayBackend {
         shell: &PipelineShell,
     ) -> Result<()> {
         if let Some(handle) = *stored.lock() {
-            apply_overlay_handle(&shell.video_sink, handle, stored)?;
+            apply_overlay_handle(shell.video_sink(), handle, stored)?;
         }
         Ok(())
     }
@@ -64,9 +64,9 @@ impl DesktopOverlayBackend {
         spawn_on_gst_thread(move || {
             let guard = shell.lock();
             if width > 0 && height > 0 {
-                set_overlay_render_rectangle(&guard.video_sink, width, height);
+                guard.apply_overlay_render_rectangle(width, height);
             } else if stored.lock().is_some() {
-                expose_overlay(&guard.video_sink);
+                guard.expose_video_overlay();
             }
         });
     }

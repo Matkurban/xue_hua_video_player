@@ -11,31 +11,31 @@ use parking_lot::Mutex;
 use crate::gst_runtime::spawn_on_gst_thread;
 #[cfg(target_os = "android")]
 use crate::playback::overlay::android_session::AndroidOverlaySession;
-#[cfg(target_os = "android")]
-use crate::playback::overlay::refresh_mobile_overlay_on_gst;
-#[cfg(all(
-    not(target_os = "android"),
-    not(target_os = "macos"),
-    not(target_os = "ios")
-))]
-use crate::playback::overlay::desktop_session::DesktopOverlaySession;
 #[cfg(all(
     not(target_os = "android"),
     not(target_os = "macos"),
     not(target_os = "ios")
 ))]
 use crate::playback::overlay::apply_overlay_handle;
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "macos"),
+    not(target_os = "ios")
+))]
+use crate::playback::overlay::desktop_session::DesktopOverlaySession;
 #[cfg(target_os = "ios")]
 use crate::playback::overlay::ios_session::IosOverlaySession;
+#[cfg(target_os = "android")]
+use crate::playback::overlay::refresh_mobile_overlay_on_gst;
 #[cfg(target_os = "ios")]
 use crate::playback::overlay::IosLayerBackend;
-use crate::playback::overlay::{MacosOverlayBackend, MacosOverlaySession, OverlaySession};
 use crate::playback::overlay::VideoOverlayBackend;
+use crate::playback::overlay::{MacosOverlayBackend, MacosOverlaySession, OverlaySession};
+#[cfg(target_os = "ios")]
+use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
 #[cfg(target_os = "ios")]
 use crate::video::ios_layer::IosLayerAttachOutcome;
-#[cfg(target_os = "ios")]
-use crate::playback::replay::OverlayPlayIntent;
 
 /// Cached native overlay handle — thin delegate to platform [`OverlaySession`].
 pub struct VideoSurface {
@@ -342,7 +342,7 @@ impl VideoSurface {
         shell: &mut PipelineShell,
         window_handle: i64,
     ) -> Result<()> {
-        apply_overlay_handle(&shell.video_sink, window_handle as usize, &self.stored)
+        apply_overlay_handle(shell.video_sink(), window_handle as usize, &self.stored)
     }
 
     #[cfg(not(any(target_os = "android", target_os = "macos", target_os = "ios")))]

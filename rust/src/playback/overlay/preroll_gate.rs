@@ -1,9 +1,6 @@
 //! Overlay-gated preroll transition rules — single source for Ready→Paused→Playing decisions.
 
 use gstreamer as gst;
-use gstreamer::prelude::*;
-
-use crate::playback::shell::PipelineShell;
 
 /// Pipeline state snapshot for pure preroll decisions (no live GStreamer calls in `decide`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,17 +8,6 @@ pub struct PipelineSnapshot {
     pub current: gst::State,
     pub pending: gst::State,
     pub has_pending_media: bool,
-}
-
-impl PipelineSnapshot {
-    pub fn from_shell(shell: &PipelineShell) -> Self {
-        let (_, current, pending) = shell.pipeline.state(gst::ClockTime::ZERO);
-        Self {
-            current,
-            pending,
-            has_pending_media: shell.has_pending_media(),
-        }
-    }
 }
 
 /// Next overlay-gated pipeline transition (execution stays at call sites).

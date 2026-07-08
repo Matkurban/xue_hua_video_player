@@ -18,7 +18,6 @@ use crate::playback::overlay::IosLayerBackend;
 use crate::playback::play_resume::resume_playing;
 use crate::playback::replay::OverlayPlayIntent;
 use crate::playback::shell::PipelineShell;
-use crate::playback::state::set_state_sync;
 use crate::playback::surface::VideoSurface;
 
 use crate::video::ios_layer::{attach_ios_video_layer_with_completion, IosLayerAttachOutcome};
@@ -307,8 +306,8 @@ impl IosOverlaySession {
         let (pipeline, sink, has_pending_media) = {
             let guard = shell.lock();
             (
-                guard.pipeline.clone(),
-                guard.video_sink.clone(),
+                guard.clone_pipeline(),
+                guard.clone_video_sink(),
                 guard.has_pending_media(),
             )
         };
@@ -435,22 +434,19 @@ impl IosOverlaySession {
                 .pending_play_after_overlay
                 .swap(false, Ordering::SeqCst);
 
-        let snapshot = {
-            let guard = work.shell.lock();
-            let (_, current, pending) = guard.pipeline.state(gst::ClockTime::ZERO);
-            (guard.pipeline.clone(), guard.kind, current, pending)
-        };
-
         if self.lifecycle_stale(work.work_generation) {
             return Ok(());
         }
 
-        let (pipeline, _kind, current, _pending) = snapshot;
+        let current = {
+            let guard = work.shell.lock();
+            guard.snapshot().current
+        };
 
         if self.buffering_active.load(Ordering::SeqCst) && want_play {
             if current == gst::State::Playing {
                 log::info!("gst: buffering — pausing pipeline");
-                set_state_sync(&pipeline, gst::State::Paused)?;
+                work.shell.lock().set_state_sync(gst::State::Paused)?;
             }
             return Ok(());
         }
@@ -538,7 +534,7 @@ impl IosOverlaySession {
                     if dimensions_changed {
                         let sink = {
                             let guard = shell.lock();
-                            guard.video_sink.clone()
+                            guard.clone_video_sink()
                         };
                         if let Ok(layer) = crate::video::ios_layer::read_sink_layer(&sink) {
                             if !crate::platform_view_ios::attach_layer_on_main_thread_sync(
@@ -599,11 +595,11 @@ impl OverlaySession for IosOverlaySession {
     fn apply_load_preroll(
         &self,
         _shell: &PipelineShell,
-        surface_overlay_ready: bool,
-        _surface: &VideoSurface,
+        surface: &VideoSurface,
         defer_log: &str,
     ) -> Result<()> {
-        load_preroll::ios_apply_load_preroll(surface_overlay_ready, defer_log)
+        let gate_ready = self.gate_ready_for_load(surface.overlay_ready_for_preroll());
+        load_preroll::ios_apply_load_preroll(gate_ready, defer_log)
     }
 
     fn is_bound(&self) -> bool {
@@ -680,7 +676,7 @@ impl PrerollEffects for IosBindPrerollEffects {
         _snapshot: PipelineSnapshot,
     ) -> Result<()> {
         log::info!("gst: overlay bound — starting Paused preroll");
-        set_state_sync(&shell.pipeline, gst::State::Paused)
+        shell.set_state_sync(gst::State::Paused)
     }
 
     fn resume_playing(

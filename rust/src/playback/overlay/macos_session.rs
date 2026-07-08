@@ -56,11 +56,11 @@ impl OverlaySession for MacosOverlaySession {
     fn apply_load_preroll(
         &self,
         shell: &PipelineShell,
-        surface_overlay_ready: bool,
-        _surface: &VideoSurface,
+        surface: &VideoSurface,
         _defer_log: &str,
     ) -> Result<()> {
-        load_preroll::desktop_apply_load_preroll(shell, surface_overlay_ready)
+        let gate_ready = self.gate_ready_for_load(surface.overlay_ready_for_preroll());
+        load_preroll::desktop_apply_load_preroll(shell, gate_ready)
     }
 
     fn is_bound(&self) -> bool {

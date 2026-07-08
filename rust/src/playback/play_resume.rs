@@ -5,14 +5,12 @@ use std::sync::{
     Arc,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use gstreamer as gst;
-use gstreamer::prelude::*;
 use parking_lot::Mutex;
 
 use crate::playback::replay::{replay_asset_shell, PlayReplayContext};
 use crate::playback::shell::{PipelineShell, SourceKind};
-use crate::playback::state::set_state_sync;
 use crate::playback::surface::VideoSurface;
 use crate::playback::switch::PipelineSwapConfig;
 
@@ -56,7 +54,7 @@ pub fn resume_playing(
 ) -> Result<()> {
     let kind = {
         let guard = shell.lock();
-        guard.kind
+        guard.source_kind()
     };
 
     let at_eos = replay.at_eos.load(Ordering::SeqCst);
@@ -75,18 +73,12 @@ pub fn resume_playing(
         ResumeAction::DeferOverlay => unreachable!(),
         ResumeAction::SetPlaying => {
             let guard = shell.lock();
-            set_state_sync(&guard.pipeline, gst::State::Playing)?;
+            guard.set_state_sync(gst::State::Playing)?;
         }
         ResumeAction::SeekToStartAndPlay => {
             let guard = shell.lock();
-            guard
-                .pipeline
-                .seek_simple(
-                    gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                    gst::ClockTime::ZERO,
-                )
-                .map_err(|e| anyhow!("seek to start before play: {e}"))?;
-            set_state_sync(&guard.pipeline, gst::State::Playing)?;
+            guard.seek_to_start()?;
+            guard.set_state_sync(gst::State::Playing)?;
         }
         ResumeAction::ReplayAssetShell => {
             let mut guard = shell.lock();
