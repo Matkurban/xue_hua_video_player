@@ -22,6 +22,7 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
   final FlutterSignal<double> _volume = signal(1.0);
   final FlutterSignal<bool> _looping = signal(false);
   final FlutterSignal<double> _speed = signal(1.0);
+  final FlutterSignal<int> _bufferingPercent = signal(100);
 
   @override
   late final ReadonlySignal<bool> isPlaying = computed(
@@ -33,6 +34,9 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
 
   @override
   ReadonlySignal<PlayerState> get state => _state;
+
+  @override
+  ReadonlySignal<int> get bufferingPercent => _bufferingPercent;
 
   @override
   ReadonlySignal<Duration> get position => _position;
@@ -91,5 +95,6 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     _volume.dispose();
     _looping.dispose();
     _speed.dispose();
+    _bufferingPercent.dispose();
   }
 }

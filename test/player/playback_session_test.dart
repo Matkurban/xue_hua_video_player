@@ -182,7 +182,7 @@ void main() {
     });
 
     test(
-      'stateChanged updates state and clears buffering on playing',
+      'stateChanged updates state without clobbering buffering percent',
       () async {
         await session.initialize();
         port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 42));
@@ -194,7 +194,7 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
         expect(session.state.value, PlayerState.playing);
-        expect(session.bufferingPercent.value, 100);
+        expect(session.bufferingPercent.value, 42);
       },
     );
 

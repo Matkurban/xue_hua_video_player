@@ -83,6 +83,8 @@ impl PlaybackEngine {
                 running: running_init,
             };
             let mut surface = VideoSurface::new(overlay_init.clone());
+            #[cfg(target_os = "ios")]
+            surface.wire_ios_replay_running(running_init.clone());
             let shell = install_uri_shell(
                 &emitter_init,
                 &looping_init,

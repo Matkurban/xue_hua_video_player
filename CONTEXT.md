@@ -14,7 +14,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | `PlaybackSession` | Dart **deep orchestration module** (`lib/src/player/playback_session.dart`): owns signals, event dispatch, `open()` lifecycle, `_guard`, optimistic transport commands, `tracksChanged` refresh; inward seam **`PlayerCommandPort`**; outward implements **`PlaybackControlsModel`** transport + exposes full readonly signals |
 | `PlaybackControlsModel` | Narrow controls seam: readonly transport signals + commands (play/seek/mute/…); widgets / **`ScrubController`** depend on this — **not** on `XueHuaPlayerController` concrete type (workstream C) |
 | `ScrubController` | Drag/seek settle logic for built-in sliders; depends on [PlaybackControlsModel] only — **unchanged in workstream B** |
-| `TransportCommand` | Private transport helpers on **`PlaybackSession`** (B2): optimistic preview → port call → error/`PlayerEvent` settle; seek/volume/mute/speed/looping — replaces scattered `preview*` + `_guard` in controller |
+| `TransportCommand` | **Not a separate type** — private `_preview*` / `_guard` helpers on **`PlaybackSession`** (seek/volume/mute/speed/looping optimistic transport) |
 | `PlayerCommandPort` | Dart/Rust seam adapter: create/dispose, event stream, FRB playback commands — **implementation detail of `PlaybackSession`** (B3); prod + **`FakePlayerCommandPort`** adapters retained |
 | `PlayerStateStore` | **Removed** (workstream B1) — logic lives in **`PlaybackSession`** |
 | `MediaSourceResolver` | Dart: `VideoSource` → `MediaSourceDto` before crossing the Rust seam |
@@ -79,7 +79,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - Bus watch pipeline: **`parse_bus_message`** → **`reduce_bus_message`** → **`BusReplayPatch`** → emit **`PlayerEvent`** → **`apply_bus_side_effects`** (`playback/bus/`). Reducer is pure (table-tested); GStreamer I/O and platform `#[cfg]` live in parse/executor only.
 - Position polling uses `timeout_source_new` **attached to the owned Gst `MainContext`** (`gst_main_context()`). Do **not** use `glib::timeout_add_local` — in glib 0.22 it binds to `g_main_context_default()`, which is not the context running `MainLoop::run()` on `xhvp-gst`.
 - State transitions call `set_state` then `get_state` with a timeout (`set_state_sync`) so failures surface as explicit errors.
-- **Do not** call `set_state_sync` from bus watch callbacks (e.g. `Buffering`) — it blocks the `MainLoop` thread and deadlocks with Android JNI overlay delivery.
+- **Do not** call `set_state_sync` from bus watch callbacks (e.g. `Buffering`, `ClockLost`) — use async `pipeline.set_state()` only; blocking `get_state` deadlocks the MainLoop (Android JNI overlay, macOS `osxvideosink`).
 
 ## Android VideoOverlay requirements
 
@@ -150,7 +150,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 - **Before:** shallow **`XueHuaPlayerController`** + **`PlayerStateStore`** + **`PlayerCommandPort`** — command orchestration, optimistic UI, `open()` lifecycle, and `tracksChanged` refresh split across three modules; seek spans controller → store → port → **`ScrubController`**.
 - **After (B1–B3 landed):** **`PlaybackSession`** owns signals, reducer, transport, and port; **`XueHuaPlayerController`** is a thin delegate (~100 LOC).
 - **B1:** event reducer + `initialize()` subscription + `open()` (`resetForOpen` → `loadSource` → capabilities → tracks) + `_guard` + **`tracksChanged` → `_refreshTracks()` inside session** (remove dead reducer arm + controller special-case).
-- **B2:** **`TransportCommand`** private helpers on session (`_seekWithPreview`, `_setVolumeWithPreview`, …) — no separate file unless session exceeds ~400 LOC.
+- **B2:** transport helpers as private `_preview*` methods on session — no separate `TransportCommand` file unless session exceeds ~400 LOC.
 - **B3:** only **`PlaybackSession`** talks to **`PlayerCommandPort`**; controller ctor injects `PlaybackSession?` / port for tests — drop direct `PlayerStateStore?` injection.
 - **B4 (deferred):** **`MediaSourceResolver`** stays honest shallow injectable; deepen only if `open()` gains Dart-side policy (validation/cache).
 - **Workstream C dependency:** satisfied — presentation binds **`PlaybackPresentationModel`**; controls bind **`PlaybackControlsModel`**.
@@ -181,7 +181,7 @@ GStreamer renders directly into the Platform View's native surface via `gst_vide
 
 - `FlutterPlatformViewFactory` must implement `createArgsCodec()` so `creationParams.playerId` is decoded (otherwise `playerId` stays 0 and overlay never binds).
 - Bind the `NSView*` handle before the pipeline reaches `PAUSED` (proactive `set_window_handle`); `set_uri` triggers `READY → PAUSED` immediately.
-- Answer `prepare-window-handle` in the pipeline bus sync handler synchronously; if no handle is cached, `osxvideosink` creates a standalone "GStreamer Video Output" window.
+- Answer `prepare-window-handle` in the pipeline bus sync handler synchronously on Android/Win/Linux; on **macOS** and **iOS** return **Pass** — bind runs on the main thread (`MacosOverlayBackend` / `IosOverlaySession`), not from the Gst bus sync handler.
 - Proactive binding calls `set_window_handle` only — do not call `prepare_window_handle()` from the application side.
 - Cache the `NSView*` handle synchronously in `native_window` from Swift C ABI entry points (`player_set_video_overlay_window`, `player_sync_macos_video_layer`).
 - Apply the GStreamer overlay bind on the **main thread** via `DispatchQueue.main.async` (`player_apply_macos_overlay_gstreamer`). `osxvideosink` calls `setView:` directly on the main thread; calling from a background thread blocks with `performSelector:waitUntilDone:YES` and deadlocks with Flutter's merged UI/platform thread.

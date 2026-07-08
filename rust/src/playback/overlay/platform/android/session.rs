@@ -232,7 +232,7 @@ impl OverlaySession for AndroidOverlaySession {
     fn rebind_cached_overlay(
         &self,
         shell: &PipelineShell,
-        stored: &Mutex<Option<usize>>,
+        stored: Arc<Mutex<Option<usize>>>,
     ) -> Result<()> {
         if let Some(handle) = *stored.lock() {
             let (width, height) = self.cached_dimensions();

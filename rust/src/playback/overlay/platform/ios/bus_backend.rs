@@ -1,15 +1,11 @@
 //! iOS bus-facing overlay backend — thin adapter to [`super::ios_session::IosOverlaySession`].
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 use gstreamer as gst;
 use parking_lot::Mutex;
 
 use super::session::{IosIdleWork, IosOverlaySession};
-use crate::platform::ios::layer::IosLayerAttachOutcome;
 use crate::playback::gst_context::PlaybackGstContext;
 use crate::playback::shell::PipelineShell;
 
@@ -68,32 +64,5 @@ impl IosLayerBackend {
 
     pub fn schedule_attach(&self) {
         self.ios_session.schedule_attach(self.idle_work());
-    }
-
-    /// Routes PLAYING resume through idle [`IosOverlaySession::apply_target_state`].
-    pub fn request_playing_resume(&self) {
-        self.schedule_apply();
-    }
-
-    pub fn try_attach(&self) {
-        let play_intent = self.ctx.overlay_intent().clone_for_async();
-        match self.ios_session.request_attach(
-            self.ctx.shell.clone(),
-            self.ctx.surface.stored_handle(),
-            self.ctx.surface.clone_for_switch(),
-            play_intent,
-            "READY→PAUSED",
-            self.ios_session.overlay_generation().load(Ordering::SeqCst),
-            self.ios_layer_bus_slot.clone(),
-        ) {
-            Ok(IosLayerAttachOutcome::LayerNotReady) => {
-                log::debug!("gst: ios layer attach on READY→PAUSED: layer not ready yet");
-            }
-            Ok(IosLayerAttachOutcome::Scheduled) => {}
-            Ok(IosLayerAttachOutcome::Skipped) => {}
-            Err(e) => {
-                log::debug!("gst: ios layer attach on READY→PAUSED: {e:#}");
-            }
-        }
     }
 }

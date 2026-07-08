@@ -5,6 +5,7 @@ import '../rust/player_events.dart';
 /// Narrow seam for built-in video controls: readonly transport state + commands.
 abstract class PlaybackControlsModel {
   ReadonlySignal<PlayerState> get state;
+  ReadonlySignal<int> get bufferingPercent;
   ReadonlySignal<bool> get isPlaying;
   ReadonlySignal<Duration> get position;
   ReadonlySignal<Duration> get duration;

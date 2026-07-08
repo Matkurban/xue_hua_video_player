@@ -111,7 +111,7 @@ pub fn bus_sync_reply_for_overlay_message(
     if !is_video_overlay_prepare_window_handle_message(msg) {
         return gst::BusSyncReply::Pass;
     }
-    let Some(handle) = cached_handle else {
+    let Some(_handle) = cached_handle else {
         log::warn!("prepare-window-handle received but no overlay handle is cached yet");
         return gst::BusSyncReply::Pass;
     };
@@ -119,15 +119,34 @@ pub fn bus_sync_reply_for_overlay_message(
     {
         return bus_sync_reply_for_ios_overlay(msg, Some(handle), None);
     }
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(target_os = "macos")]
+    {
+        return bus_sync_reply_for_macos_overlay(msg);
+    }
+    #[cfg(all(not(target_os = "ios"), not(target_os = "macos")))]
     if let Some(src) = msg.src() {
         if let Ok(overlay) = src.clone().dynamic_cast::<gst_video::VideoOverlay>() {
             log::info!("prepare-window-handle: binding overlay handle {handle:#x}");
             bind_overlay_element(&overlay, handle);
         }
     }
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(all(not(target_os = "ios"), not(target_os = "macos")))]
     gst::BusSyncReply::Drop
+}
+
+/// macOS `prepare-window-handle`: pass — `osxvideosink` must bind on the main thread via
+/// `MacosOverlayBackend::apply_gstreamer`, not from the Gst bus sync handler.
+#[cfg(target_os = "macos")]
+pub fn bus_sync_reply_for_macos_overlay(msg: &gst::MessageRef) -> gst::BusSyncReply {
+    use gstreamer_video::is_video_overlay_prepare_window_handle_message;
+
+    if !is_video_overlay_prepare_window_handle_message(msg) {
+        return gst::BusSyncReply::Pass;
+    }
+    log::debug!(
+        "prepare-window-handle: ignored on macOS (main-thread MacosOverlayBackend applies bind)"
+    );
+    gst::BusSyncReply::Pass
 }
 
 /// iOS `prepare-window-handle`: pass — `avsamplebufferlayersink` uses [`IosOverlaySession`] async CALayer attach, not VideoOverlay sync bind.
@@ -161,13 +180,18 @@ pub fn attach_overlay_bus_sync_handler(
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     let overlay_sink_bus = overlay_sink.clone();
     bus.set_sync_handler(move |_bus, msg| {
-        let handle = *overlay_handle.lock();
         #[cfg(target_os = "ios")]
         {
+            let handle = *overlay_handle.lock();
             return bus_sync_reply_for_ios_overlay(msg, handle, overlay_sink_bus.as_ref());
         }
-        #[cfg(not(target_os = "ios"))]
+        #[cfg(target_os = "macos")]
         {
+            return bus_sync_reply_for_macos_overlay(msg);
+        }
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        {
+            let handle = *overlay_handle.lock();
             bus_sync_reply_for_overlay_message(msg, handle)
         }
     });

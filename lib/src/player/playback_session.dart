@@ -265,9 +265,6 @@ class PlaybackSession
         _isSeekable.value = event.isSeekable;
       case PlayerEventKind.stateChanged:
         _state.value = event.state;
-        if (event.state == PlayerState.playing) {
-          _bufferingPercent.value = 100;
-        }
       case PlayerEventKind.buffering:
         _bufferingPercent.value = event.bufferingPercent;
       case PlayerEventKind.eos:

@@ -107,9 +107,39 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
       model.setState(PlayerState.playing);
+      model.setBufferingPercent(100);
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('shows loading chrome during rebuffer while playing', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel(
+        state: PlayerState.playing,
+        bufferingPercent: 50,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: AspectRatioMode.fit,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       debugDefaultTargetPlatformOverride = null;
     });
 

@@ -131,4 +131,18 @@ impl MacosOverlayBackend {
         }
         Ok(())
     }
+
+    /// Re-binds the cached `NSView` to a new video sink on the main thread after shell rebuild.
+    pub fn schedule_rebind_on_main(
+        stored: Arc<Mutex<Option<usize>>>,
+        sink: Arc<Mutex<gst::Element>>,
+        width: i32,
+        height: i32,
+    ) {
+        crate::platform::run_on_main(move || {
+            if let Err(e) = Self::apply_gstreamer(&stored, &sink.lock(), width, height) {
+                log::warn!("macOS overlay rebind on main: {e:#}");
+            }
+        });
+    }
 }

@@ -167,7 +167,7 @@ pub extern "C" fn xhvp_set_flutter_assets_dir(path: *const std::ffi::c_char) {
     }
 }
 
-/// iOS: caches EaglUIView handle and schedules Gst-thread VideoOverlay bind (Tutorial 4).
+/// iOS: caches host `UIView` handle and dimensions; Gst attach runs via `IosOverlaySession`.
 #[cfg(target_os = "ios")]
 #[no_mangle]
 pub extern "C" fn player_notify_ios_overlay(

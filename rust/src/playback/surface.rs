@@ -82,6 +82,11 @@ impl VideoSurface {
         }
     }
 
+    #[cfg(target_os = "ios")]
+    pub fn wire_ios_replay_running(&mut self, running: Arc<AtomicBool>) {
+        self.session.wire_running(running);
+    }
+
     pub fn overlay_session(&self) -> &dyn OverlaySession {
         &self.session
     }
@@ -287,7 +292,8 @@ impl VideoSurface {
     }
 
     pub fn rebind_cached_overlay(&self, shell: &PipelineShell) -> Result<()> {
-        self.session.rebind_cached_overlay(shell, &self.stored)
+        self.session
+            .rebind_cached_overlay(shell, self.stored.clone())
     }
 
     #[cfg(target_os = "ios")]

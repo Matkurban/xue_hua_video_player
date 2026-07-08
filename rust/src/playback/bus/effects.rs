@@ -85,28 +85,14 @@ fn apply_bus_side_effect(effect: &BusSideEffect, ctx: &mut BusEffectContext<'_>)
 }
 
 fn pause_pipeline_for_buffering(pipeline: &gst::Pipeline) {
-    #[cfg(target_os = "android")]
+    // Never call set_state_sync from the bus watch — it blocks the xhvp-gst MainLoop.
     if let Err(e) = pipeline.set_state(gst::State::Paused) {
         log::warn!("buffering set_state(Paused): {e}");
-    }
-    #[cfg(not(target_os = "android"))]
-    if let Err(e) = crate::playback::shell::set_element_state_sync(pipeline, gst::State::Paused) {
-        log::warn!("buffering set_state_sync(Paused): {e}");
     }
 }
 
 fn resume_pipeline_after_buffering(pipeline: &gst::Pipeline, emit: &mut dyn FnMut(PlayerEvent)) {
-    let resume = {
-        #[cfg(target_os = "android")]
-        {
-            pipeline.set_state(gst::State::Playing)
-        }
-        #[cfg(not(target_os = "android"))]
-        {
-            crate::playback::shell::set_element_state_sync(pipeline, gst::State::Playing)
-        }
-    };
-    if let Err(e) = resume {
+    if let Err(e) = pipeline.set_state(gst::State::Playing) {
         log::warn!("buffering resume Playing: {e}");
     } else {
         emit(PlayerEvent::state(PlayerState::Playing));
@@ -114,24 +100,11 @@ fn resume_pipeline_after_buffering(pipeline: &gst::Pipeline, emit: &mut dyn FnMu
 }
 
 fn clock_lost_recover(pipeline: &gst::Pipeline) {
-    #[cfg(target_os = "android")]
-    {
-        let _ = pipeline.set_state(gst::State::Paused);
-        if let Err(e) = pipeline.set_state(gst::State::Playing) {
-            log::warn!("clock-lost resume Playing: {e}");
-        }
+    if let Err(e) = pipeline.set_state(gst::State::Paused) {
+        log::warn!("clock-lost set_state(Paused): {e}");
     }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        if let Err(e) = crate::playback::shell::set_element_state_sync(pipeline, gst::State::Paused)
-        {
-            log::warn!("clock-lost set_state_sync(Paused): {e}");
-        }
-        if let Err(e) =
-            crate::playback::shell::set_element_state_sync(pipeline, gst::State::Playing)
-        {
-            log::warn!("clock-lost set_state_sync(Playing): {e}");
-        }
+    if let Err(e) = pipeline.set_state(gst::State::Playing) {
+        log::warn!("clock-lost resume Playing: {e}");
     }
 }
 

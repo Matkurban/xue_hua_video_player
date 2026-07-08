@@ -84,6 +84,10 @@ impl IosOverlaySession {
         )
     }
 
+    pub fn wire_running(&mut self, running: Arc<AtomicBool>) {
+        self.running = running;
+    }
+
     pub fn set_overlay_sink(&mut self, element: gst::Element) {
         match &self.overlay_sink {
             Some(slot) => *slot.lock() = element,
@@ -633,7 +637,7 @@ impl OverlaySession for IosOverlaySession {
     fn rebind_cached_overlay(
         &self,
         _shell: &PipelineShell,
-        _stored: &Mutex<Option<usize>>,
+        _stored: Arc<Mutex<Option<usize>>>,
     ) -> Result<()> {
         Ok(())
     }

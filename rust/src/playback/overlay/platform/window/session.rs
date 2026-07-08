@@ -108,9 +108,9 @@ impl OverlaySession for DesktopOverlaySession {
     fn rebind_cached_overlay(
         &self,
         shell: &PipelineShell,
-        stored: &Mutex<Option<usize>>,
+        stored: Arc<Mutex<Option<usize>>>,
     ) -> Result<()> {
-        DesktopOverlayBackend::rebind_cached_overlay(stored, shell)
+        DesktopOverlayBackend::rebind_cached_overlay(stored.as_ref(), shell)
     }
 
     fn cache_notify(
@@ -222,8 +222,16 @@ impl OverlaySession for MacosOverlaySession {
     fn rebind_cached_overlay(
         &self,
         _shell: &PipelineShell,
-        _stored: &Mutex<Option<usize>>,
+        stored: Arc<Mutex<Option<usize>>>,
     ) -> Result<()> {
+        let Some(slot) = self.overlay_sink.as_ref() else {
+            return Ok(());
+        };
+        if stored.lock().is_none() {
+            return Ok(());
+        }
+        let (width, height) = self.cached_dimensions();
+        MacosOverlayBackend::schedule_rebind_on_main(stored, slot.clone(), width, height);
         Ok(())
     }
 

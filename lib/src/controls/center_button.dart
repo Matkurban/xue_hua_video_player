@@ -25,7 +25,8 @@ class CenterButton extends StatelessWidget {
       child: SignalBuilder(
         builder: (context) {
           final PlayerState state = model.state.value;
-          if (state == PlayerState.buffering) {
+          final buffering = model.bufferingPercent.value;
+          if (buffering < 100 || state == PlayerState.buffering) {
             return SizedBox(
               width: theme.primaryIconSize,
               height: theme.primaryIconSize,

@@ -35,7 +35,7 @@ pub trait OverlaySession: Send + Sync {
     fn rebind_cached_overlay(
         &self,
         shell: &PipelineShell,
-        stored: &Mutex<Option<usize>>,
+        stored: Arc<Mutex<Option<usize>>>,
     ) -> Result<()>;
 
     /// Cache native handle and dimensions (no Gst attach on iOS/macOS).
@@ -180,7 +180,7 @@ pub mod fake {
         fn rebind_cached_overlay(
             &self,
             _shell: &PipelineShell,
-            _stored: &Mutex<Option<usize>>,
+            _stored: Arc<Mutex<Option<usize>>>,
         ) -> Result<()> {
             Ok(())
         }

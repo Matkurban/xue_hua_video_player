@@ -63,7 +63,7 @@ class _BufferingOverlay extends StatelessWidget {
       builder: (context) {
         final buffering = model.bufferingPercent.value;
         final state = model.state.value;
-        if (state != PlayerState.buffering) {
+        if (buffering >= 100 && state != PlayerState.buffering) {
           return const SizedBox.shrink();
         }
         return ColoredBox(

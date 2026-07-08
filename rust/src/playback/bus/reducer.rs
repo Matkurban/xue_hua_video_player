@@ -182,7 +182,7 @@ fn reduce_buffering(percent: i32, snapshot: BusSnapshot) -> BusReduction {
             if !snapshot.overlay_bound {
                 effects.push(BusSideEffect::IosSetPendingPlayAfterOverlay);
             }
-            if snapshot.desired_playing {
+            if snapshot.desired_playing && snapshot.overlay_bound {
                 events.push(PlayerEvent::state(PlayerState::Playing));
             }
         }
@@ -422,7 +422,7 @@ mod tests {
             .effects
             .contains(&BusSideEffect::IosSetPendingPlayAfterOverlay));
         assert!(r.effects.contains(&BusSideEffect::IosScheduleApply));
-        assert!(r.events.iter().any(|e| e.state == PlayerState::Playing));
+        assert!(!r.events.iter().any(|e| e.state == PlayerState::Playing));
     }
 
     #[cfg(target_os = "ios")]
