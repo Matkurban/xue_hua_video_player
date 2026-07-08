@@ -81,16 +81,14 @@ class _VideoAspectLayout extends StatelessWidget {
         return Center(
           child: AspectRatio(
             aspectRatio: ratio,
-            child: ClipRect(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                clipBehavior: Clip.hardEdge,
-                child: SizedBox(
-                  width: ratio,
-                  height: 1,
-                  child: child,
-                ),
+            child: FittedBox(
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: ratio,
+                height: 1,
+                child: child,
               ),
             ),
           ),
