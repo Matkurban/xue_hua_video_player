@@ -18,6 +18,8 @@ pub struct BusEffectContext<'a> {
     pub pipeline: &'a gst::Pipeline,
     pub msg: &'a gst::Message,
     pub track_cache: Option<&'a Arc<Mutex<TrackCache>>>,
+    /// Current playback rate so EOS loop seek keeps the user-selected speed.
+    pub rate: f64,
     #[cfg(target_os = "ios")]
     pub ios_layer_bus: &'a Option<Arc<Mutex<Option<IosLayerBackend>>>>,
     pub emit: &'a mut dyn FnMut(PlayerEvent),
@@ -45,8 +47,15 @@ pub fn apply_bus_side_effects(effects: &[BusSideEffect], ctx: &mut BusEffectCont
 fn apply_bus_side_effect(effect: &BusSideEffect, ctx: &mut BusEffectContext<'_>) {
     match effect {
         BusSideEffect::EosLoopSeek => {
-            let _ = ctx.pipeline.seek_simple(
+            // Seek to start carrying the current rate so looping keeps the
+            // user-selected speed (seek_simple would reset the rate to 1.0),
+            // and scaletempo receives a rate-bearing segment (pitch preserved).
+            let _ = ctx.pipeline.seek(
+                ctx.rate,
                 gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                gst::SeekType::Set,
+                gst::ClockTime::ZERO,
+                gst::SeekType::None,
                 gst::ClockTime::ZERO,
             );
         }

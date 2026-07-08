@@ -87,11 +87,17 @@ pub fn resume_playing(
             guard.set_state_sync(gst::State::Playing)?;
         }
         ResumeAction::SeekToStartAndPlay => {
+            // Manual replay after EOS resets speed to 1.0 (looping keeps the
+            // speed via EosLoopSeek, which is a different path).
+            *replay.rate.lock() = 1.0;
             let guard = shell.lock();
-            guard.seek_to_start()?;
+            guard.seek_to_start_with_rate(1.0)?;
             guard.set_state_sync(gst::State::Playing)?;
         }
         ResumeAction::ReplayAssetShell => {
+            // Manual asset replay after EOS resets speed to 1.0; the rebuilt
+            // shell already starts at rate 1.0.
+            *replay.rate.lock() = 1.0;
             let mut guard = shell.lock();
             replay_asset_shell(&mut guard, replay, swap, surface)?;
         }
@@ -249,6 +255,7 @@ mod tests {
             desired_playing: Arc::new(AtomicBool::new(true)),
             at_eos: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(true)),
+            rate: Arc::new(Mutex::new(1.0)),
         };
         let swap = PipelineSwapConfig {
             emitter: Arc::new(Mutex::new(None::<Emitter>)),
@@ -270,5 +277,70 @@ mod tests {
             result.is_err(),
             "resume_playing must reject a caller-held shell lock (guard), not deadlock"
         );
+    }
+
+    // Regression: manual replay after EOS (SeekToStartAndPlay) resets the shared
+    // rate to 1.0 (looping keeps its rate via a different path). The UI mirrors
+    // this reset in PlaybackSession.play().
+    #[test]
+    fn manual_eos_replay_resets_rate_to_one() {
+        use crate::playback::bus::Emitter;
+        use crate::playback::gst::{
+            InternalAspectRatioMode, InternalVideoMetadata, InternalVideoOrientationConfig,
+        };
+        use crate::playback::shell::new_test_shell;
+        use crate::playback::tracks::TrackCache;
+        use gstreamer as gst;
+        use gstreamer::prelude::*;
+        use std::sync::atomic::AtomicBool;
+
+        let _ = gst::init();
+        let pipeline = gst::Pipeline::new();
+        let src = gst::ElementFactory::make("audiotestsrc")
+            .property("is-live", false)
+            .build()
+            .expect("audiotestsrc");
+        let sink = gst::ElementFactory::make("fakesink")
+            .property("sync", false)
+            .build()
+            .expect("fakesink");
+        pipeline.add_many([&src, &sink]).expect("add");
+        src.link(&sink).expect("link");
+        let shell = Arc::new(Mutex::new(new_test_shell(
+            pipeline,
+            sink,
+            SourceKind::Uri,
+            None,
+        )));
+        // Preroll to PLAYING so the replay seek is valid, then release the lock
+        // (resume_playing locks internally).
+        shell
+            .lock()
+            .set_state_sync(gst::State::Playing)
+            .expect("to playing");
+
+        let replay = PlayReplayContext {
+            desired_playing: Arc::new(AtomicBool::new(true)),
+            at_eos: Arc::new(AtomicBool::new(true)),
+            running: Arc::new(AtomicBool::new(true)),
+            rate: Arc::new(Mutex::new(2.0)),
+        };
+        let swap = PipelineSwapConfig {
+            emitter: Arc::new(Mutex::new(None::<Emitter>)),
+            looping: Arc::new(AtomicBool::new(false)),
+            metadata: Arc::new(Mutex::new(InternalVideoMetadata::default())),
+            track_cache: Arc::new(Mutex::new(TrackCache::default())),
+            orientation: InternalVideoOrientationConfig::default(),
+            aspect: InternalAspectRatioMode::default(),
+        };
+        let surface = VideoSurface::new(Arc::new(Mutex::new(None)));
+
+        resume_playing(shell.clone(), &replay, &swap, &surface, true).expect("resume");
+        assert_eq!(
+            *replay.rate.lock(),
+            1.0,
+            "manual EOS replay must reset rate to 1.0"
+        );
+        let _ = shell.lock().set_state_sync(gst::State::Null);
     }
 }

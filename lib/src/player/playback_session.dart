@@ -139,7 +139,14 @@ class PlaybackSession
     });
   }
 
-  Future<void> play() => _guard(_port.play);
+  Future<void> play() {
+    // Manual replay after EOS resets speed to 1x (engine resets its rate too);
+    // keep the UI in sync. Normal pause->resume (not completed) keeps the speed.
+    if (_state.value == PlayerState.completed) {
+      _speed.value = 1.0;
+    }
+    return _guard(_port.play);
+  }
 
   Future<void> pause() => _guard(_port.pause);
 

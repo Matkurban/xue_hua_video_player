@@ -132,6 +132,7 @@ mod tests {
                 desired_playing: desired,
                 at_eos,
                 running,
+                rate: Arc::new(Mutex::new(1.0)),
             },
             Arc::new(Mutex::new(None)),
             Arc::new(AtomicBool::new(false)),

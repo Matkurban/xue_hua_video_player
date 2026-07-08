@@ -32,6 +32,7 @@ fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>
 }
 
 /// Installs a bus watch and position polling timer on the Gst thread's MainContext.
+#[allow(clippy::too_many_arguments)]
 pub fn attach_gst_bus_handlers(
     pipeline: &gst::Pipeline,
     emitter: &Arc<Mutex<Option<Emitter>>>,
@@ -39,6 +40,7 @@ pub fn attach_gst_bus_handlers(
     desired_playing: &Arc<AtomicBool>,
     at_eos: &Arc<AtomicBool>,
     running: &Arc<AtomicBool>,
+    rate: &Arc<Mutex<f64>>,
     is_playbin: bool,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
     #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<Arc<Mutex<Option<IosLayerBackend>>>>,
@@ -55,6 +57,7 @@ pub fn attach_gst_bus_handlers(
     let at_eos_bus = at_eos.clone();
     let running_bus = running.clone();
     let running_pos = running.clone();
+    let rate_bus = rate.clone();
     #[cfg(target_os = "ios")]
     let ios_layer_bus = ios_layer_bus_slot;
 
@@ -108,6 +111,7 @@ pub fn attach_gst_bus_handlers(
                 pipeline: &pipeline_bus,
                 msg,
                 track_cache: track_cache_bus.as_ref(),
+                rate: *rate_bus.lock(),
                 #[cfg(target_os = "ios")]
                 ios_layer_bus: &ios_layer_bus,
                 emit: &mut emit_to_dart,

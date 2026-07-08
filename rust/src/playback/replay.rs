@@ -19,6 +19,9 @@ pub struct PlayReplayContext {
     pub desired_playing: Arc<AtomicBool>,
     pub at_eos: Arc<AtomicBool>,
     pub running: Arc<AtomicBool>,
+    /// Current playback rate, shared with the engine so EOS replay / loop / shell
+    /// rebuild resume at the user-selected speed instead of resetting to 1.0.
+    pub rate: Arc<Mutex<f64>>,
 }
 
 /// Unified play intent for mobile overlay bind (Android + iOS).
@@ -74,6 +77,7 @@ mod tests {
                 desired_playing: desired,
                 at_eos,
                 running,
+                rate: Arc::new(Mutex::new(1.0)),
             },
             swap: PipelineSwapConfig {
                 emitter: Arc::new(Mutex::new(None)),

@@ -98,13 +98,20 @@ impl PipelineShell {
         Ok(())
     }
 
-    pub fn seek_to_start(&self) -> Result<()> {
+    /// Seeks to the start carrying `rate`, so EOS replay / loop keep the
+    /// user-selected speed (a plain `seek_simple` resets the rate to 1.0) and
+    /// scaletempo gets a rate-bearing segment (pitch preserved).
+    pub fn seek_to_start_with_rate(&self, rate: f64) -> Result<()> {
         self.pipeline
-            .seek_simple(
+            .seek(
+                rate,
                 gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                gst::SeekType::Set,
+                gst::ClockTime::ZERO,
+                gst::SeekType::None,
                 gst::ClockTime::ZERO,
             )
-            .map_err(|e| anyhow!("seek to start before play: {e}"))
+            .map_err(|e| anyhow!("seek to start (rate {rate}) failed: {e}"))
     }
 
     pub fn seek_accurate(&self, position_ms: i64, rate: f64) -> Result<()> {
@@ -122,16 +129,10 @@ impl PipelineShell {
     }
 
     pub fn apply_playback_rate(&self, rate: f64) -> Result<()> {
-        self.pipeline
-            .seek(
-                rate,
-                gst::SeekFlags::INSTANT_RATE_CHANGE,
-                gst::SeekType::None,
-                gst::ClockTime::ZERO,
-                gst::SeekType::None,
-                gst::ClockTime::ZERO,
-            )
-            .map_err(|e| anyhow!("apply playback rate failed: {e}"))
+        // Position-preserving flushing rate seek (not INSTANT_RATE_CHANGE): this
+        // sends a rate-bearing segment so scaletempo time-stretches and keeps the
+        // original pitch. INSTANT_RATE_CHANGE bypasses scaletempo and shifts pitch.
+        self.seek_accurate(self.query_position_ms(), rate)
     }
 
     pub fn set_volume(&self, volume: f64) {
@@ -298,6 +299,7 @@ pub fn install_uri_shell(
         &replay.desired_playing,
         &replay.at_eos,
         &replay.running,
+        &replay.rate,
         true,
         track_cache,
         #[cfg(target_os = "ios")]
@@ -331,6 +333,7 @@ pub fn install_asset_shell(
         &replay.desired_playing,
         &replay.at_eos,
         &replay.running,
+        &replay.rate,
         false,
         None,
         #[cfg(target_os = "ios")]
@@ -466,5 +469,60 @@ mod tests {
         let snap = shell.snapshot();
         assert!(snap.has_pending_media);
         assert_eq!(snap.current, gst::State::Null);
+    }
+
+    // Real playable pipeline whose current segment rate can be queried.
+    fn playing_rate_shell() -> PipelineShell {
+        init_gst();
+        let pipeline = gst::Pipeline::new();
+        let src = gst::ElementFactory::make("audiotestsrc")
+            .property("is-live", false)
+            .build()
+            .expect("audiotestsrc");
+        let sink = gst::ElementFactory::make("fakesink")
+            .property("sync", false)
+            .build()
+            .expect("fakesink");
+        pipeline.add_many([&src, &sink]).expect("add");
+        src.link(&sink).expect("link");
+        let shell = PipelineShell {
+            pipeline,
+            video_sink: sink,
+            kind: SourceKind::Uri,
+            is_playbin: false,
+            asset_key: None,
+            appsrc_feed: None,
+            bus_watch: None,
+            position_source: None,
+        };
+        shell.set_state_sync(gst::State::Playing).expect("to playing");
+        shell
+    }
+
+    fn segment_rate(shell: &PipelineShell) -> f64 {
+        let mut q = gst::query::Segment::new(gst::Format::Time);
+        assert!(shell.pipeline.query(&mut q), "segment query failed");
+        q.result().0
+    }
+
+    // Regression: `apply_playback_rate` must send a rate-bearing segment (so
+    // scaletempo preserves pitch), not an INSTANT_RATE_CHANGE that leaves the
+    // segment rate at 1.0.
+    #[test]
+    fn apply_playback_rate_sets_segment_rate() {
+        let shell = playing_rate_shell();
+        shell.apply_playback_rate(2.0).expect("apply rate");
+        assert!((segment_rate(&shell) - 2.0).abs() < 1e-6);
+        let _ = shell.set_state_null();
+    }
+
+    // Regression: EOS replay / loop must restart at the selected rate, not 1.0
+    // (the old `seek_simple` reset the rate).
+    #[test]
+    fn seek_to_start_with_rate_preserves_rate() {
+        let shell = playing_rate_shell();
+        shell.seek_to_start_with_rate(2.0).expect("seek start rate");
+        assert!((segment_rate(&shell) - 2.0).abs() < 1e-6);
+        let _ = shell.set_state_null();
     }
 }

@@ -71,6 +71,7 @@ impl PlaybackEngine {
         let desired_init = desired_playing.clone();
         let at_eos_init = at_eos.clone();
         let running_init = running.clone();
+        let rate_init = rate.clone();
         let overlay_init = native_window.clone();
 
         let metadata_init = video_metadata.clone();
@@ -83,6 +84,7 @@ impl PlaybackEngine {
                 desired_playing: desired_init,
                 at_eos: at_eos_init,
                 running: running_init,
+                rate: rate_init,
             };
             let mut surface = VideoSurface::new(overlay_init.clone());
             #[cfg(target_os = "ios")]
@@ -107,6 +109,7 @@ impl PlaybackEngine {
                 desired_playing: desired_init,
                 at_eos: at_eos_init,
                 running: running_init,
+                rate: rate_init,
             };
             let surface = VideoSurface::new(overlay_init.clone());
             let shell = install_uri_shell(
@@ -126,6 +129,7 @@ impl PlaybackEngine {
             desired_playing: desired_playing.clone(),
             at_eos: at_eos.clone(),
             running: running.clone(),
+            rate: rate.clone(),
         };
         let gst_context = Arc::new(PlaybackGstContext::new(
             Arc::new(Mutex::new(shell)),
