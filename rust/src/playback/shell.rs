@@ -23,12 +23,10 @@ use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
 use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
-use crate::playback::gst::apply_rotation_to_playbin;
 use crate::playback::gst::attach_overlay_bus_sync_handler;
 use crate::playback::gst::{
-    apply_rotation_to_element, expose_overlay, flush_videoflip_element,
-    set_overlay_render_rectangle, set_overlay_window_handle, InternalAspectRatioMode,
-    InternalVideoMetadata,
+    apply_rotation_to_element, expose_overlay, set_overlay_render_rectangle,
+    set_overlay_window_handle, InternalAspectRatioMode, InternalVideoMetadata,
 };
 use crate::playback::overlay::PipelineSnapshot;
 use crate::playback::replay::PlayReplayContext;
@@ -227,26 +225,8 @@ impl PipelineShell {
     }
 
     pub fn apply_rotation(&mut self, rotate_degrees: i32) -> Result<()> {
-        let was_playing = self.pipeline.current_state() == gst::State::Playing;
-        if was_playing && self.is_playbin {
-            self.set_state_sync(gst::State::Paused)?;
-        }
-
-        if self.is_playbin {
-            apply_rotation_to_playbin(
-                self.pipeline.upcast_ref::<gst::Element>(),
-                rotate_degrees,
-                &mut self.orientation_filter,
-            )?;
-        } else if let Some(ref flip) = self.orientation_filter {
+        if let Some(ref flip) = self.orientation_filter {
             apply_rotation_to_element(flip, rotate_degrees)?;
-            if rotate_degrees == 0 {
-                flush_videoflip_element(flip)?;
-            }
-        }
-
-        if was_playing && self.is_playbin {
-            self.set_state_sync(gst::State::Playing)?;
         }
         Ok(())
     }
@@ -400,7 +380,7 @@ pub fn install_uri_shell(
     frame_sink: &Arc<crate::playback::frame::FrameSink>,
     #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
 ) -> Result<PipelineShell> {
-    let (pipeline, video_sink) = build_uri_playbin(
+    let (pipeline, video_sink, orientation_filter) = build_uri_playbin(
         emitter,
         metadata_cache,
         frame_sink,
@@ -429,7 +409,7 @@ pub fn install_uri_shell(
         appsrc_feed: None,
         bus_watch: Some(bus_watch),
         position_source: Some(position_source),
-        orientation_filter: None,
+        orientation_filter: Some(orientation_filter),
     })
 }
 

@@ -18,6 +18,8 @@ use gstreamer_video::{
 };
 use parking_lot::Mutex;
 
+use super::orientation::make_videoflip_element;
+
 /// 各平台 GStreamer 推荐的视频 sink 元素名 / GStreamer-recommended video sink element name per platform.
 #[cfg_attr(
     any(
@@ -117,6 +119,33 @@ pub fn create_platform_video_sink(
         configure_video_sink(&sink);
         Ok(sink)
     }
+}
+
+/// 构建含 `videoflip` 的 playbin `video-sink` bin（NULL 态安装）/ Builds playbin `video-sink` bin with in-pipeline `videoflip`.
+///
+/// 链路：`videoflip → videoconvert →` 平台 sink（appsink 或 VideoOverlay）。
+/// 返回 `(bin, inner_sink, videoflip)`；probe/overlay 仍挂 `inner_sink`。
+pub fn build_video_sink_bin(
+    frame_sink: &Arc<crate::playback::frame::FrameSink>,
+) -> Result<(gst::Bin, gst::Element, gst::Element)> {
+    let videoflip = make_videoflip_element()?;
+    let videoconvert = gst::ElementFactory::make("videoconvert")
+        .build()
+        .map_err(|e| anyhow!("videoconvert: {e}"))?;
+    let inner_sink = create_platform_video_sink(frame_sink)?;
+
+    let bin = gst::Bin::new();
+    bin.add_many([&videoflip, &videoconvert, &inner_sink])?;
+    gst::Element::link_many([&videoflip, &videoconvert, &inner_sink])?;
+
+    let sink_pad = videoflip
+        .static_pad("sink")
+        .ok_or_else(|| anyhow!("videoflip has no sink pad"))?;
+    let ghost = gst::GhostPad::with_target(&sink_pad)?;
+    ghost.set_active(true)?;
+    bin.add_pad(&ghost)?;
+
+    Ok((bin, inner_sink, videoflip))
 }
 
 /// 将原生窗口/surface 句柄绑定到 VideoOverlay sink / Binds native window/surface handle to VideoOverlay sink.
