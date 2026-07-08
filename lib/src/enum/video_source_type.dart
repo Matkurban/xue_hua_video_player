@@ -1,11 +1,14 @@
-/// Where a piece of media comes from.
+/// 媒体来源类型 / Where a piece of media comes from.
+///
+/// 由 [MediaSourceResolver] 映射为 GStreamer 可消费的 URI 或 Flutter asset 描述符。
+/// Mapped by [MediaSourceResolver] into a GStreamer URI or Flutter asset descriptor.
 enum VideoSourceType {
-  /// A remote URL (`http(s)://`, `rtsp://`, ...).
+  /// 远程 URL（`http(s)://`、`rtsp://` 等）/ Remote URL.
   network,
 
-  /// A local filesystem path or `file://` URI.
+  /// 本地文件系统路径或 `file://` URI / Local filesystem path or `file://` URI.
   file,
 
-  /// A Flutter asset key declared in `pubspec.yaml`.
+  /// 在 `pubspec.yaml` 中声明的 Flutter 资源 / Flutter asset key in `pubspec.yaml`.
   asset,
 }

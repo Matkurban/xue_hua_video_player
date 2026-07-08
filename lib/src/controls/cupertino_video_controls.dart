@@ -11,6 +11,10 @@ import 'playback_controls_model.dart';
 import 'playback_progress_slider.dart';
 import 'scrub_controller.dart';
 
+/// Cupertino 风格内置视频控件栏 / Cupertino-styled built-in video control bar.
+///
+/// 液态玻璃 [GlassCard] 底栏、[GlassSlider]、倍速 ActionSheet；中央 [CenterButton]。
+/// Liquid-glass [GlassCard] bar, [GlassSlider], speed ActionSheet; central [CenterButton].
 class CupertinoVideoControls extends StatefulWidget {
   const CupertinoVideoControls({
     super.key,

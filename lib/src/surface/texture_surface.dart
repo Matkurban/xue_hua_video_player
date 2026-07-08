@@ -3,17 +3,21 @@ import 'package:flutter/services.dart';
 
 import 'video_surface_handle.dart';
 
-/// MethodChannel to the native texture registrar (see each platform plugin's
-/// `xue_hua_video_player/texture` channel).
+/// 原生 Texture 注册 MethodChannel（各平台插件 `xue_hua_video_player/texture`）/ MethodChannel to the native texture registrar.
 const MethodChannel _textureChannel = MethodChannel(
   'xue_hua_video_player/texture',
 );
 
-/// Renders a player's video through a Flutter external [Texture].
+/// 通过 Flutter 外部 [Texture] 渲染 player 视频 / Renders a player's video through a Flutter external [Texture].
 ///
-/// On create it asks the native plugin to register a texture for the player id
-/// (returning a texture id) and shows a [Texture]; on dispose it releases it.
+/// 创建时调用 `createTexture` 注册 texture id；dispose 时调用 `disposeTexture` 释放。
+/// On create invokes `createTexture` for a texture id; on dispose invokes `disposeTexture`.
+///
+/// # 平台 / Platform
+/// - Android：`SurfaceProducer` + `glimagesink`
+/// - iOS/macOS/Win/Linux：`appsink` → 像素缓冲 Texture
 class TextureVideoSurface extends StatefulWidget {
+  /// 绑定 [VideoSurfaceHandle.playerId] / Binds [VideoSurfaceHandle.playerId].
   const TextureVideoSurface({super.key, required this.handle});
 
   final VideoSurfaceHandle handle;

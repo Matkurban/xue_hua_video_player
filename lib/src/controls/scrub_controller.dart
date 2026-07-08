@@ -6,18 +6,22 @@ import 'package:signals/signals_flutter.dart';
 
 import 'playback_controls_model.dart';
 
-/// Drag/seek handling for built-in progress sliders.
+/// 内置进度条拖拽与 seek 处理 / Drag/seek handling for built-in progress sliders.
 ///
-/// While the user drags, the slider pins to the finger position. On release the
-/// value stays pinned until [PlaybackControlsModel.position] catches up (or
-/// after a safety timeout), so the thumb never bounces back to a stale position
-/// while the async seek is in flight.
+/// 拖拽时滑块钉在手指位置；松手后保持至 [PlaybackControlsModel.position] 追上（或安全超时），
+/// 避免异步 seek 期间 thumb 弹回旧位置。
+/// While dragging the slider pins to the finger; on release it stays pinned until
+/// [PlaybackControlsModel.position] catches up (or safety timeout), preventing thumb bounce during async seek.
 class ScrubController {
+  /// 创建 scrub 控制器 / Creates a scrub controller.
   ScrubController({required this.model, required this.onInteract}) {
     _seekWatch = effect(_checkSeekSettled);
   }
 
+  /// 拖拽安全超时（毫秒）/ Drag safety timeout in milliseconds.
   static const dragSafetyMs = 300;
+
+  /// seek 落定超时（毫秒）/ Seek settle timeout in milliseconds.
   static const seekSettleMs = 1500;
 
   final PlaybackControlsModel model;
@@ -70,22 +74,24 @@ class ScrubController {
     );
   }
 
-  /// The fraction the slider should currently display.
+  /// 滑块当前应显示的 0.0–1.0 分数 / Fraction 0.0–1.0 the slider should display.
   double sliderValue(double durMs, double posMs) {
     final target = _dragValue.value;
     if (target != null) return target;
     return durMs > 0 ? (posMs / durMs).clamp(0.0, 1.0) : 0.0;
   }
 
-  /// Whether the user is dragging or an async seek is still settling.
+  /// 用户是否在拖拽或异步 seek 尚未落定 / Whether user is dragging or async seek is settling.
   bool get isScrubbing => _dragValue.value != null;
 
+  /// 开始拖拽 / Seek drag started.
   void onSeekStart() {
     onInteract();
     _dragging = true;
     _armDragSafetyTimeout();
   }
 
+  /// 拖拽中分数变化 / Fraction changed while dragging.
   void onSeekChanged(double v, double durMs) {
     if (durMs <= 0) return;
     _dragging = true;
@@ -94,6 +100,7 @@ class ScrubController {
     _armDragSafetyTimeout();
   }
 
+  /// 松手并发起 seek / Drag ended; initiates seek.
   void onSeekEnd(double v, double durMs) {
     if (durMs <= 0) return;
     _dragging = false;
@@ -108,6 +115,7 @@ class ScrubController {
     _armSeekSettleTimeout();
   }
 
+  /// 释放 effect 与 signal / Disposes effect and signal.
   void dispose() {
     _seekTimeout?.cancel();
     _seekWatch();

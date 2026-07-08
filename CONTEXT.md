@@ -145,8 +145,8 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 ## Dart rendering surface
 
 - **`lib/src/presentation/`** (partial export): **`PlaybackPresentation`** deep widget + **`PlaybackPresentationModel`** seam; owns surface embed, aspect sync, loading chrome.
-- **`lib/src/surface/`** (not exported): **`VideoSurfaceHandle`** routing + **`TextureVideoSurface`** (`Texture` widget + native texture MethodChannel).
-- **`buildXueHuaVideoPlatformView(playerId:)`** compatibility alias → **`buildVideoSurface`** → **`TextureVideoSurface`**; full UI prefers **`XueHuaVideoView`** or **`PlaybackPresentation`**.
+- **`lib/src/surface/`** (not exported): **`VideoSurfaceHandle`** routing + **`buildVideoSurface`** → **`TextureVideoSurface`** (`Texture` widget + native texture MethodChannel).
+- Full UI prefers **`XueHuaVideoView`**; surface-only with aspect sync uses package-private **`PlaybackPresentation`** (same stack as the view without controls).
 - **`PlaybackPresentation.aspectRatioMode`** syncs **`AspectRatioMode`** to the Rust pipeline where the sink supports it; letterbox/crop/stretch is applied in GStreamer, not Flutter `BoxFit`.
 
 ## Dart playback presentation (workstream C)
@@ -154,7 +154,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 - **Before:** surface routing, aspect sync, loading overlay lived in **`XueHuaVideoView`**; presentation logic bound to controller concrete type.
 - **After (C1 landed):** **`PlaybackPresentation`** owns embed + sync + chrome; **`XueHuaVideoView`** is a thin shell (~40 LOC).
 - **`PlaybackSession`** / **`XueHuaPlayerController`** implement **`PlaybackPresentationModel`** alongside **`PlaybackControlsModel`**.
-- **`buildXueHuaVideoPlatformView`** unchanged (surface-only); integrators needing aspect sync use **`PlaybackPresentation`**.
+- Custom layouts: **`XueHuaVideoView`** (`showControls: false`) or package-private **`PlaybackPresentation`** for aspect sync without the built-in bar.
 
 ## Dart playback orchestration (workstream B)
 

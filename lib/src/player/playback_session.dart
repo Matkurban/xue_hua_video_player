@@ -10,9 +10,18 @@ import '../model/video_source.dart';
 import '../rust/player_events.dart';
 import 'command_port.dart';
 
-/// Deep orchestration module: signals, event dispatch, open lifecycle, transport.
+/// 深度编排模块：signals、事件分发、open 生命周期与 transport / Deep orchestration: signals, event dispatch, open lifecycle, transport.
+///
+/// [XueHuaPlayerController] 的核心实现。维护 reactive 状态，订阅 [PlayerCommandPort.events]，
+/// 将 [PlayerEvent] 映射到 signals；命令经 `_guard` 捕获异常并写入 [error]。
+/// Core of [XueHuaPlayerController]. Maintains reactive state, listens to [PlayerCommandPort.events],
+/// maps [PlayerEvent] to signals; commands run through `_guard` to capture errors into [error].
+///
+/// Seek/volume 等命令会先乐观更新 UI（`_preview*`），再异步调用 Rust。
+/// Seek/volume and similar commands optimistically update UI (`_preview*`) before async Rust calls.
 class PlaybackSession
     implements PlaybackControlsModel, PlaybackPresentationModel {
+  /// 创建会话；可注入测试用 [port] 与 [mediaSourceResolver] / Creates a session with optional test doubles.
   PlaybackSession({
     PlayerCommandPort? port,
     MediaSourceResolver? mediaSourceResolver,
@@ -41,15 +50,18 @@ class PlaybackSession
   final FlutterSignal<bool> _supportsTracks = signal(true);
   final FlutterSignal<bool> _supportsOrientation = signal(true);
 
+  /// 是否正在播放 / Whether `state == playing`.
   @override
   late final ReadonlySignal<bool> isPlaying = computed(
     () => _state.value == PlayerState.playing,
   );
 
+  /// 是否已 EOS / Whether playback completed.
   late final ReadonlySignal<bool> isCompleted = computed(
     () => _state.value == PlayerState.completed,
   );
 
+  /// 显示宽高比；优先 DAR 元数据 / Display aspect ratio; prefers DAR metadata.
   @override
   late final ReadonlySignal<double> aspectRatio = computed(() {
     final meta = _videoMetadata.value;
@@ -94,6 +106,7 @@ class PlaybackSession
   ReadonlySignal<bool> get supportsTracks => _supportsTracks;
   ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
 
+  /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
     if (_initialized.value) return;
     await _port.create();
@@ -126,7 +139,10 @@ class PlaybackSession
     }
   }
 
-  /// Loads [source] via the unified Rust media resolver.
+  /// 经统一 Rust 解析器加载 [source] / Loads [source] via the unified Rust media resolver.
+  ///
+  /// 调用前 [_resetForOpen] 清空上一媒体状态；加载后更新 pipeline 能力并刷新轨道。
+  /// Clears prior media state via [_resetForOpen]; updates capabilities and tracks after load.
   Future<void> open(VideoSource source, {bool autoPlay = false}) async {
     _resetForOpen();
     await _guard(() async {
@@ -139,6 +155,7 @@ class PlaybackSession
     });
   }
 
+  /// 播放；EOS 后手动 replay 会将 [speed] 重置为 1.0 / Plays; resets [speed] to 1.0 after manual replay from EOS.
   Future<void> play() {
     // Manual replay after EOS resets speed to 1x (engine resets its rate too);
     // keep the UI in sync. Normal pause->resume (not completed) keeps the speed.
@@ -155,6 +172,7 @@ class PlaybackSession
   @override
   Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
 
+  /// 跳转；播放中会乐观显示 buffering / Seeks; optimistically shows buffering while playing.
   @override
   Future<void> seek(Duration position) async {
     _previewSeek(position, showBuffering: isPlaying.value);
@@ -186,6 +204,7 @@ class PlaybackSession
     await _guard(() => _port.setLooping(looping));
   }
 
+  /// 从 port 重新拉取轨道 / Refreshes tracks from the port.
   Future<void> refreshTracks() => _refreshTracksFromPort();
 
   Future<void> selectTrack(MediaTrack track, {bool enable = true}) =>
@@ -198,6 +217,7 @@ class PlaybackSession
   Future<void> setAspectRatioMode(AspectRatioMode mode) =>
       _guard(() => _port.setAspectRatioMode(mode));
 
+  /// 取消订阅、销毁 player 并释放全部 signals / Cancels subscription, disposes player and all signals.
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

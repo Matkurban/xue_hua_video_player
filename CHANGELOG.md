@@ -23,8 +23,9 @@
 - Removed `VideoSurfaceKind.platformView` and `VideoSurfaceKind.desktopOverlay`.
 - Removed native Platform View factories (iOS/macOS/Android) and Windows/Linux
   desktop overlay MethodChannel (`xue_hua_video_player/desktop_overlay`).
-- **`buildXueHuaVideoPlatformView`** still exists as a compatibility alias; it
-  now builds a `Texture` surface (name unchanged for README/custom layouts).
+- Removed **`buildXueHuaVideoPlatformView`** and **`lib/src/platform_view.dart`**
+  (unused one-line alias over **`buildVideoSurface`**). Use **`XueHuaVideoView`**
+  (`showControls: false` for custom chrome) or package-private **`PlaybackPresentation`**.
 
 ### Added
 

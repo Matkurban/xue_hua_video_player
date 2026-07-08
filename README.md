@@ -269,9 +269,8 @@ build with a clean tree and symbolicate with
    `flutter clean` / full reinstall after upgrading.
 2. **Initialization order** — `XueHuaVideoPlayer.initialize()` →
    `controller.initialize()` → wait until media is on disk → `open(...)`.
-3. **Video surface** — embed `XueHuaVideoView` (or `buildXueHuaVideoPlatformView`)
-   with the same `playerId` as the controller. The widget registers a native
-   texture automatically.
+3. **Video surface** — embed `XueHuaVideoView` (set `showControls: false` if you
+   provide your own chrome). The widget registers a native texture automatically.
 4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR.
 5. **Diagnosis** — filter logcat for `xue_hua_video_player` and `android overlay:`.
 

@@ -9,6 +9,10 @@ import 'playback_controls_model.dart';
 import 'playback_progress_slider.dart';
 import 'scrub_controller.dart';
 
+/// Material 风格内置视频控件栏 / Material-styled built-in video control bar.
+///
+/// 底部渐变 scrim、Material [Slider]、倍速 PopupMenu；中央 [CenterButton]。
+/// Bottom gradient scrim, Material [Slider], speed PopupMenu; central [CenterButton].
 class MaterialVideoControls extends StatefulWidget {
   const MaterialVideoControls({
     super.key,

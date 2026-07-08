@@ -2,7 +2,10 @@ import 'package:signals/signals_flutter.dart';
 
 import '../rust/player_events.dart';
 
-/// Narrow seam for built-in video controls: readonly transport state + commands.
+/// 内置视频控件窄接口：只读 transport 状态 + 命令 / Narrow seam for built-in controls: readonly transport state and commands.
+///
+/// 由 [XueHuaPlayerController] 实现；[VideoControls] 及其子组件依赖此接口。
+/// Implemented by [XueHuaPlayerController]; [VideoControls] and child widgets depend on it.
 abstract class PlaybackControlsModel {
   ReadonlySignal<PlayerState> get state;
   ReadonlySignal<int> get bufferingPercent;

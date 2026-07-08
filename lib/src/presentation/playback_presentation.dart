@@ -7,8 +7,16 @@ import '../surface/build_video_surface.dart';
 import '../surface/video_surface_handle.dart';
 import 'playback_presentation_model.dart';
 
-/// Deep presentation module: platform surface embed, aspect layout, buffering chrome.
+/// 深度呈现模块：平台表面嵌入、宽高比布局、缓冲 UI / Deep presentation: platform surface embed, aspect layout, buffering chrome.
+///
+/// 根据 [model.playerId] 路由至 [buildVideoSurface]，并用 [SignalBuilder] 响应 [aspectRatio] 变化。
+/// Routes to [buildVideoSurface] from [model.playerId] and reacts to [aspectRatio] via [SignalBuilder].
 class PlaybackPresentation extends StatelessWidget {
+  /// 创建呈现层 / Creates the presentation layer.
+  ///
+  /// # 参数 / Parameters
+  /// - `model` — 实现 [PlaybackPresentationModel] 的控制器 / controller implementing the model
+  /// - `aspectRatioMode` — fit / fill / stretch 布局策略 / layout strategy
   const PlaybackPresentation({
     super.key,
     required this.model,
@@ -17,8 +25,7 @@ class PlaybackPresentation extends StatelessWidget {
 
   final PlaybackPresentationModel model;
 
-  /// Letterbox/crop/stretch behaviour. On Texture surfaces this is applied in
-  /// Dart layout; on Android it is also forwarded to `glimagesink`.
+  /// letterbox / 裁剪 / 拉伸；Texture 在 Dart 布局；Android 亦转发至 `glimagesink` / Letterbox, crop, or stretch; Dart layout plus Android sink forward.
   final AspectRatioMode aspectRatioMode;
 
   @override
@@ -50,10 +57,10 @@ class PlaybackPresentation extends StatelessWidget {
   }
 }
 
-/// Sizes the video surface for external [Texture] rendering.
+/// 为外部 [Texture] 渲染计算视频 widget 尺寸 / Sizes the video widget for external [Texture] rendering.
 ///
-/// GStreamer `appsink` frames are raw rectangles; Flutter `Texture` stretches
-/// pixels to the widget bounds, so the widget itself must preserve DAR.
+/// GStreamer `appsink` 帧为原始矩形；Flutter [Texture] 会拉伸至 widget 边界，故须在此保留 DAR。
+/// GStreamer `appsink` frames are raw rectangles; Flutter [Texture] stretches to bounds, so DAR is preserved here.
 class _VideoAspectLayout extends StatelessWidget {
   const _VideoAspectLayout({
     required this.aspectRatio,
@@ -92,6 +99,7 @@ class _VideoAspectLayout extends StatelessWidget {
   }
 }
 
+/// 缓冲中半透明遮罩与进度指示 / Semi-transparent overlay and progress indicator while buffering.
 class _BufferingOverlay extends StatelessWidget {
   const _BufferingOverlay({required this.model});
 
@@ -119,7 +127,7 @@ class _BufferingOverlay extends StatelessWidget {
   }
 }
 
-/// Pushes [aspectRatioMode] to the Rust pipeline when the player is ready.
+/// 播放器就绪后将 [aspectRatioMode] 推送至 Rust pipeline / Pushes [aspectRatioMode] to Rust when the player is ready.
 class _AspectRatioModeSync extends StatefulWidget {
   const _AspectRatioModeSync({
     required this.model,

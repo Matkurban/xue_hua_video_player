@@ -6,7 +6,10 @@ import '../rust/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import 'playback_controls_model.dart';
 
-/// Central play/pause/buffering affordance shared by both styles.
+/// 两种控件风格共用的中央播放/暂停/缓冲 affordance / Central play/pause/buffering affordance shared by both control styles.
+///
+/// 缓冲中隐藏大按钮（由进度条与 presentation 层指示）；否则显示玻璃态播放/暂停。
+/// Hidden during buffering (progress/presentation indicate loading); otherwise shows glass play/pause.
 class CenterButton extends StatelessWidget {
   const CenterButton({
     super.key,

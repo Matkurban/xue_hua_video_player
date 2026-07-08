@@ -1,11 +1,11 @@
-/// Selects which visual language the built-in [VideoControls] use.
+/// 内置 [VideoControls] 采用的视觉语言 / Selects which visual language [VideoControls] use.
 enum VideoControlsStyle {
-  /// Pick Cupertino on iOS/macOS, Material elsewhere.
+  /// iOS/macOS 用 Cupertino，其余用 Material / Cupertino on iOS/macOS, Material elsewhere.
   adaptive,
 
-  /// Always use the Material control bar.
+  /// 始终 Material 控件栏 / Always Material control bar.
   material,
 
-  /// Always use the Cupertino control bar.
+  /// 始终 Cupertino 控件栏 / Always Cupertino control bar.
   cupertino,
 }

@@ -4,7 +4,14 @@ import 'package:flutter/material.dart';
 import 'texture_surface.dart';
 import 'video_surface_handle.dart';
 
-/// Routes [handle] to the Flutter external [Texture] surface for its platform.
+/// 将 [handle] 路由至平台对应的 Flutter 外部 [Texture] 表面 / Routes [handle] to the platform Flutter external [Texture] surface.
+///
+/// # 参数 / Parameters
+/// - `handle` — [VideoSurfaceHandle] 含 playerId 与 [VideoSurfaceKind] / player id and surface kind
+///
+/// # 返回值 / Returns
+/// - [VideoSurfaceKind.texture] → [TextureVideoSurface]
+/// - [VideoSurfaceKind.unsupported] → 错误占位 widget / error placeholder widget
 Widget buildVideoSurface(VideoSurfaceHandle handle) {
   return switch (handle.kind) {
     VideoSurfaceKind.texture => TextureVideoSurface(handle: handle),

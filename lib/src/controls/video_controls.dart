@@ -10,12 +10,17 @@ import 'cupertino_video_controls.dart';
 import 'material_video_controls.dart';
 import 'playback_controls_model.dart';
 
-/// Overlay that draws an adaptive, auto-hiding control bar on top of the video.
+/// 在视频上方绘制自适应、自动隐藏控件栏的 overlay / Overlay with adaptive, auto-hiding control bar on top of the video.
 ///
-/// Tap the video to toggle the controls; they hide automatically after a few
-/// seconds of inactivity while playing. All reactive reads happen inside
-/// [SignalBuilder]s so only the affected control rebuilds.
+/// 点击视频切换可见性；播放中无操作 [autoHide] 后自动隐藏。Reactive 读取均在 [SignalBuilder] 内，仅重建受影响控件。
+/// Tap toggles visibility; hides after [autoHide] while playing. Reactive reads inside [SignalBuilder] for granular rebuilds.
 class VideoControls extends StatefulWidget {
+  /// 创建控件 overlay / Creates the controls overlay.
+  ///
+  /// # 参数 / Parameters
+  /// - `model` — [PlaybackControlsModel] 实现 / playback controls model
+  /// - `style` — Material / Cupertino / adaptive
+  /// - `autoHide` — 播放中自动隐藏延迟 / auto-hide delay while playing
   const VideoControls({
     super.key,
     required this.model,
