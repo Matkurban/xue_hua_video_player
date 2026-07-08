@@ -24,11 +24,9 @@ use reducer::BusSnapshot;
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
 #[cfg(target_os = "ios")]
-fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) -> bool {
-    ios_layer_bus
-        .as_ref()
-        .and_then(|slot| slot.lock().as_ref().map(|hook| hook.is_overlay_bound()))
-        .unwrap_or(false)
+fn ios_overlay_bound(_ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) -> bool {
+    // Texture/appsink path: no CALayer attach — always ready (matches overlay_ready_for_play).
+    true
 }
 
 /// Installs a bus watch and position polling timer on the Gst thread's MainContext.

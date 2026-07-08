@@ -416,16 +416,29 @@ mod tests {
 
     #[cfg(target_os = "ios")]
     #[test]
-    fn ios_buffering_defers_when_overlay_unbound() {
+    fn ios_buffering_100_emits_playing_when_overlay_ready() {
         let r = reduce_bus_message(
             BusMessage::Buffering { percent: 100 },
-            snap(true, false, true, false),
+            snap(true, false, true, true),
         );
+        assert!(r.events.iter().any(|e| e.state == PlayerState::Playing));
+        assert!(r.events.iter().any(|e| e.buffering_percent == 100));
         assert!(r
             .effects
-            .contains(&BusSideEffect::IosSetPendingPlayAfterOverlay));
-        assert!(r.effects.contains(&BusSideEffect::IosScheduleApply));
-        assert!(!r.events.iter().any(|e| e.state == PlayerState::Playing));
+            .contains(&BusSideEffect::IosSetBufferingActive(false)));
+    }
+
+    #[cfg(target_os = "ios")]
+    #[test]
+    fn ios_playbin_rebuffer_cycle_recovers_to_playing() {
+        let snapshot = snap(true, false, true, true);
+        let _ = reduce_bus_message(BusMessage::Buffering { percent: 30 }, snapshot);
+        let _ = reduce_bus_message(BusMessage::Buffering { percent: 100 }, snapshot);
+        let r = reduce_bus_message(BusMessage::Buffering { percent: 20 }, snapshot);
+        assert!(r.events.iter().any(|e| e.state == PlayerState::Buffering));
+        let r = reduce_bus_message(BusMessage::Buffering { percent: 100 }, snapshot);
+        assert!(r.events.iter().any(|e| e.state == PlayerState::Playing));
+        assert!(r.events.iter().any(|e| e.buffering_percent == 100));
     }
 
     #[cfg(target_os = "ios")]
