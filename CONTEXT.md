@@ -81,10 +81,12 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 - Position polling uses `timeout_source_new` **attached to the owned Gst `MainContext`** (`gst_main_context()`). Do **not** use `glib::timeout_add_local` — in glib 0.22 it binds to `g_main_context_default()`, which is not the context running `MainLoop::run()` on `xhvp-gst`.
 - State transitions call `set_state` then `get_state` with a timeout (`set_state_sync`) so failures surface as explicit errors.
 - **Do not** call `set_state_sync` from bus watch callbacks (e.g. `Buffering`, `ClockLost`) — use async `pipeline.set_state()` only; blocking `get_state` deadlocks the MainLoop (Android JNI overlay, macOS `osxvideosink`).
+- **Android:** Gradle downloads the official GStreamer Android SDK (if missing) and runs ndk-build to produce `libgstreamer_android.so` per ABI before the Rust link step. Cache default: `~/Library/Caches/xue_hua_video_player/gstreamer/android/<GST_VER>/`. Override with `GSTREAMER_ROOT_ANDROID` / `GST_VER`. See `android/scripts/` and `android/build.gradle`.
 
 ## Android VideoOverlay requirements
 
 - `glimagesink` + [`VideoOverlay`](https://gstreamer.freedesktop.org/documentation/rust/stable/latest/docs/gstreamer_video/index.html) bind via `ANativeWindow_fromSurface` from `SurfaceView` callbacks.
+- **HW decode (`amcvideodec`)** emits External OES GL textures; URI/AppSrc video branches use `glupload → glcolorconvert → gltransformation → glimagesink` (`playback/gst/sink.rs`). Do not insert `gldownload`, `videoflip`, or `videoconvert` on this path — `gldownload` cannot map External OES and causes black video with audio.
 - **Never** call `spawn_on_gst_thread_and_wait` from Android JNI / main thread (`surfaceCreated` / `surfaceChanged`). Cache the native window handle on the JNI thread, then apply overlay + `set_render_rectangle` + `expose` via `spawn_on_gst_thread` (fire-and-forget).
 - If no overlay handle is cached when `load` runs, defer `PAUSED` preroll until the first surface bind (`maybe_preroll_after_overlay_bind`).
 - After `PipelineShell` rebuild (URI ↔ asset switch), `mark_shell_rebuilt()` clears `overlay_bound`; `rebind_cached_overlay()` on the same Gst-thread stack must re-apply VideoOverlay to the new `video_sink` and set `overlay_bound` before preroll/play.

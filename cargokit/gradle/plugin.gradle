@@ -86,6 +86,18 @@ abstract class CargoKitBuildTask extends DefaultTask {
             environment "CARGOKIT_MIN_SDK_VERSION", minSdkVersion
             environment "CARGOKIT_TARGET_PLATFORMS", targetPlatforms.join(",")
             environment "CARGOKIT_JAVA_HOME", System.properties['java.home']
+            def gstRoot = project.hasProperty('gstreamerRootAndroid')
+                ? project.gstreamerRootAndroid
+                : System.getenv('GSTREAMER_ROOT_ANDROID')
+            if (gstRoot != null) {
+                environment "GSTREAMER_ROOT_ANDROID", gstRoot
+            }
+            def gstVer = project.hasProperty('gstreamerVersion')
+                ? project.gstreamerVersion
+                : System.getenv('GST_VER')
+            if (gstVer != null) {
+                environment "GST_VER", gstVer
+            }
         }
     }
 }
@@ -146,11 +158,10 @@ class CargoKitPlugin implements Plugin<Project> {
             }
 
             // Build the Rust cdylib for exactly the ABI(s) Flutter requests for
-            // this build. All four Android ABIs are wired up (the umbrella
-            // GStreamer .so is shipped per-ABI in jniLibs and the GStreamer
-            // Android SDK provides a per-ABI lib dir; see
-            // cargokit/build_tool/lib/src/android_environment.dart). Consumers
-            // requires the Rust toolchain to compile from source.
+            // this build. The GStreamer umbrella .so is built per-ABI before
+            // CargoKit runs (see android/build.gradle) and the GStreamer Android
+            // SDK provides a per-ABI lib dir for the Rust link step; see
+            // cargokit/build_tool/lib/src/android_environment.dart.
 
             // The task name depends on plugin properties, which are not available
             // at this point

@@ -174,10 +174,9 @@ class AndroidEnvironment {
   /// static libs, and because cargokit runs cargo from a working directory
   /// where `rust/.cargo/config.toml` is not discovered.
   ///
-  /// The SDK root defaults to the standard install location and can be
-  /// overridden with GSTREAMER_ROOT_ANDROID. If the umbrella `.so` for this ABI
-  /// is not present, nothing is injected (so non-GStreamer builds are
-  /// unaffected).
+  /// The SDK root defaults to the user cache and can be overridden with
+  /// GSTREAMER_ROOT_ANDROID. The umbrella `.so` must be built before the Rust
+  /// link step (see `android/scripts/build_gstreamer_umbrella.sh`).
   Map<String, String> _gstreamerSystemDepsEnv() {
     final abi = const {
       'aarch64-linux-android': 'arm64',
@@ -188,18 +187,18 @@ class AndroidEnvironment {
     if (abi == null) {
       return {};
     }
+    final gstVer = Platform.environment['GST_VER'] ?? '1.28.4';
     final sdkRoot = Platform.environment['GSTREAMER_ROOT_ANDROID'] ??
-        path.join(
-          Platform.environment['HOME'] ?? '',
-          'Library',
-          'Developer',
-          'GStreamer',
-          'android',
-          '1.28.4',
-        );
+        _defaultGstreamerAndroidCacheRoot(gstVer);
     final libDir = path.join(sdkRoot, abi, 'lib');
-    if (!File(path.join(libDir, 'libgstreamer_android.so')).existsSync()) {
-      return {};
+    final umbrella = File(path.join(libDir, 'libgstreamer_android.so'));
+    if (!umbrella.existsSync()) {
+      throw Exception(
+        'GStreamer Android umbrella library not found at ${umbrella.path}. '
+        'Run the Android build (which downloads the SDK and runs ndk-build) or '
+        'set GSTREAMER_ROOT_ANDROID to a GStreamer Android SDK root with '
+        'libgstreamer_android.so installed per ABI.',
+      );
     }
     const pkgs = [
       'GLIB_2_0',
@@ -217,6 +216,40 @@ class AndroidEnvironment {
       env['SYSTEM_DEPS_${p}_SEARCH_NATIVE'] = libDir;
     }
     return env;
+  }
+
+  static String _defaultGstreamerAndroidCacheRoot(String gstVer) {
+    final home = Platform.environment['HOME'] ?? '';
+    if (Platform.isMacOS) {
+      return path.join(
+        home,
+        'Library',
+        'Caches',
+        'xue_hua_video_player',
+        'gstreamer',
+        'android',
+        gstVer,
+      );
+    }
+    if (Platform.isWindows) {
+      final localAppData =
+          Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
+      return path.join(
+        localAppData,
+        'xue_hua_video_player',
+        'gstreamer',
+        'android',
+        gstVer,
+      );
+    }
+    final xdgCache = Platform.environment['XDG_CACHE_HOME'] ?? path.join(home, '.cache');
+    return path.join(
+      xdgCache,
+      'xue_hua_video_player',
+      'gstreamer',
+      'android',
+      gstVer,
+    );
   }
 
   // Workaround for libgcc missing in NDK23, inspired by cargo-ndk

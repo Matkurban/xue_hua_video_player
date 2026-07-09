@@ -18,8 +18,10 @@ use crate::media::AppSrcFeedState;
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
 use crate::playback::gst::{
-    create_platform_video_sink, make_videoflip_element, InternalVideoMetadata,
+    create_platform_video_sink, make_orientation_element, InternalVideoMetadata,
 };
+#[cfg(target_os = "android")]
+use crate::playback::gst::link_android_gl_video_branch;
 #[cfg(target_os = "android")]
 use crate::playback::sink::OverlaySizeSync;
 use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
@@ -29,8 +31,7 @@ const APPSRC_CHUNK: usize = 64 * 1024;
 
 /// 为 Flutter bundle 资产构建 AppSrc → decodebin 管线 / Builds an AppSrc → decodebin pipeline for Flutter bundle assets.
 ///
-/// 返回 `(Pipeline, video_sink, feed, orientation_filter)`，其中 `orientation_filter` 为视频支路 `videoflip`。
-/// Returns `(Pipeline, video_sink, feed, orientation_filter)` where `orientation_filter` is the branch `videoflip`.
+/// 返回 `(Pipeline, video_sink, feed, orientation_filter)`，其中 `orientation_filter` 为视频支路旋转元素（Android：`gltransformation`；其他：`videoflip`）。
 pub fn build_asset_pipeline(
     asset_key: &str,
     emitter: &Arc<Mutex<Option<Emitter>>>,
@@ -53,7 +54,7 @@ pub fn build_asset_pipeline(
         overlay_size_sync,
     );
     let audio_bin = build_audio_sink_bin()?;
-    let orientation_filter = make_videoflip_element()?;
+    let orientation_filter = make_orientation_element()?;
 
     let appsrc = gst::ElementFactory::make("appsrc")
         .name("src")
@@ -155,7 +156,10 @@ fn wire_appsrc_callbacks(appsrc_el: &gst::Element, feed: Arc<AppSrcFeedState>) -
     Ok(())
 }
 
-/// 将 decodebin 视频 pad 链接到 queue → videoflip → videoconvert → video_sink / Links decodebin video pad to sink branch.
+/// 将 decodebin 视频 pad 链接到视频 sink 支路 / Links decodebin video pad to sink branch.
+///
+/// Android：`queue → glupload → glcolorconvert → gltransformation → glimagesink`
+/// 其他平台：`queue → videoflip → videoconvert → video_sink`
 fn link_video_branch(
     src_pad: &gst::Pad,
     pipeline: &gst::Pipeline,
@@ -163,17 +167,27 @@ fn link_video_branch(
     videoflip: &gst::Element,
 ) -> Result<()> {
     let queue = gst::ElementFactory::make("queue").build()?;
-    let convert = gst::ElementFactory::make("videoconvert").build()?;
-    pipeline.add_many([&queue, &convert])?;
-    gst::Element::link_many([queue.upcast_ref(), videoflip, &convert, video_sink])?;
+    pipeline.add(&queue)?;
     let sink_pad = queue
         .static_pad("sink")
         .ok_or_else(|| anyhow!("queue has no sink pad"))?;
     src_pad.link(&sink_pad)?;
-    for el in [&queue, videoflip, &convert, video_sink] {
-        el.sync_state_with_parent()?;
+    queue.sync_state_with_parent()?;
+
+    #[cfg(target_os = "android")]
+    {
+        return link_android_gl_video_branch(queue.upcast_ref(), videoflip, video_sink);
     }
-    Ok(())
+    #[cfg(not(target_os = "android"))]
+    {
+        let convert = gst::ElementFactory::make("videoconvert").build()?;
+        pipeline.add(&convert)?;
+        gst::Element::link_many([queue.upcast_ref(), videoflip, &convert, video_sink])?;
+        for el in [videoflip, &convert, video_sink] {
+            el.sync_state_with_parent()?;
+        }
+        Ok(())
+    }
 }
 
 /// 将 decodebin 音频 pad 链接到 queue → convert → resample → audio bin / Links decodebin audio pad to audio bin.

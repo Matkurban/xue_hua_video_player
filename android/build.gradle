@@ -3,6 +3,29 @@
 group 'com.flutter_rust_bridge.xue_hua_video_player'
 version '1.0.0'
 
+def gstVer = System.getenv('GST_VER') ?: '1.28.4'
+
+def defaultGstreamerAndroidCacheRoot = {
+    def home = System.getProperty('user.home')
+    def os = org.gradle.internal.os.OperatingSystem.current()
+    if (os.isMacOsX()) {
+        return "${home}/Library/Caches/xue_hua_video_player/gstreamer/android/${gstVer}"
+    }
+    if (os.isWindows()) {
+        def localAppData = System.getenv('LOCALAPPDATA') ?: "${home}/AppData/Local"
+        return "${localAppData}/xue_hua_video_player/gstreamer/android/${gstVer}"
+    }
+    def xdgCache = System.getenv('XDG_CACHE_HOME') ?: "${home}/.cache"
+    return "${xdgCache}/xue_hua_video_player/gstreamer/android/${gstVer}"
+}()
+
+def gstRoot = System.getenv('GSTREAMER_ROOT_ANDROID') ?: defaultGstreamerAndroidCacheRoot
+def gstJniOut = "${buildDir}/gstreamer/jniLibs"
+def gstScriptsDir = "${projectDir}/scripts"
+
+ext.gstreamerRootAndroid = gstRoot
+ext.gstreamerVersion = gstVer
+
 buildscript {
     repositories {
         google()
@@ -48,16 +71,16 @@ android {
         minSdkVersion 19
         consumerProguardFiles 'proguard-rules.pro'
 
-        // All four Android ABIs are wired up: the bundled umbrella GStreamer
-        // library is in jniLibs; libxue_hua_video_player.so is built from Rust
-        // source at build time via cargokit. A consuming app can narrow this set with
-        // its own `abiFilters` (e.g. arm64-v8a only) to reduce APK size.
+        // All four Android ABIs are wired up: the umbrella GStreamer library is
+        // built at compile time via ndk-build; libxue_hua_video_player.so is
+        // built from Rust source at build time via cargokit. A consuming app
+        // can narrow this set with its own `abiFilters` (e.g. arm64-v8a only).
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
         }
     }
 
-    // The umbrella GStreamer library (src/main/jniLibs/<abi>/
+    // The umbrella GStreamer library (build/gstreamer/jniLibs/<abi>/
     // libgstreamer_android.so) plus libc++_shared.so are packaged into the
     // plugin AAR and merged into any consuming app. `useLegacyPackaging`
     // (mirrored by extractNativeLibs=true in the manifest) makes sure the
@@ -71,6 +94,12 @@ android {
     testOptions {
         unitTests.returnDefaultValues = true
     }
+
+    sourceSets {
+        main {
+            jniLibs.srcDir(gstJniOut)
+        }
+    }
 }
 
 dependencies {
@@ -83,17 +112,99 @@ cargokit {
     libname = "xue_hua_video_player"
 }
 
-// --- GStreamer (Android) integration notes ----------------------------------
-// The plugin SHIPS the GStreamer runtime for consumers: the umbrella
-// `libgstreamer_android.so` (all of GStreamer + its plugins, linked statically)
-// and `libc++_shared.so` are committed under `src/main/jniLibs/<abi>/` (for all
-// four ABIs) and bundled into the AAR. Consumers therefore need neither the
-// GStreamer Android SDK. The Rust `libxue_hua_video_player.so` is compiled from
-// source during the app build (requires Rust toolchain).
-//
-// The GStreamer Android SDK is only needed by MAINTAINERS who compile the Rust
-// library locally or regenerate the umbrella `.so` (see `gstreamer_build/`
-// and the plugin README, "Android"). In that case cargokit points the Rust
-// `-sys` crates at the umbrella `.so` via GSTREAMER_ROOT_ANDROID
-// (see `cargokit/build_tool/lib/src/android_environment.dart`).
+// --- GStreamer (Android) dynamic build --------------------------------------
+// On every Android build the plugin downloads the official GStreamer Android SDK
+// (if missing) and runs ndk-build to produce libgstreamer_android.so per ABI.
+// Override GSTREAMER_ROOT_ANDROID / GST_VER for offline or custom SDK paths.
+// See android/scripts/ and the plugin README, "Android".
+
+def flutterPlatformToAbi = [
+    'android-arm'   : 'armeabi-v7a',
+    'android-arm64' : 'arm64-v8a',
+    'android-x86'   : 'x86',
+    'android-x64'   : 'x86_64',
+]
+
+def resolveGstreamerAbis = {
+    def abis = [] as LinkedHashSet
+    try {
+        def platforms = com.flutter.gradle.FlutterPluginUtils.getTargetPlatforms(project).collect()
+        platforms.each { p ->
+            def abi = flutterPlatformToAbi[p]
+            if (abi != null) {
+                abis.add(abi)
+            }
+        }
+    } catch (Exception ignored) {
+        // Not building inside a Flutter app context.
+    }
+    if (abis.isEmpty()) {
+        abis.addAll(android.defaultConfig.ndk.abiFilters)
+    }
+    return abis as List
+}
+
+tasks.register('ensureGstreamerAndroid', Exec) {
+    group = 'gstreamer'
+    description = 'Download GStreamer Android SDK into the user cache if missing.'
+    environment 'GST_VER', gstVer
+    if (System.getenv('GSTREAMER_ROOT_ANDROID') != null) {
+        environment 'GSTREAMER_ROOT_ANDROID', System.getenv('GSTREAMER_ROOT_ANDROID')
+    }
+    if (System.getenv('XUE_HUA_GSTREAMER_ROOT') != null) {
+        environment 'XUE_HUA_GSTREAMER_ROOT', System.getenv('XUE_HUA_GSTREAMER_ROOT')
+    }
+    commandLine 'sh', "${gstScriptsDir}/ensure_gstreamer_android.sh"
+}
+
+tasks.register('buildGstreamerUmbrella', Exec) {
+    group = 'gstreamer'
+    description = 'ndk-build libgstreamer_android.so for the requested ABIs.'
+    dependsOn ensureGstreamerAndroid
+
+    inputs.files(
+        file("${projectDir}/gstreamer_build/jni/Android.mk"),
+        file("${projectDir}/gstreamer_build/jni/Application.mk"),
+        file("${projectDir}/gstreamer_build/jni/dummy.c"),
+    )
+
+    outputs.dir(gstJniOut)
+
+    outputs.upToDateWhen {
+        def abis = resolveGstreamerAbis()
+        abis.every { abi ->
+            file("${gstJniOut}/${abi}/libgstreamer_android.so").exists() \
+                && file("${gstJniOut}/${abi}/libc++_shared.so").exists()
+        }
+    }
+
+    doFirst {
+        if (android.ndkVersion == null) {
+            throw new GradleException("Please set 'android.ndkVersion' in the app build.gradle.")
+        }
+        def abis = resolveGstreamerAbis()
+        def ndkPath = "${android.sdkDirectory}/ndk/${android.ndkVersion}"
+        environment 'GST_VER', gstVer
+        environment 'GSTREAMER_ROOT_ANDROID', gstRoot
+        commandLine(['sh', "${gstScriptsDir}/build_gstreamer_umbrella.sh", ndkPath, gstJniOut] + abis)
+    }
+}
+
+def wireGstreamerDeps = { task ->
+    if (task.name.startsWith('cargokitCargoBuild') ||
+        (task.name.startsWith('merge') && (
+            task.name.endsWith('NativeLibs') || task.name.endsWith('JniLibFolders')
+        ))) {
+        task.dependsOn buildGstreamerUmbrella
+    }
+}
+
+project.gradle.afterProject { p ->
+    if (p != project) {
+        return
+    }
+    project.tasks.configureEach wireGstreamerDeps
+}
+
+project.tasks.whenTaskAdded wireGstreamerDeps
 

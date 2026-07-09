@@ -45,7 +45,7 @@
 
 | 平台 | 最低版本 | 架构 | GStreamer 运行时 |
 | --- | --- | --- | --- |
-| Android | API 24（7.0） | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` | 已内置于插件（无需配置） |
+| Android | API 24（7.0） | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` | 构建时自动下载 Android SDK 并 ndk-build |
 | iOS | 13.0 | 真机 `arm64`（不支持模拟器） | GStreamer iOS SDK（静态 framework） |
 | macOS | 10.13 | x86_64 / arm64 | Homebrew 或 `GStreamer.framework` |
 | Windows | 10+ | x86_64 | GStreamer MSVC 运行时 |
@@ -76,8 +76,9 @@ flutter pub get
 ```
 
 Rust 核心在应用构建时通过 [cargokit] **从源码编译**。构建应用的机器需要安装 **Rust
-工具链**（`rustup`）。桌面端与 iOS 仍需在构建/运行时提供 GStreamer SDK；Android 已内置
-GStreamer 运行时，但仍会在构建时编译 Rust 插件（见下文各平台说明）。
+工具链**（`rustup`）。各平台在构建时都需要 GStreamer SDK（部分平台运行时也需要其运行库）。
+Android 会在**首次构建时自动下载**官方 GStreamer Android SDK，并通过 ndk-build 生成伞形
+`libgstreamer_android.so`（见下文 [Android](#android全部-abi)）。
 
 ## 快速上手
 
@@ -147,9 +148,10 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
    释放会泄漏原生管线。
 4. **在 `SignalBuilder`/`Watch` 内读取状态。** 所有状态字段都是 `ReadonlySignal`；在响应式
    builder 之外读取 `.value` 不会在其变化时触发重建。
-5. **Android 已内置全部四种 ABI**（`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`）。可按需用
-   `abiFilters` 收窄以减小 APK 体积（见下文）。
-6. **iOS/macOS/Windows/Linux 在构建时需要 GStreamer SDK**（运行时需要其运行库）。见
+5. **Android 默认构建全部四种 ABI**（`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`）。可按需用
+   `abiFilters` 收窄以减小 APK 体积（见下文）。首次 Android 构建会下载 GStreamer Android
+   SDK 并运行 ndk-build（需要网络）。
+6. **所有平台在构建时都需要 GStreamer SDK**（部分平台运行时也需要其运行库）。见
    [各平台的 GStreamer 原生环境配置](#各平台的-gstreamer-原生环境配置)。
 
 ## 权限与各平台配置
@@ -173,9 +175,8 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
     ...>
 ```
 
-插件已内置全部四种 ABI（`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`），因此**无需**配置
-`abiFilters`。如果想缩小 APK 到你实际发布的 ABI，可在 `android/app/build.gradle(.kts)` 中
-收窄：
+插件默认构建全部四种 ABI（`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`），因此**无需**
+配置 `abiFilters`，除非你想缩小 APK。若要收窄，可在 `android/app/build.gradle(.kts)` 中设置：
 
 ```kotlin
 android {
@@ -188,8 +189,8 @@ android {
 }
 ```
 
-建议使用按 ABI 拆分的 APK 或 Android App Bundle，让每台设备只下载自己的 ABI —— 内置的
-GStreamer 运行时较大（每个 ABI 约 13–18 MB）。
+建议使用按 ABI 拆分的 APK 或 Android App Bundle，让每台设备只下载自己的 ABI —— 每个 ABI
+打包的 GStreamer 运行时较大（约 13–18 MB）。
 
 > 插件为完整性也提供了 `x86`（32 位）库，但当前 Flutter 已不再构建 32 位 x86 应用，因此
 > 实际上 Flutter 应用真正打包的是 `arm64-v8a`、`armeabi-v7a` 与 `x86_64`。
@@ -197,7 +198,7 @@ GStreamer 运行时较大（每个 ABI 约 13–18 MB）。
 说明：
 
 - 插件的 `AndroidManifest.xml` 已设置 `android:extractNativeLibs="true"`，会合并进你的应用，
-  确保内置的 `libgstreamer_android.so` 被解压到磁盘供动态加载器使用。
+  确保 `libgstreamer_android.so` 被解压到磁盘供动态加载器使用。
 - 部分传递依赖需要较新的 `compileSdk`。若 AAR 元数据校验失败，可在所有子工程强制
   `compileSdk = 36`（示例工程在其 `android/build.gradle.kts` 中就是这样做的）。
 
@@ -443,69 +444,53 @@ iOS 模拟器。
 
 ### Android（全部 ABI）
 
-支持 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`。**使用方无需任何 GStreamer 配置**：插件已
-内置完整 GStreamer 运行时。`android/src/main/jniLibs/<abi>/` 为每个 ABI 提供伞形
-`libgstreamer_android.so`（静态链接的全部 GStreamer + 插件）与 `libc++_shared.so`；它们被打
-进插件 AAR 并合并到应用。Rust 的 `libxue_hua_video_player.so` 在构建时由 cargokit 从源码编译（需要 Rust 工具链）。
+支持 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`。每次 Android 构建时插件会：
+
+1. 下载官方 GStreamer Android universal SDK（若缓存中不存在）
+2. 通过 ndk-build 为每个 ABI 生成伞形 `libgstreamer_android.so`
+3. 通过 cargokit 从源码编译 Rust 的 `libxue_hua_video_player.so`（需要 Rust 工具链）
+
+伞形库（静态链接的全部 GStreamer + 插件）与 `libc++_shared.so` 输出到
+`android/build/gstreamer/jniLibs/<abi>/` 并打进插件 AAR。**首次构建需要网络**；后续构建复用缓存
+`~/Library/Caches/xue_hua_video_player/gstreamer/android/<version>/`。
+
+环境变量：
+
+| 变量 | 用途 |
+| --- | --- |
+| `GST_VER` | GStreamer 版本（默认 `1.28.4`） |
+| `GSTREAMER_ROOT_ANDROID` | SDK 根目录（已手动解压时可跳过自动下载） |
+| `XUE_HUA_GSTREAMER_ROOT` | 自定义 SDK/缓存根目录的别名 |
 
 GStreamer 的 Android 运行时会在进程启动时由 `GStreamerInitProvider`（插件
 `android/src/main/java/` 下的一个 `ContentProvider`）自动初始化：它执行
 `System.loadLibrary("gstreamer_android")`（使该库的 `JNI_OnLoad` 捕获 JavaVM）并调用
 `GStreamer.init(context)`（设置应用的 `Context`/`ClassLoader`）。这一步是必需的，`androidmedia`
-的 MediaCodec 解码器只有在此之后才能扫描/注册；否则唯一内置的解码器不会注册，播放会报
-`not-linked` / `No streams to output`。内置的 `GStreamer.java` 及 `androidmedia` 辅助类
-（位于 `org/freedesktop/gstreamer/` 下）正是 `JNI_OnLoad`/`GStreamer.init` 按类名查找的对象；
-**使用方仍无需任何配置**——全部在插件内部完成。因此 Rust 核心在 Android 上不再自行注册插件
-（那会在 Java 初始化之前、且没有 JavaVM 的情况下运行）。
+的 MediaCodec 解码器只有在此之后才能扫描/注册；否则播放会报 `not-linked` /
+`No streams to output`。因此 Rust 核心在 Android 上不再自行注册插件（那会在 Java 初始化之前、
+且没有 JavaVM 的情况下运行）。
 
 使用方默认会构建全部四种 ABI。若要减小 APK 体积，可收窄 `abiFilters`（见
-[权限与各平台配置](#android)）或发布 App Bundle。若你是需要重建伞形库的维护者，见下文
-“重新生成内置 `.so`”。
+[权限与各平台配置](#android)）或发布 App Bundle。
 
-#### 重新生成内置 `.so`（维护者）
+#### 自定义插件集
 
-只有需要本地编译 Rust 库或重新生成伞形 `.so` 的维护者才需要 GStreamer Android SDK。
+在 [`android/gstreamer_build/jni/Android.mk`](android/gstreamer_build/jni/Android.mk) 中编辑
+`GSTREAMER_PLUGINS` 以增删编解码器，然后重新构建；下次 Android 构建会自动重新生成伞形库。
 
-**1. 下载并解压 GStreamer Android SDK**（顶层是各 ABI 目录）：
+#### 手动下载 SDK / 重建伞形库（可选）
 
-```bash
-curl -fLO https://gstreamer.freedesktop.org/data/pkg/android/1.28.4/gstreamer-1.0-android-universal-1.28.4.tar.xz
-mkdir -p ~/Library/Developer/GStreamer/android/1.28.4
-# 注意：不要用 --strip-components；压缩包顶层是 arm64/ armv7/ x86/ x86_64/
-tar -xf gstreamer-1.0-android-universal-1.28.4.tar.xz \
-  -C ~/Library/Developer/GStreamer/android/1.28.4
-```
-
-**2. 从 `android/gstreamer_build` 的配方为所有 ABI 构建 `libgstreamer_android.so`**
-（`jni/Application.mk` 已设置 `APP_ABI := arm64-v8a armeabi-v7a x86 x86_64`；在其中的
-`GSTREAMER_PLUGINS` 列表增删编解码器）：
+Gradle 会自动运行
+[`android/scripts/ensure_gstreamer_android.sh`](android/scripts/ensure_gstreamer_android.sh) 与
+[`android/scripts/build_gstreamer_umbrella.sh`](android/scripts/build_gstreamer_umbrella.sh)。
+也可手动执行：
 
 ```bash
-cd android/gstreamer_build
-export GSTREAMER_ROOT_ANDROID="$HOME/Library/Developer/GStreamer/android/1.28.4"
-~/Library/Android/sdk/ndk/<ndk-version>/ndk-build \
-  NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk clean
-~/Library/Android/sdk/ndk/<ndk-version>/ndk-build \
-  NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk -j4
-# -> 每个 ABI 的 libs/<abi>/libgstreamer_android.so (+ libc++_shared.so)
-#    注意：请从 libs/ 复制（已 strip）；gst-android-build/ 下是未 strip 的链接中间产物。
-```
-
-**3. 把伞形 `.so` 安装到 `jniLibs`（提交入库、运行时打包）与 SDK 的各 ABI `lib` 目录（供 Rust
-链接步骤使用）。** 注意 GStreamer SDK 用 `armv7`/`arm64` 目录名，而 jniLibs 用
-`armeabi-v7a`/`arm64-v8a`。复制前确认 `libs/<abi>/libgstreamer_android.so` 已包含
-`audiofx`（例如 `strings ... | rg gst_plugin_audiofx_register`）：
-
-```bash
-GST=~/Library/Developer/GStreamer/android/1.28.4
-declare -A SDK=( [arm64-v8a]=arm64 [armeabi-v7a]=armv7 [x86]=x86 [x86_64]=x86_64 )
-for abi in arm64-v8a armeabi-v7a x86 x86_64; do
-  strings "libs/$abi/libgstreamer_android.so" | rg -q gst_plugin_audiofx_register
-  cp libs/$abi/libgstreamer_android.so "$GST/${SDK[$abi]}/lib/"          # 供 Rust 链接
-  mkdir -p ../src/main/jniLibs/$abi
-  cp libs/$abi/libgstreamer_android.so libs/$abi/libc++_shared.so \
-    ../src/main/jniLibs/$abi/                                            # 运行时
-done
+sh android/scripts/ensure_gstreamer_android.sh
+sh android/scripts/build_gstreamer_umbrella.sh \
+  "$HOME/Library/Android/sdk/ndk/<ndk-version>" \
+  /tmp/gstreamer-jniLibs \
+  arm64-v8a armeabi-v7a x86 x86_64
 ```
 
 ## 架构
@@ -537,8 +522,10 @@ flutter_rust_bridge_codegen generate
 
 - **网络视频报 `Can't typefind stream`（iOS）**：未配置 CA 数据库导致 TLS 握手失败。本版本已
   注册 OpenSSL TLS 后端并放宽 `ssl-strict`；请确保使用 v1.0.0+。
-- **APK 体积过大**：四种 Android ABI 各自内置了较大的 GStreamer 运行时。可收窄 `abiFilters`，
+- **APK 体积过大**：四种 Android ABI 各自携带较大的 GStreamer 运行时。可收窄 `abiFilters`，
   或发布按 ABI 拆分的 APK / App Bundle。
+- **Android 首次构建失败 / 无网络**：首次构建会下载 GStreamer Android SDK。离线 CI 可预先
+  设置 `GSTREAMER_ROOT_ANDROID`，或缓存 `~/Library/Caches/xue_hua_video_player/gstreamer/android/`。
 - **Windows `pkg-config` 找不到 `glib-2.0`**：确认已安装**开发**文件，且 `PKG_CONFIG_PATH`
   指向 `...\1.0\msvc_x86_64\lib\pkgconfig`。
 - **macOS 黑屏 / dyld 找不到 GStreamer**：确认

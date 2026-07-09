@@ -47,7 +47,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 | Platform | Min version | Architectures | GStreamer runtime |
 | --- | --- | --- | --- |
-| Android | API 24 (7.0) | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` | Bundled in the plugin (no setup) |
+| Android | API 24 (7.0) | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` | Auto-downloaded Android SDK + ndk-build at compile time |
 | iOS | 13.0 | Physical `arm64` device (no Simulator) | GStreamer iOS SDK (static framework) |
 | macOS | 10.13 | x86_64 / arm64 | Homebrew or `GStreamer.framework` |
 | Windows | 10+ | x86_64 | GStreamer MSVC runtime |
@@ -81,9 +81,11 @@ flutter pub get
 
 The Rust core is **compiled from source** during your app build via [cargokit].
 You need the **Rust toolchain** (`rustup`) on the machine that builds the app.
-Each desktop/iOS platform also needs the GStreamer SDK at build/run time; Android
-bundles the GStreamer runtime but still compiles the Rust plugin at build time
-(see the sections below).
+Each platform also needs the GStreamer SDK at build time (and its runtime
+libraries at run time where applicable). On Android the official GStreamer Android
+SDK is **downloaded automatically** on the first build and the umbrella
+`libgstreamer_android.so` is produced via ndk-build (see [Android](#android-all-abis)
+below).
 
 ## Quick start
 
@@ -155,11 +157,12 @@ Bundled assets are streamed from Rust via `AppSrc` (no Dart-side temp-file copy)
 4. **Read state inside `SignalBuilder`/`Watch`.** Every state field is a
    `ReadonlySignal`; reading `.value` outside a reactive builder will not rebuild
    your widget when it changes.
-5. **Android ships all four ABIs** (`arm64-v8a`, `armeabi-v7a`, `x86`,
+5. **Android builds all four ABIs by default** (`arm64-v8a`, `armeabi-v7a`, `x86`,
    `x86_64`). You may optionally narrow this with `abiFilters` to shrink your APK
-   (see below).
-6. **iOS/macOS/Windows/Linux require the GStreamer SDK** at build time (and its
-   runtime libraries at run time). See
+   (see below). The first Android build downloads the GStreamer Android SDK and
+   runs ndk-build (requires network).
+6. **All platforms require the GStreamer SDK at build time** (and its runtime
+   libraries at run time where applicable). See
    [Native GStreamer setup](#native-gstreamer-setup-per-platform).
 
 ## Permissions & platform configuration
@@ -202,7 +205,7 @@ android {
 ```
 
 Prefer per-ABI APKs or an Android App Bundle so each device only downloads its
-own ABI — the bundled GStreamer runtime is large (~13–18 MB per ABI).
+own ABI — the GStreamer runtime packaged per ABI is large (~13–18 MB each).
 
 > The plugin ships `x86` (32-bit) libraries for completeness, but current Flutter
 > no longer builds 32-bit x86 apps, so in practice `arm64-v8a`, `armeabi-v7a`,
@@ -211,7 +214,7 @@ own ABI — the bundled GStreamer runtime is large (~13–18 MB per ABI).
 Notes:
 
 - The plugin's `AndroidManifest.xml` already sets
-  `android:extractNativeLibs="true"`; it merges into your app so the bundled
+  `android:extractNativeLibs="true"`; it merges into your app so
   `libgstreamer_android.so` is extracted to disk for the dynamic loader.
 - Some transitive plugins require a recent `compileSdk`. If AAR metadata checks
   fail, force `compileSdk = 36` across subprojects (the example does this in its
@@ -528,73 +531,62 @@ plugin list if you need an element that isn't registered yet.
 
 ### Android (all ABIs)
 
-Supports `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64`. **Consumers need no
-GStreamer setup**: the plugin bundles the entire GStreamer runtime.
-`android/src/main/jniLibs/<abi>/` ships the umbrella `libgstreamer_android.so`
-(all of GStreamer + its plugins, linked statically) and `libc++_shared.so` for
-each ABI; these are packaged into the plugin AAR and merged into the app. The
-Rust `libxue_hua_video_player.so` is compiled from source at build time via
-cargokit (requires the Rust toolchain).
+Supports `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64`. On every Android
+build the plugin:
+
+1. Downloads the official GStreamer Android universal SDK (if not already cached)
+2. Runs ndk-build to produce the umbrella `libgstreamer_android.so` per ABI
+3. Compiles the Rust `libxue_hua_video_player.so` via cargokit (requires the
+   Rust toolchain)
+
+The umbrella library (all of GStreamer + its plugins, linked statically) and
+`libc++_shared.so` land in `android/build/gstreamer/jniLibs/<abi>/` and are
+packaged into the plugin AAR. **The first build needs network access**; later
+builds reuse the cache at
+`~/Library/Caches/xue_hua_video_player/gstreamer/android/<version>/`.
+
+Environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `GST_VER` | GStreamer version (default `1.28.4`) |
+| `GSTREAMER_ROOT_ANDROID` | SDK root (skip auto-download when pre-populated) |
+| `XUE_HUA_GSTREAMER_ROOT` | Alias for custom SDK/cache root |
 
 The GStreamer Android runtime is initialized automatically at process startup by
 `GStreamerInitProvider` (a `ContentProvider` in the plugin's
 `android/src/main/java/`), which runs `System.loadLibrary("gstreamer_android")`
 (so the library's `JNI_OnLoad` captures the JavaVM) and `GStreamer.init(context)`
 (so the app `Context`/`ClassLoader` are set). This is required so the
-`androidmedia` MediaCodec decoders can enumerate/register - without it the only
-bundled decoders never register and playback fails with `not-linked` /
-`No streams to output`. The bundled `GStreamer.java` and the `androidmedia`
-helper classes (under `org/freedesktop/gstreamer/`) are what `JNI_OnLoad`/
-`GStreamer.init` look up by name; **consumers still need no setup** - it all
-happens inside the plugin. The Rust core therefore does NOT register plugins on
-Android (it would run before the Java init and without the JavaVM).
+`androidmedia` MediaCodec decoders can enumerate/register - without it playback
+fails with `not-linked` / `No streams to output`. The Rust core does NOT register
+plugins on Android (it would run before the Java init and without the JavaVM).
 
 A consuming app builds for all four ABIs by default. To reduce APK size, narrow
 `abiFilters` (see [Permissions & platform configuration](#android)) or ship an
-App Bundle. See the "Regenerating the bundled `.so`" section below if you are a
-maintainer who needs to rebuild the umbrella libraries.
+App Bundle.
 
-#### Regenerating the bundled `.so` (maintainers)
+#### Customizing the plugin set
 
-The GStreamer Android SDK is only needed by maintainers who rebuild the Rust
-library locally or regenerate the umbrella `.so`.
+Edit `GSTREAMER_PLUGINS` in
+[`android/gstreamer_build/jni/Android.mk`](android/gstreamer_build/jni/Android.mk)
+to add codecs, then rebuild. The next Android build regenerates the umbrella
+libraries automatically.
 
-**1. Download + extract the GStreamer Android SDK** (per-ABI top-level dirs):
+#### Manual SDK / umbrella rebuild (optional)
 
-```bash
-curl -fLO https://gstreamer.freedesktop.org/data/pkg/android/1.28.4/gstreamer-1.0-android-universal-1.28.4.tar.xz
-mkdir -p ~/Library/Developer/GStreamer/android/1.28.4
-# NOTE: no --strip-components; the tarball's top level is arm64/ armv7/ x86/ x86_64/
-tar -xf gstreamer-1.0-android-universal-1.28.4.tar.xz \
-  -C ~/Library/Developer/GStreamer/android/1.28.4
-```
-
-**2. Build `libgstreamer_android.so`** for all ABIs from the recipe in
-`android/gstreamer_build` (`jni/Application.mk` sets
-`APP_ABI := arm64-v8a armeabi-v7a x86 x86_64`; edit the `GSTREAMER_PLUGINS` list
-to add codecs):
+Gradle runs
+[`android/scripts/ensure_gstreamer_android.sh`](android/scripts/ensure_gstreamer_android.sh)
+and
+[`android/scripts/build_gstreamer_umbrella.sh`](android/scripts/build_gstreamer_umbrella.sh)
+for you. To run them by hand:
 
 ```bash
-cd android/gstreamer_build
-export GSTREAMER_ROOT_ANDROID="$HOME/Library/Developer/GStreamer/android/1.28.4"
-~/Library/Android/sdk/ndk/<ndk-version>/ndk-build \
-  NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk -j4
-# -> libs/<abi>/libgstreamer_android.so (+ libc++_shared.so) for each ABI
-```
-
-**3. Install the umbrella `.so`** into `jniLibs` (committed, bundled at runtime)
-and into the SDK's per-ABI `lib` dir (for the Rust link step). The GStreamer SDK
-uses `armv7`/`arm64` folder names, while jniLibs use `armeabi-v7a`/`arm64-v8a`:
-
-```bash
-GST=~/Library/Developer/GStreamer/android/1.28.4
-declare -A SDK=( [arm64-v8a]=arm64 [armeabi-v7a]=armv7 [x86]=x86 [x86_64]=x86_64 )
-for abi in arm64-v8a armeabi-v7a x86 x86_64; do
-  cp libs/$abi/libgstreamer_android.so "$GST/${SDK[$abi]}/lib/"          # Rust link
-  mkdir -p ../src/main/jniLibs/$abi
-  cp libs/$abi/libgstreamer_android.so libs/$abi/libc++_shared.so \
-    ../src/main/jniLibs/$abi/                                            # runtime
-done
+sh android/scripts/ensure_gstreamer_android.sh
+sh android/scripts/build_gstreamer_umbrella.sh \
+  "$HOME/Library/Android/sdk/ndk/<ndk-version>" \
+  /tmp/gstreamer-jniLibs \
+  arm64-v8a armeabi-v7a x86 x86_64
 ```
 
 ## Architecture
@@ -629,8 +621,11 @@ Removed (`irondash_texture`). Video rendering uses the custom texture bridge des
 - **`Can't typefind stream` on network video (iOS):** caused by a failed TLS
   handshake when no CA database is configured. This build registers the OpenSSL
   TLS backend and relaxes `ssl-strict`; make sure you are on v1.0.0+.
-- **APK too large:** all four Android ABIs are bundled with a large GStreamer
-  runtime each. Narrow `abiFilters` or ship per-ABI APKs / an App Bundle.
+- **APK too large:** all four Android ABIs each carry a large GStreamer runtime.
+  Narrow `abiFilters` or ship per-ABI APKs / an App Bundle.
+- **Android first build fails / no network:** the GStreamer Android SDK is
+  downloaded on first build. Pre-populate `GSTREAMER_ROOT_ANDROID` for offline
+  CI, or cache `~/Library/Caches/xue_hua_video_player/gstreamer/android/`.
 - **Windows `pkg-config` cannot find `glib-2.0`:** confirm the **development**
   files were installed and `PKG_CONFIG_PATH` points at
   `...\1.0\msvc_x86_64\lib\pkgconfig`.

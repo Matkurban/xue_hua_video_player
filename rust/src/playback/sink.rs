@@ -39,6 +39,10 @@ pub type OverlaySizeSync = Arc<dyn Fn(i32, i32) + Send + Sync>;
 /// # 平台 / Platform
 /// - 网络 URI 源；移动 UA 字符串 / network URI sources; mobile user-agent string
 pub fn configure_http_source(element: &gst::Element) {
+    let is_souphttpsrc = element
+        .factory()
+        .is_some_and(|f| f.name().as_str() == "souphttpsrc");
+
     if element.find_property("ssl-strict").is_some() {
         element.set_property("ssl-strict", false);
     }
@@ -52,6 +56,19 @@ pub fn configure_http_source(element: &gst::Element) {
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
              AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
         );
+    }
+
+    if is_souphttpsrc && element.find_property("http-status-code").is_some() {
+        element.connect_notify(Some("http-status-code"), move |el, _| {
+            let code: u32 = el.property("http-status-code");
+            if !(200..300).contains(&code) {
+                log::warn!("souphttpsrc HTTP status code: {code}");
+                #[cfg(target_os = "android")]
+                crate::diag::logcat_error(&format!("souphttpsrc HTTP status code: {code}"));
+            } else {
+                log::debug!("souphttpsrc HTTP status code: {code}");
+            }
+        });
     }
 }
 

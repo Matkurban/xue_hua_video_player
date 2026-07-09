@@ -12,11 +12,13 @@ mod sink;
 
 pub(crate) use metadata::InternalVideoMetadata;
 pub(crate) use orientation::{
-    apply_rotation_to_element, make_videoflip_element, rotate_method, rotate_video_direction,
-    validate_rotate_degrees, InternalAspectRatioMode,
+    apply_rotation_to_element, make_orientation_element, make_videoflip_element, rotate_method,
+    rotate_video_direction, validate_rotate_degrees, InternalAspectRatioMode,
 };
 pub(crate) use sink::{
     attach_overlay_bus_sync_handler, build_video_sink_bin, clear_overlay_window_handle,
     create_platform_video_sink, expose_overlay, set_overlay_render_rectangle,
     set_overlay_window_handle,
 };
+#[cfg(target_os = "android")]
+pub(crate) use sink::link_android_gl_video_branch;

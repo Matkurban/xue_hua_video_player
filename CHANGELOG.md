@@ -1,3 +1,50 @@
+## 1.3.0
+
+### Breaking
+
+- **Android GStreamer runtime is no longer pre-committed** under
+  `android/src/main/jniLibs/`. Each Android build downloads the official
+  GStreamer Android SDK (if missing) and runs **ndk-build** to produce
+  `libgstreamer_android.so` per ABI. The **first build needs network access**;
+  later builds reuse the user cache
+  (`~/Library/Caches/xue_hua_video_player/gstreamer/android/<GST_VER>/` on macOS).
+  Override with `GSTREAMER_ROOT_ANDROID`, `GST_VER` (default `1.28.4`), or
+  `XUE_HUA_GSTREAMER_ROOT`. See `android/scripts/` and the README Android
+  section.
+
+### Added
+
+- Android Gradle tasks `ensureGstreamerAndroid` and `buildGstreamerUmbrella`,
+  wired into cargokit Rust builds and native-lib packaging.
+- Shell helpers: `android/scripts/ensure_gstreamer_android.sh`,
+  `build_gstreamer_umbrella.sh`, `gstreamer_paths.sh`.
+- Android HW-decode video path stays end-to-end GL:
+  `glupload → glcolorconvert → gltransformation → glimagesink` (URI playbin and
+  AppSrc branches).
+- `make_orientation_element()` on Android creates `gltransformation` for
+  in-pipeline rotation; non-Android platforms still use `videoflip`.
+- `souphttpsrc` HTTP status logging: warns on non-2xx responses (Android
+  logcat via `diag::logcat_error`).
+
+### Bug fixes
+
+- **Android network video `not-negotiated` / `Internal data stream error`**:
+  GL bridge for MediaCodec (`amcvideodec`) texture output in the playbin
+  video-sink bin.
+- **Android network video black screen (audio only)**: removed `gldownload`,
+  `videoconvert`, and CPU `videoflip` from the External OES path — they cannot
+  map HW decoder surfaces and dropped every frame.
+- **Android startup SIGABRT** after the GL rotation change: `gltransformation`
+  `rotation-z` is GObject `gfloat` (`f32`); reading/writing it as `f64` panicked
+  in glib-rs during pipeline construction.
+
+### Platform notes (Android)
+
+- `android.ndkVersion` must be set in the consuming app's `build.gradle` (the
+  example already does).
+- `GStreamerInitProvider` still loads `gstreamer_android` and calls
+  `GStreamer.init(context)` before Rust registers plugins.
+
 ## 1.2.0
 
 ### Breaking

@@ -1,10 +1,11 @@
 //! URI / 网络 / 文件 `playbin3` 管线构建 / URI/network/file `playbin3` pipeline builder.
 //!
-//! 为 [`crate::playback::shell::install_uri_shell`] 构建 `playbin3` 管线：含 `videoflip` 的
-//! video-sink bin、音频 scaletempo bin、可选字幕 fakesink，以及 HTTP 源 TLS/UA 配置。
+//! 为 [`crate::playback::shell::install_uri_shell`] 构建 `playbin3` 管线：含 GL 桥接（Android）
+//! 或 `videoflip` 的 video-sink bin、音频 scaletempo bin、可选字幕 fakesink，以及 HTTP 源 TLS/UA 配置。
 //!
 //! Builds `playbin3` for [`crate::playback::shell::install_uri_shell`]: video-sink bin with
-//! `videoflip`, audio scaletempo bin, optional subtitle fakesink, and HTTP source TLS/UA config.
+//! Android GL bridge or `videoflip`, audio scaletempo bin, optional subtitle fakesink, and HTTP
+//! source TLS/UA config.
 
 use std::sync::Arc;
 

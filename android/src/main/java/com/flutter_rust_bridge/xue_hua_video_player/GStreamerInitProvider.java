@@ -11,19 +11,17 @@ import org.freedesktop.gstreamer.GStreamer;
 /**
  * Auto-initializes the GStreamer Android runtime before any Dart/Rust code runs.
  *
- * <p>The bundled {@code libgstreamer_android.so} is loaded by the Rust core via
- * {@code dlopen} (Dart FFI), which does NOT trigger the library's
- * {@code JNI_OnLoad}. Without it, the JavaVM is never captured and the
- * {@code androidmedia} (MediaCodec) decoders - the only decoders bundled - never
- * register, so playback fails with "not-linked" / "No streams to output".
+ * <p>The {@code libgstreamer_android.so} umbrella library is built at compile time
+ * and packaged into the plugin AAR. It must be loaded through
+ * {@link System#loadLibrary} here (not Dart FFI {@code dlopen}) so the library's
+ * {@code JNI_OnLoad} runs, the JavaVM is captured, and the {@code androidmedia}
+ * (MediaCodec) decoders register. Without this, playback fails with
+ * "not-linked" / "No streams to output".
  *
- * <p>Loading the library through {@link System#loadLibrary} here runs its
- * {@code JNI_OnLoad} (which also hands the VM to androidmedia), and
- * {@link GStreamer#init} sets the application {@code Context}/{@code ClassLoader}
+ * <p>{@link GStreamer#init} sets the application {@code Context}/{@code ClassLoader}
  * required for MediaCodec codec discovery. A {@link ContentProvider} is used
  * because its {@link #onCreate()} runs during process startup - before
- * {@code Application.onCreate} and long before the Flutter engine - so consumers
- * need no setup.
+ * {@code Application.onCreate} and long before the Flutter engine.
  */
 public class GStreamerInitProvider extends ContentProvider {
     private static final String TAG = "XueHuaGStreamerInit";

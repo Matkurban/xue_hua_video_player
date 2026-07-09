@@ -2,7 +2,8 @@ LOCAL_PATH := $(call my-dir)
 
 # A throwaway module that pulls in libgstreamer_android.so (which is what we
 # actually want to ship). We have no JNI C of our own; the Rust cdylib links
-# against libgstreamer_android.so at build time and it is bundled in jniLibs.
+# against libgstreamer_android.so at build time; the umbrella .so is built at
+# compile time and packaged via android/build/gstreamer/jniLibs/.
 include $(CLEAR_VARS)
 LOCAL_MODULE    := dummy
 LOCAL_SRC_FILES := dummy.c

@@ -18,6 +18,9 @@ use gstreamer_video::{
 };
 use parking_lot::Mutex;
 
+#[cfg(target_os = "android")]
+use super::orientation::make_orientation_element;
+#[cfg(not(target_os = "android"))]
 use super::orientation::make_videoflip_element;
 
 /// 各平台 GStreamer 推荐的视频 sink 元素名 / GStreamer-recommended video sink element name per platform.
@@ -121,11 +124,27 @@ pub fn create_platform_video_sink(
     }
 }
 
-/// 构建含 `videoflip` 的 playbin `video-sink` bin（NULL 态安装）/ Builds playbin `video-sink` bin with in-pipeline `videoflip`.
+/// 构建 playbin `video-sink` bin（NULL 态安装）/ Builds playbin `video-sink` bin.
 ///
-/// 链路：`videoflip → videoconvert →` 平台 sink（appsink 或 VideoOverlay）。
-/// 返回 `(bin, inner_sink, videoflip)`；probe/overlay 仍挂 `inner_sink`。
+/// 非 Android：`videoflip → videoconvert →` 平台 sink。
+/// Android：`glupload → glcolorconvert → gltransformation → glimagesink`（全程 GL，不接 `gldownload`）。
+///
+/// 返回 `(bin, inner_sink, orientation_element)`；probe/overlay 仍挂 `inner_sink`。
 pub fn build_video_sink_bin(
+    frame_sink: &Arc<crate::playback::frame::FrameSink>,
+) -> Result<(gst::Bin, gst::Element, gst::Element)> {
+    #[cfg(target_os = "android")]
+    {
+        return build_android_gl_video_sink_bin(frame_sink);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        build_default_video_sink_bin(frame_sink)
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn build_default_video_sink_bin(
     frame_sink: &Arc<crate::playback::frame::FrameSink>,
 ) -> Result<(gst::Bin, gst::Element, gst::Element)> {
     let videoflip = make_videoflip_element()?;
@@ -146,6 +165,65 @@ pub fn build_video_sink_bin(
     bin.add_pad(&ghost)?;
 
     Ok((bin, inner_sink, videoflip))
+}
+
+/// Android HW 解码 External OES → GL 纹理支路，供 AppSrc decodebin 复用。
+#[cfg(target_os = "android")]
+pub(crate) fn link_android_gl_video_branch(
+    head: &gst::Element,
+    orientation: &gst::Element,
+    video_sink: &gst::Element,
+) -> Result<()> {
+    let glupload = gst::ElementFactory::make("glupload")
+        .build()
+        .map_err(|e| anyhow!("glupload: {e}"))?;
+    let glcolorconvert = gst::ElementFactory::make("glcolorconvert")
+        .build()
+        .map_err(|e| anyhow!("glcolorconvert: {e}"))?;
+
+    let pipeline = head
+        .parent()
+        .and_then(|p| p.downcast::<gst::Pipeline>().ok())
+        .ok_or_else(|| anyhow!("GL video branch head has no parent pipeline"))?;
+    pipeline.add_many([&glupload, &glcolorconvert])?;
+    gst::Element::link_many([
+        head,
+        &glupload,
+        &glcolorconvert,
+        orientation,
+        video_sink,
+    ])?;
+    for el in [&glupload, &glcolorconvert, orientation, video_sink] {
+        el.sync_state_with_parent()?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn build_android_gl_video_sink_bin(
+    frame_sink: &Arc<crate::playback::frame::FrameSink>,
+) -> Result<(gst::Bin, gst::Element, gst::Element)> {
+    let orientation = make_orientation_element()?;
+    let glupload = gst::ElementFactory::make("glupload")
+        .build()
+        .map_err(|e| anyhow!("glupload: {e}"))?;
+    let glcolorconvert = gst::ElementFactory::make("glcolorconvert")
+        .build()
+        .map_err(|e| anyhow!("glcolorconvert: {e}"))?;
+    let inner_sink = create_platform_video_sink(frame_sink)?;
+
+    let bin = gst::Bin::new();
+    bin.add_many([&glupload, &glcolorconvert, &orientation, &inner_sink])?;
+    gst::Element::link_many([&glupload, &glcolorconvert, &orientation, &inner_sink])?;
+
+    let sink_pad = glupload
+        .static_pad("sink")
+        .ok_or_else(|| anyhow!("glupload has no sink pad"))?;
+    let ghost = gst::GhostPad::with_target(&sink_pad)?;
+    ghost.set_active(true)?;
+    bin.add_pad(&ghost)?;
+
+    Ok((bin, inner_sink, orientation))
 }
 
 /// 将原生窗口/surface 句柄绑定到 VideoOverlay sink / Binds native window/surface handle to VideoOverlay sink.
