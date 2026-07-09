@@ -12,6 +12,37 @@ use gstreamer as gst;
 static JAVA_GST_CONTEXT_ENSURED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+static REQWEST_RUNTIME_WARMED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+static GL_DISPLAY_WARMED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Lightweight URL probed at process start to force `reqwesthttpsrc`'s Tokio `RUNTIME`
+/// LazyLock before SDK-heavy code exhausts Bionic pthread keys.
+#[cfg(target_os = "android")]
+const REQWEST_WARMUP_URL: &str = "https://www.gstatic.com/generate_204";
+
+/// Android bundles `reqwesthttpsrc` (not `souphttpsrc`). Default rank is marginal;
+/// promote to primary so `playbin` selects it for `http(s)://` URIs.
+fn ensure_android_http_uri_handler() {
+    use gstreamer::prelude::*;
+
+    match gst::ElementFactory::find("reqwesthttpsrc") {
+        Some(factory) => {
+            factory.set_rank(gst::Rank::PRIMARY);
+            crate::diag::logcat_info(
+                "gst: Android HTTP URI handler — reqwesthttpsrc only (soup not bundled)",
+            );
+        }
+        None => {
+            crate::diag::logcat_error(
+                "gst: reqwesthttpsrc missing — Android HTTP(S) playback unavailable",
+            );
+        }
+    }
+}
+
 /// 将 gstreamer-rs 与 C 运行时同步（Java 提供方或 `gst::init`）。
 /// Syncs gstreamer-rs with the C runtime (Java provider or `gst::init`).
 ///
@@ -45,6 +76,7 @@ pub fn ensure_gst_init_android() -> Result<()> {
     match gst::init() {
         Ok(()) => {
             crate::diag::logcat_info("gst: gst::init() / gst_init_check ok");
+            ensure_android_http_uri_handler();
             Ok(())
         }
         Err(e) => {
@@ -83,4 +115,117 @@ pub fn ensure_java_gstreamer_for_network(uri: &str) -> Result<()> {
     JAVA_GST_CONTEXT_ENSURED.store(true, std::sync::atomic::Ordering::SeqCst);
     crate::diag::logcat_info("gst: network URI — GStreamer.init assumed via GStreamerInitProvider");
     Ok(())
+}
+
+/// Eagerly initializes `reqwesthttpsrc`'s embedded Tokio runtime from
+/// [`GStreamerInitProvider`] (before first `playbin` preroll).
+#[cfg(target_os = "android")]
+pub fn warmup_reqwest_httpsrc_runtime() {
+    use gstreamer::prelude::*;
+
+    if REQWEST_RUNTIME_WARMED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+
+    if let Err(e) = ensure_gst_init_android() {
+        crate::diag::logcat_error(&format!("gst: reqwest warmup gst init failed: {e:#}"));
+        return;
+    }
+
+    ensure_android_http_uri_handler();
+
+    let src = match gst::ElementFactory::make("reqwesthttpsrc")
+        .name("xhvp-reqwest-warmup")
+        .build()
+    {
+        Ok(element) => element,
+        Err(e) => {
+            crate::diag::logcat_error(&format!("gst: reqwest warmup element create failed: {e}"));
+            return;
+        }
+    };
+
+    src.set_property("location", REQWEST_WARMUP_URL);
+
+    let pipeline = gst::Pipeline::new();
+    if pipeline.add(&src).is_err() {
+        crate::diag::logcat_error("gst: reqwest warmup pipeline add src failed");
+        return;
+    }
+
+    let sink = match gst::ElementFactory::make("fakesink").build() {
+        Ok(element) => element,
+        Err(e) => {
+            crate::diag::logcat_error(&format!("gst: reqwest warmup fakesink failed: {e}"));
+            return;
+        }
+    };
+    if pipeline.add(&sink).is_err() {
+        crate::diag::logcat_error("gst: reqwest warmup pipeline add sink failed");
+        return;
+    }
+
+    if gst::Element::link_many([&src, &sink]).is_err() {
+        crate::diag::logcat_error("gst: reqwest warmup link failed");
+        return;
+    }
+
+    match pipeline.set_state(gst::State::Paused) {
+        Ok(_) => {
+            crate::diag::logcat_info("gst: reqwesthttpsrc RUNTIME warmed up (Paused probe)");
+        }
+        Err(e) => {
+            crate::diag::logcat_error(&format!(
+                "gst: reqwest warmup Paused failed (RUNTIME may still be init): {e:#}"
+            ));
+        }
+    }
+    let _ = pipeline.set_state(gst::State::Null);
+}
+
+/// Eagerly creates the process-wide GstGL display (`gldisplay-event` thread) from
+/// [`GStreamerInitProvider`] while Bionic pthread keys are still available.
+///
+/// `glimagesink` lazily starts this thread on first HW-decode preroll; on SDK-heavy
+/// apps that can exhaust pthread keys and SIGABRT in `g_private_get`.
+#[cfg(target_os = "android")]
+pub fn warmup_gst_gl_display() {
+    use gstreamer::prelude::*;
+    use std::sync::atomic::Ordering;
+
+    if GL_DISPLAY_WARMED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    super::spawn_on_gst_thread(|| {
+        if let Err(e) = ensure_gst_init_android() {
+            crate::diag::logcat_error(&format!("gst: GL display warmup gst init failed: {e:#}"));
+            return;
+        }
+
+        let sink = match gst::ElementFactory::make("glimagesink")
+            .name("xhvp-gl-warmup")
+            .build()
+        {
+            Ok(element) => element,
+            Err(e) => {
+                crate::diag::logcat_error(&format!(
+                    "gst: GL display warmup glimagesink create failed: {e}"
+                ));
+                return;
+            }
+        };
+
+        match sink.set_state(gst::State::Ready) {
+            Ok(_) => {
+                let _ = sink.set_state(gst::State::Null);
+                crate::diag::logcat_info(
+                    "gst: GstGL display warmed (gldisplay-event claimed at process start)",
+                );
+            }
+            Err(e) => {
+                crate::diag::logcat_error(&format!("gst: GL display warmup Ready failed: {e:#}"));
+            }
+        }
+    });
 }

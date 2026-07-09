@@ -25,7 +25,7 @@ pub type OverlaySizeSync = Arc<dyn Fn(i32, i32) + Send + Sync>;
 /// 配置 HTTP(S) 源元素的 TLS 与 User-Agent / Configures TLS and user-agent on HTTP(S) source elements.
 ///
 /// # 参数 / Parameters
-/// - `element` — `souphttpsrc` 等源元素 / source element such as `souphttpsrc`
+/// - `element` — `reqwesthttpsrc` / `souphttpsrc` 等源元素 / HTTP source element
 ///
 /// # 返回值 / Returns
 /// - 无 / None
@@ -38,10 +38,33 @@ pub type OverlaySizeSync = Arc<dyn Fn(i32, i32) + Send + Sync>;
 ///
 /// # 平台 / Platform
 /// - 网络 URI 源；移动 UA 字符串 / network URI sources; mobile user-agent string
+const HTTP_USER_AGENT: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
+     AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+
 pub fn configure_http_source(element: &gst::Element) {
-    let is_souphttpsrc = element
+    let factory_name = element
         .factory()
-        .is_some_and(|f| f.name().as_str() == "souphttpsrc");
+        .map(|f| f.name().to_string())
+        .unwrap_or_default();
+
+    #[cfg(target_os = "android")]
+    {
+        if factory_name != "reqwesthttpsrc" {
+            return;
+        }
+        if element.find_property("user-agent").is_some() {
+            element.set_property("user-agent", HTTP_USER_AGENT);
+        }
+        return;
+    }
+
+    #[cfg(not(target_os = "android"))]
+    configure_soup_http_source(element, &factory_name);
+}
+
+#[cfg(not(target_os = "android"))]
+fn configure_soup_http_source(element: &gst::Element, factory_name: &str) {
+    let is_souphttpsrc = factory_name == "souphttpsrc";
 
     if element.find_property("ssl-strict").is_some() {
         element.set_property("ssl-strict", false);
@@ -51,11 +74,7 @@ pub fn configure_http_source(element: &gst::Element) {
         element.set_property("tls-validation-flags", 0u32);
     }
     if element.find_property("user-agent").is_some() {
-        element.set_property(
-            "user-agent",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) \
-             AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
-        );
+        element.set_property("user-agent", HTTP_USER_AGENT);
     }
 
     if is_souphttpsrc && element.find_property("http-status-code").is_some() {
@@ -63,8 +82,6 @@ pub fn configure_http_source(element: &gst::Element) {
             let code: u32 = el.property("http-status-code");
             if !(200..300).contains(&code) {
                 log::warn!("souphttpsrc HTTP status code: {code}");
-                #[cfg(target_os = "android")]
-                crate::diag::logcat_error(&format!("souphttpsrc HTTP status code: {code}"));
             } else {
                 log::debug!("souphttpsrc HTTP status code: {code}");
             }

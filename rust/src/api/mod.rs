@@ -8,6 +8,7 @@
 //! [`player`] for lifecycle/controls, [`types`] for cross-language DTOs,
 //! [`simple`] for the FRB init hook.
 
+pub mod frb_handler;
 pub mod player;
 pub mod simple;
 pub mod types;

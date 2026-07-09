@@ -17,7 +17,7 @@
 //! - **`effects`** — 需在 Gst 线程执行的 [`BusSideEffect`]（如 seek、暂停/恢复 pipeline）
 //! - **`replay_patch`** — 在发送事件**之前**写入的 [`BusReplayPatch`]（`at_eos`、`desired_playing`）
 //!
-//! 入口函数 [`attach_gst_bus_handlers`] 在 Gst MainContext 上注册 bus watch 与位置轮询定时器。
+//! 入口函数 [`attach_gst_bus_handlers`] 在 Gst 线程上注册 bus 处理与位置轮询。
 //!
 //! # English
 //!
@@ -40,6 +40,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use gstreamer as gst;
+#[cfg(not(target_os = "android"))]
 use gstreamer::glib::source::{self, Priority};
 use gstreamer::prelude::*;
 use parking_lot::Mutex;
@@ -60,6 +61,60 @@ use reducer::BusSnapshot;
 /// Thread-safe callback type for delivering [`PlayerEvent`] values to the Dart layer.
 pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
+#[cfg(not(target_os = "android"))]
+pub type BusWatchHandles = (gst::glib::SourceId, gst::glib::SourceId);
+
+#[cfg(target_os = "android")]
+pub type BusWatchHandles = (
+    crate::gst::BusPollToken,
+    crate::gst::PositionPollToken,
+);
+
+/// Shared bus handler state for GLib watch callbacks and Android bus polling.
+pub(crate) struct BusHandlerState {
+    pub pipeline: gst::Pipeline,
+    pub emitter: Arc<Mutex<Option<Emitter>>>,
+    pub looping: Arc<AtomicBool>,
+    pub desired_playing: Arc<AtomicBool>,
+    pub at_eos: Arc<AtomicBool>,
+    pub running: Arc<AtomicBool>,
+    pub rate: Arc<Mutex<f64>>,
+    pub is_playbin: bool,
+    pub track_cache: Option<Arc<Mutex<TrackCache>>>,
+    #[cfg(target_os = "ios")]
+    pub ios_layer_bus: Option<Arc<Mutex<Option<IosLayerBackend>>>>,
+}
+
+impl BusHandlerState {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        pipeline: gst::Pipeline,
+        emitter: Arc<Mutex<Option<Emitter>>>,
+        looping: Arc<AtomicBool>,
+        desired_playing: Arc<AtomicBool>,
+        at_eos: Arc<AtomicBool>,
+        running: Arc<AtomicBool>,
+        rate: Arc<Mutex<f64>>,
+        is_playbin: bool,
+        track_cache: Option<Arc<Mutex<TrackCache>>>,
+        #[cfg(target_os = "ios")] ios_layer_bus: Option<Arc<Mutex<Option<IosLayerBackend>>>>,
+    ) -> Self {
+        Self {
+            pipeline,
+            emitter,
+            looping,
+            desired_playing,
+            at_eos,
+            running,
+            rate,
+            is_playbin,
+            track_cache,
+            #[cfg(target_os = "ios")]
+            ios_layer_bus,
+        }
+    }
+}
+
 /// 判断 iOS 视频 overlay 是否已绑定，用于 [`BusSnapshot::overlay_bound`]。
 ///
 /// 当前 texture/appsink 路径无需 CALayer attach，恒返回 `true`（与 `overlay_ready_for_play`
@@ -70,12 +125,70 @@ pub type Emitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 /// Whether the iOS video overlay is bound, fed into [`BusSnapshot::overlay_bound`]. The
 /// texture/appsink path always returns `true` (matches `overlay_ready_for_play`).
 #[cfg(target_os = "ios")]
-fn ios_overlay_bound(_ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) -> bool {
+fn ios_overlay_bound(ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>>) -> bool {
     // Texture/appsink path: no CALayer attach — always ready (matches overlay_ready_for_play).
     true
 }
 
-/// 在 Gst 线程 MainContext 上安装 bus watch 与位置轮询定时器。
+/// Dispatches one GStreamer bus message through the parse → reduce → effects pipeline.
+pub(crate) fn dispatch_gst_bus_message(state: &BusHandlerState, msg: &gst::Message) {
+    if !state.running.load(Ordering::SeqCst) {
+        return;
+    }
+
+    let Some(parsed) = parse::parse_bus_message(msg, &state.pipeline) else {
+        return;
+    };
+
+    if matches!(&parsed, reducer::BusMessage::Error { .. }) {
+        if let reducer::BusMessage::Error { message } = &parsed {
+            log::error!("GStreamer error: {message}");
+            #[cfg(target_os = "android")]
+            crate::diag::logcat_error(&format!("GStreamer error: {message}"));
+        }
+    }
+
+    let snapshot = BusSnapshot::new(
+        state.desired_playing.load(Ordering::SeqCst),
+        state.looping.load(Ordering::SeqCst),
+        state.is_playbin,
+        #[cfg(target_os = "ios")]
+        ios_overlay_bound(&state.ios_layer_bus),
+        #[cfg(not(target_os = "ios"))]
+        false,
+    );
+
+    let reduction = reducer::reduce_bus_message(parsed, snapshot);
+
+    effects::apply_bus_replay_patch(
+        reduction.replay_patch,
+        &state.at_eos,
+        &state.desired_playing,
+    );
+
+    let mut emit_to_dart = |event: PlayerEvent| {
+        if let Some(cb) = state.emitter.lock().as_ref() {
+            cb(event);
+        }
+    };
+
+    for event in reduction.events {
+        emit_to_dart(event);
+    }
+
+    let mut effect_ctx = effects::BusEffectContext {
+        pipeline: &state.pipeline,
+        msg,
+        track_cache: state.track_cache.as_ref(),
+        rate: *state.rate.lock(),
+        #[cfg(target_os = "ios")]
+        ios_layer_bus: &state.ios_layer_bus,
+        emit: &mut emit_to_dart,
+    };
+    effects::apply_bus_side_effects(&reduction.effects, &mut effect_ctx);
+}
+
+/// 在 Gst 线程上安装 bus 处理与位置轮询。
 ///
 /// 每条 bus 消息的处理顺序（与归约架构一致）：
 ///
@@ -90,9 +203,8 @@ fn ios_overlay_bound(_ios_layer_bus: &Option<Arc<Mutex<Option<IosLayerBackend>>>
 ///
 /// # English
 ///
-/// Installs a bus watch and a 200 ms position poll on the Gst thread's MainContext. Each
-/// message follows the parse → snapshot → reduce → replay patch → emit events → apply side
-/// effects pipeline documented in the module root.
+/// Installs bus handling and a 200 ms position poll on the Gst thread. Each message follows
+/// the parse → snapshot → reduce → replay patch → emit events → apply side effects pipeline.
 #[allow(clippy::too_many_arguments)]
 pub fn attach_gst_bus_handlers(
     pipeline: &gst::Pipeline,
@@ -105,107 +217,96 @@ pub fn attach_gst_bus_handlers(
     is_playbin: bool,
     track_cache: Option<Arc<Mutex<TrackCache>>>,
     #[cfg(target_os = "ios")] ios_layer_bus_slot: Option<Arc<Mutex<Option<IosLayerBackend>>>>,
-) -> Result<(gst::bus::BusWatchGuard, gst::glib::SourceId)> {
+) -> Result<BusWatchHandles> {
     let bus = pipeline
         .bus()
         .ok_or_else(|| anyhow!("pipeline has no bus"))?;
-    let pipeline_bus = pipeline.clone();
-    let track_cache_bus = track_cache.clone();
-    let emitter_bus = emitter.clone();
-    let emitter_pos = emitter.clone();
-    let looping = looping.clone();
-    let desired_playing_bus = desired_playing.clone();
-    let at_eos_bus = at_eos.clone();
-    let running_bus = running.clone();
-    let running_pos = running.clone();
-    let rate_bus = rate.clone();
-    #[cfg(target_os = "ios")]
-    let ios_layer_bus = ios_layer_bus_slot;
 
-    let bus_watch = bus
-        .add_watch_local(move |_, msg| {
-            if !running_bus.load(Ordering::SeqCst) {
-                return gst::glib::ControlFlow::Break;
-            }
+    let state = BusHandlerState::new(
+        pipeline.clone(),
+        emitter.clone(),
+        looping.clone(),
+        desired_playing.clone(),
+        at_eos.clone(),
+        running.clone(),
+        rate.clone(),
+        is_playbin,
+        track_cache,
+        #[cfg(target_os = "ios")]
+        ios_layer_bus_slot,
+    );
 
-            let Some(parsed) = parse::parse_bus_message(msg, &pipeline_bus) else {
-                return gst::glib::ControlFlow::Continue;
-            };
+    #[cfg(target_os = "android")]
+    {
+        return Ok(crate::gst::android_runtime::register_bus_handlers(
+            bus,
+            state,
+            pipeline.clone(),
+            emitter.clone(),
+            running.clone(),
+        ));
+    }
 
-            if matches!(&parsed, reducer::BusMessage::Error { .. }) {
-                if let reducer::BusMessage::Error { message } = &parsed {
-                    log::error!("GStreamer error: {message}");
-                    #[cfg(target_os = "android")]
-                    crate::diag::logcat_error(&format!("GStreamer error: {message}"));
+    #[cfg(not(target_os = "android"))]
+    {
+        let ctx = crate::gst::gst_main_context()?.clone();
+        let pipeline_bus = pipeline.clone();
+        let state_bus = state.clone_for_watch();
+        let emitter_pos = emitter.clone();
+        let running_pos = running.clone();
+
+        let bus_source = bus.create_watch(
+            Some("xhvp-bus"),
+            Priority::DEFAULT,
+            move |_, msg| {
+                dispatch_gst_bus_message(&state_bus, msg);
+                gst::glib::ControlFlow::Continue
+            },
+        );
+        let bus_source_id = bus_source.attach(Some(&ctx));
+
+        let pipeline_pos = pipeline_bus;
+        let position_source = source::timeout_source_new(
+            Duration::from_millis(200),
+            Some("xhvp-position"),
+            Priority::DEFAULT,
+            move || {
+                if !running_pos.load(Ordering::SeqCst) {
+                    return gst::glib::ControlFlow::Break;
                 }
-            }
-
-            let snapshot = BusSnapshot::new(
-                desired_playing_bus.load(Ordering::SeqCst),
-                looping.load(Ordering::SeqCst),
-                is_playbin,
-                #[cfg(target_os = "ios")]
-                ios_overlay_bound(&ios_layer_bus),
-                #[cfg(not(target_os = "ios"))]
-                false,
-            );
-
-            let reduction = reducer::reduce_bus_message(parsed, snapshot);
-
-            effects::apply_bus_replay_patch(
-                reduction.replay_patch,
-                &at_eos_bus,
-                &desired_playing_bus,
-            );
-
-            let mut emit_to_dart = |event: PlayerEvent| {
-                if let Some(cb) = emitter_bus.lock().as_ref() {
-                    cb(event);
+                let (_, current, _) = pipeline_pos.state(gst::ClockTime::ZERO);
+                if current != gst::State::Playing && current != gst::State::Paused {
+                    return gst::glib::ControlFlow::Continue;
                 }
-            };
-
-            for event in reduction.events {
-                emit_to_dart(event);
-            }
-
-            let mut effect_ctx = effects::BusEffectContext {
-                pipeline: &pipeline_bus,
-                msg,
-                track_cache: track_cache_bus.as_ref(),
-                rate: *rate_bus.lock(),
-                #[cfg(target_os = "ios")]
-                ios_layer_bus: &ios_layer_bus,
-                emit: &mut emit_to_dart,
-            };
-            effects::apply_bus_side_effects(&reduction.effects, &mut effect_ctx);
-
-            gst::glib::ControlFlow::Continue
-        })
-        .map_err(|e| anyhow!("bus watch failed: {e}"))?;
-
-    let pipeline_pos = pipeline.clone();
-    let ctx = crate::gst::gst_main_context()?.clone();
-    let position_source = source::timeout_source_new(
-        Duration::from_millis(200),
-        Some("xhvp-position"),
-        Priority::DEFAULT,
-        move || {
-            if !running_pos.load(Ordering::SeqCst) {
-                return gst::glib::ControlFlow::Break;
-            }
-            let (_, current, _) = pipeline_pos.state(gst::ClockTime::ZERO);
-            if current != gst::State::Playing && current != gst::State::Paused {
-                return gst::glib::ControlFlow::Continue;
-            }
-            if let Some(cb) = emitter_pos.lock().as_ref() {
-                if let Some(p) = pipeline_pos.query_position::<gst::ClockTime>() {
-                    cb(PlayerEvent::position(p.mseconds() as i64));
+                if let Some(cb) = emitter_pos.lock().as_ref() {
+                    if let Some(p) = pipeline_pos.query_position::<gst::ClockTime>() {
+                        cb(PlayerEvent::position(p.mseconds() as i64));
+                    }
                 }
-            }
-            gst::glib::ControlFlow::Continue
-        },
-    )
-    .attach(Some(&ctx));
+                gst::glib::ControlFlow::Continue
+            },
+        )
+        .attach(Some(&ctx));
 
-    Ok((bus_watch, position_source))
+        Ok((bus_source_id, position_source))
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+impl BusHandlerState {
+    fn clone_for_watch(&self) -> Self {
+        Self {
+            pipeline: self.pipeline.clone(),
+            emitter: self.emitter.clone(),
+            looping: self.looping.clone(),
+            desired_playing: self.desired_playing.clone(),
+            at_eos: self.at_eos.clone(),
+            running: self.running.clone(),
+            rate: self.rate.clone(),
+            is_playbin: self.is_playbin,
+            track_cache: self.track_cache.clone(),
+            #[cfg(target_os = "ios")]
+            ios_layer_bus: self.ios_layer_bus.clone(),
+        }
+    }
 }

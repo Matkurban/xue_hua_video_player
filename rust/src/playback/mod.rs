@@ -13,7 +13,7 @@
 //! [`frame::FrameSink`] appsink; [`bus`] converts Gst events into Dart [`PlayerEvent`]s.
 
 mod asset_pipeline;
-mod bus;
+pub(crate) mod bus;
 pub mod capabilities;
 pub mod engine;
 pub(crate) mod frame;

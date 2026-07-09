@@ -29,7 +29,7 @@ use jni::objects::{JClass, JObject};
 use jni::{jni_mangle, Env, EnvUnowned};
 
 #[cfg(target_os = "android")]
-use crate::platform::android::{native_window_handle_from_surface, store_java_vm};
+use crate::platform::android::{init_android_context, native_window_handle_from_surface, store_java_vm};
 
 /// 原生库加载时缓存进程 JavaVM（Platform View Surface 之前）/
 /// Caches the process JavaVM when the native library loads (before Platform View surface).
@@ -151,6 +151,28 @@ pub extern "C" fn player_notify_ios_overlay(
     }
 }
 
+/// Android JNI：初始化 `ndk-context` 与 application `Context` /
+/// Android JNI: initializes `ndk-context` with the application `Context`.
+#[cfg(target_os = "android")]
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.NativeAndroidContext",
+    "nativeInitAndroidContext",
+    "(Landroid/content/Context;)V"
+)]
+pub extern "system" fn native_init_android_context<'caller>(
+    mut env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    context: JObject<'caller>,
+) {
+    env.with_env(|env| {
+        if let Err(e) = init_android_context(env, context) {
+            crate::diag::logcat_error(&format!("nativeInitAndroidContext failed: {e:#}"));
+        }
+        Ok::<(), jni::errors::Error>(())
+    })
+    .resolve::<LogErrorAndDefault>();
+}
+
 /// Android JNI：`Surface` 创建回调 / Android JNI: `Surface` created callback.
 #[cfg(target_os = "android")]
 #[jni_mangle(
@@ -268,4 +290,18 @@ pub extern "system" fn native_bind_plugin_class<'caller>(
         Ok::<(), jni::errors::Error>(())
     })
     .resolve::<LogErrorAndDefault>();
+}
+
+/// Android JNI: warm up FRB handler + Gst runtime from [`GStreamerInitProvider`].
+#[cfg(target_os = "android")]
+#[jni_mangle(
+    "com.flutter_rust_bridge.xue_hua_video_player.NativeRuntimeWarmup",
+    "nativeWarmupNativeRuntime",
+    "()V"
+)]
+pub extern "system" fn native_warmup_native_runtime<'caller>(
+    _env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) {
+    crate::api::frb_handler::warmup_native_runtime();
 }

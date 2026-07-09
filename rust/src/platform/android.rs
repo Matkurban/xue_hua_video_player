@@ -8,7 +8,7 @@
 
 #[cfg(target_os = "android")]
 use std::sync::{
-    atomic::{AtomicPtr, Ordering},
+    atomic::{AtomicBool, AtomicPtr, Ordering},
     Mutex,
 };
 
@@ -23,7 +23,14 @@ use jni::Env;
 static JAVA_VM: AtomicPtr<jni::sys::JavaVM> = AtomicPtr::new(std::ptr::null_mut());
 
 #[cfg(target_os = "android")]
+static ANDROID_CONTEXT: Mutex<Option<Global<JObject>>> = Mutex::new(None);
+
+#[cfg(target_os = "android")]
 static FLUTTER_ASSET_HELPER_CLASS: Mutex<Option<Global<JClass>>> = Mutex::new(None);
+
+/// Set after `xhvp-gst` permanently attaches via raw JNI (avoids jni-rs TLS keys).
+#[cfg(target_os = "android")]
+static GST_JVM_ATTACHED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "android")]
 extern "C" {
@@ -41,6 +48,58 @@ extern "C" {
 #[cfg(target_os = "android")]
 pub fn store_java_vm(vm: *mut jni::sys::JavaVM) {
     JAVA_VM.store(vm, Ordering::SeqCst);
+}
+
+/// Initializes `ndk-context` with the application `Context` (called from Java at startup).
+#[cfg(target_os = "android")]
+pub fn init_android_context(env: &mut Env, context: JObject) -> Result<()> {
+    let global = env
+        .new_global_ref(context)
+        .map_err(|e| anyhow!("new_global_ref(context): {e}"))?;
+    let vm_ptr = env
+        .get_java_vm()
+        .map_err(|e| anyhow!("get_java_vm: {e}"))?
+        .get_raw();
+    store_java_vm(vm_ptr);
+    // SAFETY: pointers are valid JNIEnv/JavaVM/Context from a JNI callback.
+    unsafe {
+        ndk_context::initialize_android_context(
+            vm_ptr as *mut std::ffi::c_void,
+            global.as_obj().as_raw() as *mut std::ffi::c_void,
+        );
+    }
+    *ANDROID_CONTEXT.lock().unwrap() = Some(global);
+    crate::diag::logcat_info("ndk-context: Android context initialized");
+    Ok(())
+}
+
+fn resolve_java_vm_ptr() -> Result<*mut jni::sys::JavaVM> {
+    let vm_ptr = ndk_context::android_context().vm() as *mut jni::sys::JavaVM;
+    if vm_ptr.is_null() {
+        return Err(anyhow!("ndk-context JavaVM is null"));
+    }
+    store_java_vm(vm_ptr);
+    Ok(vm_ptr)
+}
+
+fn raw_attach_current_thread(vm_ptr: *mut jni::sys::JavaVM) -> Result<()> {
+    if is_thread_jni_attached(vm_ptr) {
+        return Ok(());
+    }
+    // SAFETY: `vm_ptr` came from `store_java_vm` / ndk-context / JNI callbacks.
+    let status = unsafe {
+        let vm: jni::sys::JavaVM = *vm_ptr;
+        let mut env: *mut jni::sys::JNIEnv = std::ptr::null_mut();
+        ((*vm).v1_4.AttachCurrentThreadAsDaemon)(
+            vm_ptr,
+            &mut env as *mut *mut jni::sys::JNIEnv as *mut *mut std::ffi::c_void,
+            std::ptr::null_mut(),
+        )
+    };
+    if status != jni::sys::JNI_OK {
+        return Err(anyhow!("AttachCurrentThreadAsDaemon failed: {status}"));
+    }
+    Ok(())
 }
 
 /// 绑定 `FlutterAssetHelper` 全局 jclass / Binds the `FlutterAssetHelper` global jclass.
@@ -113,6 +172,49 @@ pub fn call_open_asset_fd(env: &mut Env, asset_key: &str) -> Result<(i32, u64, u
     Ok((fd, buf[1] as u64, buf[2] as u64))
 }
 
+/// Returns whether the current native thread is already attached to the cached `JavaVM`.
+#[cfg(target_os = "android")]
+fn is_thread_jni_attached(vm_ptr: *mut jni::sys::JavaVM) -> bool {
+    // SAFETY: `vm_ptr` came from `store_java_vm` / JNI callbacks.
+    unsafe {
+        let vm: jni::sys::JavaVM = *vm_ptr;
+        let mut env: *mut jni::sys::JNIEnv = std::ptr::null_mut();
+        ((*vm).v1_4.GetEnv)(
+            vm_ptr,
+            &mut env as *mut *mut jni::sys::JNIEnv as *mut *mut std::ffi::c_void,
+            jni::sys::JNI_VERSION_1_6,
+        ) == jni::sys::JNI_OK
+    }
+}
+
+/// Runs `f` on the current thread using raw `GetEnv` (no jni-rs TLS attach guard).
+#[cfg(target_os = "android")]
+fn with_attached_env_raw<F, R>(vm_ptr: *mut jni::sys::JavaVM, f: F) -> Result<R>
+where
+    F: FnOnce(&mut Env<'_>) -> Result<R>,
+{
+    use jni::{AttachGuard, DEFAULT_LOCAL_FRAME_CAPACITY};
+
+    // SAFETY: caller verified the thread is attached; `GetEnv` returns a valid env pointer.
+    unsafe {
+        let vm: jni::sys::JavaVM = *vm_ptr;
+        let mut env_ptr: *mut jni::sys::JNIEnv = std::ptr::null_mut();
+        let status = ((*vm).v1_4.GetEnv)(
+            vm_ptr,
+            &mut env_ptr as *mut *mut jni::sys::JNIEnv as *mut *mut std::ffi::c_void,
+            jni::sys::JNI_VERSION_1_6,
+        );
+        if status != jni::sys::JNI_OK {
+            return Err(anyhow!("GetEnv failed: {status}"));
+        }
+        let mut guard = AttachGuard::from_unowned(env_ptr);
+        guard
+            .borrow_env_mut()
+            .with_local_frame(DEFAULT_LOCAL_FRAME_CAPACITY, f)
+            .map_err(|e| anyhow!("{e}"))
+    }
+}
+
 /// 附着当前线程到缓存的 `JavaVM` 并执行 JNI 闭包 / Attaches current thread to cached `JavaVM` and runs JNI closure.
 ///
 /// # 参数 / Parameters
@@ -125,28 +227,48 @@ pub fn with_jni_env<F, R>(f: F) -> Result<R>
 where
     F: FnOnce(&mut Env<'_>) -> Result<R>,
 {
-    let vm_ptr = JAVA_VM.load(Ordering::SeqCst);
-    if vm_ptr.is_null() {
-        return Err(anyhow!("JavaVM not cached"));
-    }
-    // SAFETY: pointer came from `JavaVM::get_raw` in a JNI callback.
-    let vm = unsafe { jni::JavaVM::from_raw(vm_ptr) };
-    vm.attach_current_thread(|env| f(env))
+    let vm_ptr = resolve_java_vm_ptr().or_else(|_| {
+        let ptr = JAVA_VM.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            Err(anyhow!("JavaVM not cached"))
+        } else {
+            Ok(ptr)
+        }
+    })?;
+    raw_attach_current_thread(vm_ptr)?;
+    with_attached_env_raw(vm_ptr, f)
 }
 
 /// 将当前线程附着到缓存的 `JavaVM`（无 JNI 操作）/ Attaches current thread to cached `JavaVM` (no JNI work).
+///
+/// Uses raw `AttachCurrentThreadAsDaemon` so jni-rs does not allocate a `TLS_ATTACH_GUARD`
+/// pthread key (which can exhaust Bionic's TLS key budget on SDK-heavy apps).
 ///
 /// # 返回值 / Returns
 /// - `Ok(())` 成功或 `JavaVM` 尚未缓存 / `Ok(())` on success or when `JavaVM` not yet cached
 #[cfg(target_os = "android")]
 pub fn attach_java_vm() -> Result<()> {
-    let vm_ptr = JAVA_VM.load(Ordering::SeqCst);
-    if vm_ptr.is_null() {
+    if GST_JVM_ATTACHED.load(Ordering::SeqCst) {
         return Ok(());
     }
-    // SAFETY: pointer came from `JavaVM::get_raw` in a JNI callback.
-    let vm = unsafe { jni::JavaVM::from_raw(vm_ptr) };
-    vm.attach_current_thread(|_| Ok(()))
+    let vm_ptr = match resolve_java_vm_ptr() {
+        Ok(ptr) => ptr,
+        Err(_) => {
+            let ptr = JAVA_VM.load(Ordering::SeqCst);
+            if ptr.is_null() {
+                return Ok(());
+            }
+            ptr
+        }
+    };
+    if is_thread_jni_attached(vm_ptr) {
+        GST_JVM_ATTACHED.store(true, Ordering::SeqCst);
+        return Ok(());
+    }
+    raw_attach_current_thread(vm_ptr)?;
+    GST_JVM_ATTACHED.store(true, Ordering::SeqCst);
+    crate::diag::logcat_info("xhvp-gst: JavaVM attached via raw JNI (no jni-rs TLS)");
+    Ok(())
 }
 
 #[cfg(target_os = "android")]

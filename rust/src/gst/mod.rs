@@ -16,17 +16,29 @@ mod env;
 mod init;
 #[cfg(target_os = "ios")]
 mod ios_plugins;
+#[cfg(target_os = "android")]
+pub(crate) mod android_runtime;
+#[cfg(not(target_os = "android"))]
+mod runtime_glib;
 mod runtime;
 mod tls;
 #[cfg(target_os = "macos")]
 mod tls_macos;
 
 #[cfg(target_os = "android")]
+pub use android_runtime::{BusPollToken, PositionPollToken};
+
+#[cfg(target_os = "android")]
 pub use android::ensure_gst_init_android;
 #[cfg(target_os = "android")]
 pub use android::ensure_java_gstreamer_for_network;
+#[cfg(target_os = "android")]
+pub use android::warmup_reqwest_httpsrc_runtime;
+#[cfg(target_os = "android")]
+pub use android::warmup_gst_gl_display;
 pub use init::ensure_gst_init;
 pub use runtime::{
-    ensure_gst_runtime, gst_main_context, run_on_gst_thread, spawn_on_gst_thread,
-    spawn_on_gst_thread_and_wait,
+    ensure_gst_runtime, run_on_gst_thread, spawn_on_gst_thread, spawn_on_gst_thread_and_wait,
 };
+#[cfg(not(target_os = "android"))]
+pub use runtime::gst_main_context;

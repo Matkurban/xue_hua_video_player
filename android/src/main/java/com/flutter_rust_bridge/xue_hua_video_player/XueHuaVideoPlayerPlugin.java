@@ -19,10 +19,6 @@ import java.util.Map;
 public class XueHuaVideoPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
     public static final String TEXTURE_CHANNEL_NAME = "xue_hua_video_player/texture";
 
-    static {
-        System.loadLibrary("xue_hua_video_player");
-    }
-
     private static native void nativeBindPluginClass();
 
     @Nullable

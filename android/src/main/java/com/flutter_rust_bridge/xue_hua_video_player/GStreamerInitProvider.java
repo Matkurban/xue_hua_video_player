@@ -34,6 +34,8 @@ public class GStreamerInitProvider extends ContentProvider {
             System.loadLibrary("xue_hua_video_player");
             GStreamer.init(getContext());
             FlutterAssetHelper.init(getContext());
+            NativeAndroidContext.init(getContext());
+            NativeRuntimeWarmup.warmup();
             Log.i(TAG, "GStreamer Android runtime initialized");
         } catch (Throwable t) {
             Log.e(TAG, "Failed to initialize GStreamer Android runtime", t);

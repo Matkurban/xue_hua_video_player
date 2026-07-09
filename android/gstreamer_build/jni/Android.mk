@@ -31,7 +31,10 @@ GSTREAMER_NDK_BUILD_PATH := $(GSTREAMER_ROOT)/share/gst-android/ndk-build/
 # Explicit, minimal plugin set for local + network video playback. We avoid the
 # broad CODECS/EFFECTS groups because some of their (Rust-based) plugins pull in
 # static deps the ndk-build whole-archive step can't resolve (lcevc_*, bare
-# c++/m). androidmedia provides HW H.264/H.265 decode; soup provides http(s).
+# c++/m). androidmedia provides HW H.264/H.265 decode; reqwest provides http(s)
+# (gst-plugins-rs reqwesthttpsrc — avoids souphttpsrc g_main_loop pthread TLS crash).
+# libgstreqwest.a is rebuilt with current_thread Tokio before ndk-build; see
+# android/scripts/build_reqwest_plugin_android.sh.
 #
 # `opengl` is REQUIRED for hardware decode: Qualcomm/Android MediaCodec decoders
 # (amcvideodec) only emit GL textures (memory:GLMemory, texture-target=
@@ -44,7 +47,7 @@ GSTREAMER_PLUGINS := \
     audioconvert audioresample audiofx videoconvertscale volume autodetect \
     isomp4 matroska audioparsers videoparsersbad id3demux \
     androidmedia videofilter opengl \
-    soup tcp udp opensles
+    reqwest tcp udp opensles
 
 GSTREAMER_EXTRA_DEPS := gstreamer-video-1.0 gstreamer-app-1.0
 # TLS for https:// sources. The openssl gio module needs libssl/libcrypto,

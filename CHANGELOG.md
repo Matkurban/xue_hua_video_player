@@ -1,3 +1,80 @@
+## Unreleased
+
+### Bug fixes
+
+- **Android SIGABRT on `reqwesthttpsrc` preroll (pthread_key)**: rebuild `libgstreqwest.a`
+  for Android with `tokio::current_thread` instead of the SDK's multi-thread runtime
+  (blocking pool spawns extra OS threads that exhaust Bionic pthread keys on SDK-heavy
+  apps). `build_gstreamer_umbrella.sh` now runs `build_reqwest_plugin_android.sh`
+  before ndk-build. FRB `SimpleThreadPool` is capped at one thread on Android.
+- **Android SIGABRT in co-hosted FRB plugins (e.g. pinyin)**: remove `reqwesthttpsrc`
+  HTTP pipeline warmup from `GStreamerInitProvider`; patched `libgstreqwest.a` initializes
+  on first network preroll instead.
+- **Android SIGABRT on `gldisplay-event` (glimagesink preroll)**: warm up GstGL display
+  at process start (`glimagesink` Ready→Null on `xhvp-gst`) so `gldisplay-event` claims
+  pthread keys before SDK-heavy code exhausts the Bionic budget.
+
+## 1.3.6
+
+### Bug fixes
+
+- **Android SIGABRT on `souphttpsrc` (network video)**: remove the `soup` plugin from the
+  Android GStreamer umbrella build and use `reqwesthttpsrc` (`reqwest` plugin from
+  gst-plugins-rs) instead. GStreamer Android SDK 1.28.4 ships `reqwesthttpsrc` but not
+  `curlhttpsrc`; `playbin3` still streams `http(s)://` URIs directly. `souphttpsrc` spawns
+  an internal `g_main_loop` thread that can exhaust Bionic's pthread TLS key budget on
+  SDK-heavy apps; `reqwesthttpsrc` avoids that thread model.
+
+## 1.3.5
+
+### Bug fixes
+
+- **Android `Gst runtime command channel not ready`**: call `ensure_gst_runtime()` at the
+  start of `spawn_on_gst_thread` / `spawn_on_gst_thread_and_wait` before reading `CMD_TX`,
+  matching the GLib backend behaviour (`gst_main_context()` implicitly starts the runtime).
+  Previously `ensure_gst_init()` inside the dispatched closure never ran because the channel
+  was not ready yet.
+
+## 1.3.4
+
+### Bug fixes
+
+- **Android SIGABRT in `g_main_loop_run` (TLS exhaustion)**: replace GLib `MainLoop` on Android
+  with an `mpsc` command queue plus `gst_bus_timed_pop` polling (`android_runtime`). Bus watch
+  and position polling no longer use `MainContext` / GLib sources on Android.
+- **Android JNI**: initialize `ndk-context` 0.1.1 from `GStreamerInitProvider` with application
+  `Context`; `with_jni_env` uses raw `AttachCurrentThreadAsDaemon` instead of jni-rs TLS attach.
+
+## 1.3.3
+
+### Bug fixes
+
+- **Android SIGABRT on video page (FRB thread, `g_main_context_invoke_full`)**: replace
+  `MainContext::invoke` in `spawn_on_gst_thread` / `spawn_on_gst_thread_and_wait` with
+  `idle_source_new` + explicit `g_source_attach` on the Gst `MainContext`. `invoke` calls
+  `g_main_context_get_thread_default` on the caller thread, which allocates a GLib `GPrivate`
+  pthread key and can exhaust Bionic's TLS budget on SDK-heavy apps.
+
+## 1.3.2
+
+### Bug fixes
+
+- **Android SIGABRT after JNI attach (`g_private_get` / TLS exhaustion)**: stop calling
+  `g_main_context_push_thread_default` on the `xhvp-gst` thread (GLib `GPrivate` allocates
+  a pthread key per thread). Bus watch now uses `create_watch` + explicit `MainContext::attach`
+  instead of `add_watch_local` (which required thread-default context). Skip redundant
+  `gst::init()` on the Gst thread when Java `GStreamerInitProvider` already initialized GStreamer.
+
+## 1.3.1
+
+### Bug fixes
+
+- **Android SIGABRT on video page (`xhvp-gst` thread)**: attach the Gst
+  runtime thread with raw `AttachCurrentThreadAsDaemon` instead of jni-rs
+  `attach_current_thread`, which allocated a `TLS_ATTACH_GUARD` pthread key and
+  could hit Bionic's TLS key limit on apps with many native SDKs. `with_jni_env`
+  now uses a `GetEnv` fast path for already-attached threads.
+
 ## 1.3.0
 
 ### Breaking

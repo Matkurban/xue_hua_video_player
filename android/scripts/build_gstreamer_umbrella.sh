@@ -64,6 +64,9 @@ done
 echo "[xue_hua_video_player] Building GStreamer umbrella for ABIs: ${ABI_FILTER}"
 echo "[xue_hua_video_player] GSTREAMER_ROOT_ANDROID=${GSTREAMER_ROOT_ANDROID}"
 
+echo "[xue_hua_video_player] Building patched libgstreqwest.a (Android current_thread Tokio)..."
+"${SCRIPT_DIR}/build_reqwest_plugin_android.sh" "${NDK_PATH}" "${REQUESTED_ABIS[@]}"
+
 (
   cd "${GSTREAMER_BUILD_DIR}"
   GSTREAMER_ROOT_ANDROID="${GSTREAMER_ROOT_ANDROID}" \

@@ -17,7 +17,7 @@ pub mod texture;
 #[cfg(target_os = "android")]
 pub use android::{
     attach_java_vm, bind_flutter_asset_helper_class, bind_xue_hua_video_player_plugin_class,
-    call_open_asset_fd, native_window_handle_from_surface, notify_texture_content_size,
+    call_open_asset_fd, init_android_context, native_window_handle_from_surface, notify_texture_content_size,
     release_native_window, store_java_vm, with_jni_env,
 };
 #[cfg(target_os = "ios")]

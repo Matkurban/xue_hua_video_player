@@ -21,7 +21,7 @@ use parking_lot::Mutex;
 
 use crate::media::AppSrcFeedState;
 use crate::playback::asset_pipeline::build_asset_pipeline;
-use crate::playback::bus::{attach_gst_bus_handlers, Emitter};
+use crate::playback::bus::{attach_gst_bus_handlers, BusWatchHandles, Emitter};
 use crate::playback::capabilities::PipelineCapabilities;
 use crate::playback::gst::attach_overlay_bus_sync_handler;
 use crate::playback::gst::{
@@ -58,8 +58,7 @@ pub struct PipelineShell {
     is_playbin: bool,
     asset_key: Option<String>,
     appsrc_feed: Option<Arc<AppSrcFeedState>>,
-    bus_watch: Option<gst::bus::BusWatchGuard>,
-    position_source: Option<gst::glib::SourceId>,
+    bus_handles: Option<BusWatchHandles>,
     /// 缓存的 `videoflip`（playbin video-filter 或 AppSrc 支路）/ Cached `videoflip` for playbin or AppSrc.
     orientation_filter: Option<gst::Element>,
 }
@@ -300,8 +299,7 @@ pub(crate) fn new_test_shell(
         is_playbin: kind == SourceKind::Uri,
         asset_key,
         appsrc_feed: None,
-        bus_watch: None,
-        position_source: None,
+        bus_handles: None,
         orientation_filter: None,
     }
 }
@@ -387,7 +385,7 @@ pub fn install_uri_shell(
         #[cfg(target_os = "android")]
         overlay_size_sync,
     )?;
-    let (bus_watch, position_source) = attach_gst_bus_handlers(
+    let bus_handles = attach_gst_bus_handlers(
         &pipeline,
         emitter,
         looping,
@@ -407,8 +405,7 @@ pub fn install_uri_shell(
         is_playbin: true,
         asset_key: None,
         appsrc_feed: None,
-        bus_watch: Some(bus_watch),
-        position_source: Some(position_source),
+        bus_handles: Some(bus_handles),
         orientation_filter: Some(orientation_filter),
     })
 }
@@ -448,7 +445,7 @@ pub fn install_asset_shell(
         #[cfg(target_os = "android")]
         overlay_size_sync,
     )?;
-    let (bus_watch, position_source) = attach_gst_bus_handlers(
+    let bus_handles = attach_gst_bus_handlers(
         &pipeline,
         emitter,
         looping,
@@ -468,15 +465,13 @@ pub fn install_asset_shell(
         is_playbin: false,
         asset_key: Some(asset_key.to_string()),
         appsrc_feed: Some(feed),
-        bus_watch: Some(bus_watch),
-        position_source: Some(position_source),
+        bus_handles: Some(bus_handles),
         orientation_filter: Some(orientation_filter),
     })
 }
 /// 拆除 shell：释放总线监听与 AppSrc feed，置 Null / Tears down shell: releases bus watch and AppSrc feed, sets Null.
 pub fn teardown_shell(shell: &mut PipelineShell) {
-    shell.bus_watch = None;
-    shell.position_source = None;
+    shell.bus_handles = None;
     shell.appsrc_feed = None;
     shell.set_state_null();
 }
@@ -530,8 +525,7 @@ mod tests {
             is_playbin: kind == SourceKind::Uri,
             asset_key,
             appsrc_feed: None,
-            bus_watch: None,
-            position_source: None,
+            bus_handles: None,
             orientation_filter: None,
         }
     }
@@ -556,8 +550,7 @@ mod tests {
             is_playbin: true,
             asset_key: None,
             appsrc_feed: None,
-            bus_watch: None,
-            position_source: None,
+            bus_handles: None,
             orientation_filter: None,
         }
     }
@@ -633,8 +626,7 @@ mod tests {
             is_playbin: false,
             asset_key: None,
             appsrc_feed: None,
-            bus_watch: None,
-            position_source: None,
+            bus_handles: None,
             orientation_filter: None,
         };
         shell

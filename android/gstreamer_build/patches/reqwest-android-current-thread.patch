@@ -1,0 +1,39 @@
+--- a/net/reqwest/Cargo.toml
++++ b/net/reqwest/Cargo.toml
+@@ -16,7 +16,7 @@ mime = "0.3"
+ gst.workspace = true
+ gst-base.workspace = true
+-tokio = { version = "1.0", default-features = false, features = ["time", "rt-multi-thread"] }
++tokio = { version = "1.0", default-features = false, features = ["time", "rt"] }
+ 
+ [dev-dependencies]
+ hyper = { version = "1.0", features = ["server"] }
+--- a/net/reqwest/src/reqwesthttpsrc/imp.rs
++++ b/net/reqwest/src/reqwesthttpsrc/imp.rs
+@@ -171,10 +171,19 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
+ });
+ 
+ static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
+-    runtime::Builder::new_multi_thread()
+-        .enable_all()
+-        .worker_threads(1)
+-        .build()
+-        .unwrap()
++    #[cfg(target_os = "android")]
++    {
++        runtime::Builder::new_current_thread()
++            .enable_all()
++            .build()
++            .unwrap()
++    }
++    #[cfg(not(target_os = "android"))]
++    {
++        runtime::Builder::new_multi_thread()
++            .enable_all()
++            .worker_threads(1)
++            .build()
++            .unwrap()
++    }
+ });
+ 
+ impl ReqwestHttpSrc {
