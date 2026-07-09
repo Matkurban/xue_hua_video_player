@@ -166,15 +166,23 @@ tasks.register('buildGstreamerUmbrella', Exec) {
         file("${projectDir}/gstreamer_build/jni/Android.mk"),
         file("${projectDir}/gstreamer_build/jni/Application.mk"),
         file("${projectDir}/gstreamer_build/jni/dummy.c"),
+        file("${projectDir}/gstreamer_build/patches/reqwest-android-current-thread.patch"),
+        file("${gstScriptsDir}/build_gstreamer_umbrella.sh"),
+        file("${gstScriptsDir}/build_reqwest_plugin_android.sh"),
     )
 
     outputs.dir(gstJniOut)
 
+    // Existence alone is not enough: a stale unpatched umbrella (multi-thread
+    // Tokio) would otherwise be treated as UP-TO-DATE and ship into the APK.
+    // The umbrella script writes `.reqwest-tokio-current-thread` after verifying
+    // the unstripped build (32-bit strip drops many Rust mangled names).
     outputs.upToDateWhen {
         def abis = resolveGstreamerAbis()
         abis.every { abi ->
             file("${gstJniOut}/${abi}/libgstreamer_android.so").exists() \
-                && file("${gstJniOut}/${abi}/libc++_shared.so").exists()
+                && file("${gstJniOut}/${abi}/libc++_shared.so").exists() \
+                && file("${gstJniOut}/${abi}/.reqwest-tokio-current-thread").exists()
         }
     }
 

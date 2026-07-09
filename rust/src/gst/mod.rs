@@ -12,6 +12,8 @@
 //! be scheduled on that thread via the [`runtime`] dispatch APIs.
 
 mod android;
+#[cfg(target_os = "android")]
+mod android_bootstrap;
 mod env;
 mod init;
 #[cfg(target_os = "ios")]
@@ -32,6 +34,8 @@ pub use android_runtime::{BusPollToken, PositionPollToken};
 pub use android::ensure_gst_init_android;
 #[cfg(target_os = "android")]
 pub use android::ensure_java_gstreamer_for_network;
+#[cfg(target_os = "android")]
+pub use android_bootstrap::{ensure_ready_for_network_preroll, warmup as warmup_native_runtime_bootstrap};
 #[cfg(target_os = "android")]
 pub use android::warmup_reqwest_httpsrc_runtime;
 #[cfg(target_os = "android")]

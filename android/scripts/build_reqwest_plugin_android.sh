@@ -93,10 +93,23 @@ env_key_for_rust_target() {
 
 apply_reqwest_android_patch() {
   local imp="${GST_PLUGINS_RS_CACHE}/net/reqwest/src/reqwesthttpsrc/imp.rs"
+  local mod_rs="${GST_PLUGINS_RS_CACHE}/net/reqwest/src/reqwesthttpsrc/mod.rs"
   local cargo_toml="${GST_PLUGINS_RS_CACHE}/net/reqwest/Cargo.toml"
+  local patch_file="${GST_BUILD_DIR}/patches/reqwest-android-current-thread.patch"
+
+  # Prefer the checked-in patch when the tree is still stock; otherwise apply
+  # incremental edits for partially-patched caches.
+  if ! grep -q "new_current_thread" "${imp}"; then
+    if [[ -f "${patch_file}" ]] && command -v patch >/dev/null 2>&1; then
+      (
+        cd "${GST_PLUGINS_RS_CACHE}"
+        patch -p1 --forward < "${patch_file}" || true
+      )
+    fi
+  fi
 
   if grep -q "new_current_thread" "${imp}"; then
-    echo "[xue_hua_video_player] reqwest Android patch already applied (imp.rs)"
+    echo "[xue_hua_video_player] reqwest Android patch already applied (imp.rs RUNTIME)"
   else
     python3 - "${imp}" <<'PY'
 import sys
@@ -134,6 +147,54 @@ PY
     echo "[xue_hua_video_player] Patched reqwesthttpsrc RUNTIME for Android"
   fi
 
+  if grep -q "force_runtime_init" "${imp}"; then
+    echo "[xue_hua_video_player] reqwest Android patch already applied (force_runtime_init)"
+  else
+    python3 - "${imp}" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+text = p.read_text()
+needle = "});\n\nimpl ReqwestHttpSrc {"
+insert = """});
+
+/// Force Tokio RUNTIME LazyLock during plugin register (Android process start).
+#[cfg(target_os = \"android\")]
+pub(super) fn force_runtime_init() {
+    let _ = &*RUNTIME;
+}
+
+impl ReqwestHttpSrc {"""
+if needle not in text:
+    raise SystemExit(f"insert point for force_runtime_init not found in {p}")
+p.write_text(text.replace(needle, insert, 1))
+PY
+    echo "[xue_hua_video_player] Patched reqwesthttpsrc force_runtime_init"
+  fi
+
+  if grep -q "force_runtime_init" "${mod_rs}"; then
+    echo "[xue_hua_video_player] reqwest Android patch already applied (mod.rs register)"
+  else
+    python3 - "${mod_rs}" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+text = p.read_text()
+old = """pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    gst::Element::register("""
+new = """pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    // Claim pthread keys for Tokio while Bionic budget is still available
+    // (GStreamer.init from ContentProvider), before SDK-heavy host code runs.
+    #[cfg(target_os = \"android\")]
+    imp::force_runtime_init();
+    gst::Element::register("""
+if old not in text:
+    raise SystemExit(f"register() block not found in {p}")
+p.write_text(text.replace(old, new, 1))
+PY
+    echo "[xue_hua_video_player] Patched reqwesthttpsrc register() for Android"
+  fi
+
   if grep -q 'features = \["time", "rt"\]' "${cargo_toml}"; then
     echo "[xue_hua_video_player] reqwest Android patch already applied (Cargo.toml)"
   else
@@ -156,10 +217,15 @@ ensure_gst_plugins_rs_source() {
 build_reqwest_for_abi() {
   local gradle_abi="$1"
   local rust_target sdk_abi clang_triple env_key
+  local cc_path cxx_path ar_path
+  local cc_env_underscores
   rust_target="$(rust_target_for_abi "${gradle_abi}")"
   sdk_abi="$(sdk_abi_for "${gradle_abi}")"
   clang_triple="$(clang_triple_for_abi "${gradle_abi}")"
   env_key="$(env_key_for_rust_target "${rust_target}")"
+  # cc-rs looks for CC_<target> with the rustc triple using underscores / hyphens
+  # (lowercase), not the Cargo CARGO_TARGET_* uppercase form.
+  cc_env_underscores="${rust_target//-/_}"
 
   local gst_sysroot="${GSTREAMER_ROOT_ANDROID}/${sdk_abi}"
   local plugin_dir="${gst_sysroot}/lib/gstreamer-1.0"
@@ -170,17 +236,35 @@ build_reqwest_for_abi() {
     exit 1
   fi
 
+  cc_path="${NDK_BIN}/${clang_triple}-clang"
+  cxx_path="${NDK_BIN}/${clang_triple}-clang++"
+  ar_path="${NDK_BIN}/llvm-ar"
+  if [[ ! -x "${cc_path}" ]]; then
+    echo "error: NDK clang not found: ${cc_path}" >&2
+    exit 1
+  fi
+
   export PATH="${NDK_BIN}:${PATH}"
-  export "CC_${env_key}=${clang_triple}-clang"
-  export "CXX_${env_key}=${clang_triple}-clang"
-  export "AR_${env_key}=llvm-ar"
-  export "CARGO_TARGET_${env_key}_LINKER=${clang_triple}-clang"
+  # Cargo linker (uppercase triple with underscores).
+  export "CARGO_TARGET_${env_key}_LINKER=${cc_path}"
+  # cc-rs / ring: CC_<target_with_underscores> (hyphenated names are not valid
+  # shell identifiers — do not export CC_armv7-linux-androideabi).
+  export "CC_${cc_env_underscores}=${cc_path}"
+  export "CXX_${cc_env_underscores}=${cxx_path}"
+  export "AR_${cc_env_underscores}=${ar_path}"
+  export TARGET_CC="${cc_path}"
+  export TARGET_CXX="${cxx_path}"
+  export TARGET_AR="${ar_path}"
+  export CC="${cc_path}"
+  export CXX="${cxx_path}"
+  export AR="${ar_path}"
   export PKG_CONFIG_ALLOW_CROSS=1
   export PKG_CONFIG_SYSROOT_DIR="${gst_sysroot}"
   export PKG_CONFIG_LIBDIR="${gst_sysroot}/lib/pkgconfig"
   export CARGO_TARGET_DIR="${CARGO_TARGET_DIR}"
 
   echo "[xue_hua_video_player] Building libgstreqwest.a for ${gradle_abi} (${rust_target})..."
+  echo "[xue_hua_video_player]   CC=${cc_path}"
   (
     cd "${GST_PLUGINS_RS_CACHE}"
     cargo rustc -p gst-plugin-reqwest --release --target "${rust_target}" --crate-type staticlib

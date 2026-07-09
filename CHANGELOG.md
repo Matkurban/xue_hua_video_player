@@ -6,13 +6,24 @@
   for Android with `tokio::current_thread` instead of the SDK's multi-thread runtime
   (blocking pool spawns extra OS threads that exhaust Bionic pthread keys on SDK-heavy
   apps). `build_gstreamer_umbrella.sh` now runs `build_reqwest_plugin_android.sh`
-  before ndk-build. FRB `SimpleThreadPool` is capped at one thread on Android.
-- **Android SIGABRT in co-hosted FRB plugins (e.g. pinyin)**: remove `reqwesthttpsrc`
-  HTTP pipeline warmup from `GStreamerInitProvider`; patched `libgstreqwest.a` initializes
-  on first network preroll instead.
+  before ndk-build and **fails** if the umbrella still contains `new_multi_thread` /
+  `BlockingPool`. Gradle `buildGstreamerUmbrella` up-to-date checks those symbols so a
+  stale jniLibs copy cannot ship. FRB `SimpleThreadPool` is capped at one thread on Android.
+  Plugin `register` forces Tokio `RUNTIME` LazyLock at `GStreamer.init` time.
+- **Android SIGABRT in co-hosted FRB plugins (e.g. pinyin)**: remove full HTTP pipeline
+  warmup from `GStreamerInitProvider`; use `AndroidNativeRuntimeBootstrap` instead
+  (FRB + `xhvp-gst` + sync GstGL + reqwest factory). Patched `libgstreqwest.a` initializes
+  Tokio at plugin register, not on first network preroll.
 - **Android SIGABRT on `gldisplay-event` (glimagesink preroll)**: warm up GstGL display
-  at process start (`glimagesink` Ready→Null on `xhvp-gst`) so `gldisplay-event` claims
-  pthread keys before SDK-heavy code exhausts the Bionic budget.
+  synchronously on `xhvp-gst` at process start (`glimagesink` Ready→Null) so
+  `gldisplay-event` claims pthread keys before SDK-heavy code exhausts the Bionic budget.
+- **Android stale umbrella packaging**: `jniLibs` existence-only up-to-date check could
+  leave an unpatched `libgstreamer_android.so` in the APK after rebuilding libs/; fixed
+  via symbol verification in the umbrella script and Gradle.
+- **Android `ring` / `armeabi-v7a` reqwest build**: set `CC_<target_with_underscores>` /
+  `TARGET_CC` to the NDK API-level clang wrapper so cc-rs finds
+  `armv7a-linux-androideabi34-clang` instead of the nonexistent
+  `arm-linux-androideabi-clang`.
 
 ## 1.3.6
 

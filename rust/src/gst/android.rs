@@ -114,6 +114,7 @@ pub fn ensure_java_gstreamer_for_network(uri: &str) -> Result<()> {
     }
     JAVA_GST_CONTEXT_ENSURED.store(true, std::sync::atomic::Ordering::SeqCst);
     crate::diag::logcat_info("gst: network URI — GStreamer.init assumed via GStreamerInitProvider");
+    super::android_bootstrap::ensure_ready_for_network_preroll();
     Ok(())
 }
 

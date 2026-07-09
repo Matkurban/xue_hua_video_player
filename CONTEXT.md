@@ -52,7 +52,8 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (Rust `flutte
 | Path | Role |
 |------|------|
 | `api/` | FRB seam: `player.rs` registry, `types.rs` DTOs (`player_events` alias for generated code) |
-| `gst/` | Process GStreamer bootstrap: `init`, `runtime` (`xhvp-gst`), `android`, `tls`, `env`, `ios_plugins` |
+| `gst/` | Process GStreamer bootstrap: `init`, `runtime` (`xhvp-gst`), `android`, `android_bootstrap` (AndroidNativeRuntimeBootstrap), `tls`, `env`, `ios_plugins` |
+| `AndroidNativeRuntimeBootstrap` | Deep Android process-start module (`gst/android_bootstrap.rs`): `warmup()` / `ensure_ready_for_network_preroll()`; owns FRB handler touch, `xhvp-gst`, GstGL display sync warmup, reqwest factory readiness. Java seam: `NativeRuntimeWarmup` → JNI → this module |
 | `platform/` | Native FFI: `jni`, `android`, `ios/` (`mod.rs` UIKit bridge, `layer.rs` CALayer) |
 | `playback/gst/` | GStreamer video primitives: `sink.rs` (VideoOverlay), `metadata.rs`, `orientation.rs` — **not** overlay lifecycle |
 | `playback/overlay/` | `overlay_session.rs`, `preroll/{gate,executor}`, `platform/{android,ios,window}/` |

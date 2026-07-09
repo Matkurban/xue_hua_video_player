@@ -91,13 +91,13 @@ lazy_static! {
     pub static ref FLUTTER_RUST_BRIDGE_HANDLER: FrbHandler = build_handler();
 }
 
-/// Eagerly initializes FRB handler + `xhvp-gst` from [`GStreamerInitProvider`].
+/// Eagerly initializes Android native runtime from [`GStreamerInitProvider`].
+///
+/// Delegates to [`crate::gst::android_bootstrap`] — the deep module that owns
+/// FRB handler, `xhvp-gst`, GstGL display, and reqwest readiness.
 #[cfg(target_os = "android")]
 pub fn warmup_native_runtime() {
+    // Ensure the handler type is linked; bootstrap also touches it.
     std::hint::black_box(&*FLUTTER_RUST_BRIDGE_HANDLER);
-    crate::gst::ensure_gst_runtime();
-    crate::gst::warmup_gst_gl_display();
-    crate::diag::logcat_info(
-        "xhvp: native runtime warmed up (FRB handler + xhvp-gst + GstGL display)",
-    );
+    crate::gst::warmup_native_runtime_bootstrap();
 }
