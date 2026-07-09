@@ -31,7 +31,7 @@ use crate::media::{is_seekable, MediaSource};
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
 use crate::playback::gst::{
-    InternalAspectRatioMode, InternalVideoMetadata, validate_rotate_degrees,
+    validate_rotate_degrees, InternalAspectRatioMode, InternalVideoMetadata,
 };
 use crate::playback::gst_context::PlaybackGstContext;
 #[cfg(target_os = "ios")]

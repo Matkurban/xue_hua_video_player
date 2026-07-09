@@ -19,9 +19,7 @@ use parking_lot::Mutex;
 
 use crate::media::ResolvedSource;
 use crate::playback::bus::Emitter;
-use crate::playback::gst::{
-    InternalAspectRatioMode, InternalVideoMetadata,
-};
+use crate::playback::gst::{InternalAspectRatioMode, InternalVideoMetadata};
 use crate::playback::overlay::OverlaySession;
 use crate::playback::replay::PlayReplayContext;
 use crate::playback::shell::{

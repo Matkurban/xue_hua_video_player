@@ -148,10 +148,7 @@ class ProductionPlayerCommandPort implements PlayerCommandPort {
 
   @override
   Future<void> setVideoRotation(int rotateDegrees) =>
-      rust.playerSetVideoRotation(
-        playerId: _id,
-        rotateDegrees: rotateDegrees,
-      );
+      rust.playerSetVideoRotation(playerId: _id, rotateDegrees: rotateDegrees);
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) =>

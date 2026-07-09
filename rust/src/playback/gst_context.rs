@@ -15,8 +15,8 @@ use parking_lot::Mutex;
 
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
-use crate::playback::gst::InternalVideoMetadata;
 use crate::playback::gst::InternalAspectRatioMode;
+use crate::playback::gst::InternalVideoMetadata;
 use crate::playback::replay::{OverlayPlayIntent, PlayReplayContext};
 use crate::playback::shell::PipelineShell;
 #[cfg(target_os = "android")]

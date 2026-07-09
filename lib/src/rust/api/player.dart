@@ -7,11 +7,9 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'types.dart';
 
+// These functions are ignored because they are not marked as `pub`: `get_player`
 
-            // These functions are ignored because they are not marked as `pub`: `get_player`
-
-
-            /// 创建 GStreamer 播放器实例 / Creates a new GStreamer-backed player.
+/// 创建 GStreamer 播放器实例 / Creates a new GStreamer-backed player.
 ///
 /// # 参数 / Parameters
 /// - 无 / None
@@ -25,13 +23,32 @@ import 'types.dart';
 /// # 平台 / Platform
 /// - Android：初始化诊断日志并注册 `player_id` 到 texture 桥 / initializes diagnostics and registers texture bridge
 /// - 若 `PENDING_OVERLAYS` 中有待处理句柄，创建后立即应用 / applies staged overlay handle if present
-Future<PlayerHandle>  createPlayer() => RustLib.instance.api.crateApiPlayerCreatePlayer();
+Future<PlayerHandle> createPlayer() =>
+    RustLib.instance.api.crateApiPlayerCreatePlayer();
 
 /// iOS 占位 / iOS stub.
-Future<void>  notifyIosOverlay({required PlatformInt64 playerId , required PlatformInt64 handle , required int width , required int height }) => RustLib.instance.api.crateApiPlayerNotifyIosOverlay(playerId: playerId, handle: handle, width: width, height: height);
+Future<void> notifyIosOverlay({
+  required PlatformInt64 playerId,
+  required PlatformInt64 handle,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerNotifyIosOverlay(
+  playerId: playerId,
+  handle: handle,
+  width: width,
+  height: height,
+);
 
 /// iOS 占位 / iOS stub.
-Future<void>  applyIosOverlayGstreamer({required PlatformInt64 playerId , required int width , required int height }) => RustLib.instance.api.crateApiPlayerApplyIosOverlayGstreamer(playerId: playerId, width: width, height: height);
+Future<void> applyIosOverlayGstreamer({
+  required PlatformInt64 playerId,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerApplyIosOverlayGstreamer(
+  playerId: playerId,
+  width: width,
+  height: height,
+);
 
 /// 将原生窗口/表面句柄绑定到 VideoOverlay sink / Binds a native window/surface handle to the player's VideoOverlay sink.
 ///
@@ -44,10 +61,26 @@ Future<void>  applyIosOverlayGstreamer({required PlatformInt64 playerId , requir
 ///
 /// # 错误 / Errors
 /// - 播放器不存在且句柄为 0 / player not found with zero handle
-Future<void>  setVideoOverlayWindow({required PlatformInt64 playerId , required PlatformInt64 windowHandle }) => RustLib.instance.api.crateApiPlayerSetVideoOverlayWindow(playerId: playerId, windowHandle: windowHandle);
+Future<void> setVideoOverlayWindow({
+  required PlatformInt64 playerId,
+  required PlatformInt64 windowHandle,
+}) => RustLib.instance.api.crateApiPlayerSetVideoOverlayWindow(
+  playerId: playerId,
+  windowHandle: windowHandle,
+);
 
 /// Android 占位 / Android stub.
-Future<void>  notifyAndroidSurface({required PlatformInt64 playerId , required PlatformInt64 handle , required int width , required int height }) => RustLib.instance.api.crateApiPlayerNotifyAndroidSurface(playerId: playerId, handle: handle, width: width, height: height);
+Future<void> notifyAndroidSurface({
+  required PlatformInt64 playerId,
+  required PlatformInt64 handle,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerNotifyAndroidSurface(
+  playerId: playerId,
+  handle: handle,
+  width: width,
+  height: height,
+);
 
 /// 订阅播放器事件流 / Subscribes to the player's event stream.
 ///
@@ -63,7 +96,8 @@ Future<void>  notifyAndroidSurface({required PlatformInt64 playerId , required P
 ///
 /// # 错误 / Errors
 /// - 播放器不存在 / player not found
-Stream<PlayerEvent>  playerEventStream({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerEventStream(playerId: playerId);
+Stream<PlayerEvent> playerEventStream({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerEventStream(playerId: playerId);
 
 /// 从统一源描述符加载媒体 / Loads media from a unified source descriptor (URI or Flutter asset).
 ///
@@ -74,74 +108,127 @@ Stream<PlayerEvent>  playerEventStream({required PlatformInt64 playerId }) => Ru
 ///
 /// # 错误 / Errors
 /// - 解析失败、pipeline 切换失败等 / resolution or pipeline switch failure
-Future<void>  playerLoadSource({required PlatformInt64 playerId , required MediaSourceDto source , required bool autoPlay }) => RustLib.instance.api.crateApiPlayerPlayerLoadSource(playerId: playerId, source: source, autoPlay: autoPlay);
+Future<void> playerLoadSource({
+  required PlatformInt64 playerId,
+  required MediaSourceDto source,
+  required bool autoPlay,
+}) => RustLib.instance.api.crateApiPlayerPlayerLoadSource(
+  playerId: playerId,
+  source: source,
+  autoPlay: autoPlay,
+);
 
 /// 加载媒体 URI 并 preroll（不自动播放）/ Loads a media URI and prerolls without auto-play.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `uri` — `file://...`、`http(s)://...`、`rtsp://...` 等 / media URI
-Future<void>  playerSetSource({required PlatformInt64 playerId , required String uri }) => RustLib.instance.api.crateApiPlayerPlayerSetSource(playerId: playerId, uri: uri);
+Future<void> playerSetSource({
+  required PlatformInt64 playerId,
+  required String uri,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetSource(
+  playerId: playerId,
+  uri: uri,
+);
 
 /// 通过 AppSrc 加载 Flutter asset（Dart 侧无需临时文件）/ Loads a Flutter asset key via AppSrc (no Dart-side temp file copy).
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `asset_key` — 如 `assets/sample.mp4` / asset key
-Future<void>  playerSetAssetSource({required PlatformInt64 playerId , required String assetKey }) => RustLib.instance.api.crateApiPlayerPlayerSetAssetSource(playerId: playerId, assetKey: assetKey);
+Future<void> playerSetAssetSource({
+  required PlatformInt64 playerId,
+  required String assetKey,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetAssetSource(
+  playerId: playerId,
+  assetKey: assetKey,
+);
 
 /// 开始或恢复播放 / Starts or resumes playback.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
-Future<void>  playerPlay({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerPlay(playerId: playerId);
+Future<void> playerPlay({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerPlay(playerId: playerId);
 
 /// 暂停播放 / Pauses playback.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
-Future<void>  playerPause({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerPause(playerId: playerId);
+Future<void> playerPause({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerPause(playerId: playerId);
 
 /// 停止播放（pipeline → NULL）/ Stops playback (pipeline to NULL).
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
-Future<void>  playerStop({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerStop(playerId: playerId);
+Future<void> playerStop({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerStop(playerId: playerId);
 
 /// 跳转到指定位置 / Seeks to a position.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `position_ms` — 目标位置（毫秒）/ target position in milliseconds
-Future<void>  playerSeek({required PlatformInt64 playerId , required PlatformInt64 positionMs }) => RustLib.instance.api.crateApiPlayerPlayerSeek(playerId: playerId, positionMs: positionMs);
+Future<void> playerSeek({
+  required PlatformInt64 playerId,
+  required PlatformInt64 positionMs,
+}) => RustLib.instance.api.crateApiPlayerPlayerSeek(
+  playerId: playerId,
+  positionMs: positionMs,
+);
 
 /// 设置音量 / Sets playback volume.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `volume` — 0.0–1.0（具体 clamp 由 engine 负责）/ 0.0–1.0, clamped by engine
-Future<void>  playerSetVolume({required PlatformInt64 playerId , required double volume }) => RustLib.instance.api.crateApiPlayerPlayerSetVolume(playerId: playerId, volume: volume);
+Future<void> playerSetVolume({
+  required PlatformInt64 playerId,
+  required double volume,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetVolume(
+  playerId: playerId,
+  volume: volume,
+);
 
 /// 设置静音 / Sets mute state.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `mute` — `true` 静音 / `true` to mute
-Future<void>  playerSetMute({required PlatformInt64 playerId , required bool mute }) => RustLib.instance.api.crateApiPlayerPlayerSetMute(playerId: playerId, mute: mute);
+Future<void> playerSetMute({
+  required PlatformInt64 playerId,
+  required bool mute,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetMute(
+  playerId: playerId,
+  mute: mute,
+);
 
 /// 设置播放速率 / Sets playback speed.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `speed` — 倍速，如 1.0、1.5 / speed multiplier
-Future<void>  playerSetSpeed({required PlatformInt64 playerId , required double speed }) => RustLib.instance.api.crateApiPlayerPlayerSetSpeed(playerId: playerId, speed: speed);
+Future<void> playerSetSpeed({
+  required PlatformInt64 playerId,
+  required double speed,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetSpeed(
+  playerId: playerId,
+  speed: speed,
+);
 
 /// 设置循环播放 / Sets looping.
 ///
 /// # 参数 / Parameters
 /// - `player_id` — 播放器 ID / player id
 /// - `looping` — `true` 在 EOS 时循环 / `true` to loop at EOS
-Future<void>  playerSetLooping({required PlatformInt64 playerId , required bool looping }) => RustLib.instance.api.crateApiPlayerPlayerSetLooping(playerId: playerId, looping: looping);
+Future<void> playerSetLooping({
+  required PlatformInt64 playerId,
+  required bool looping,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetLooping(
+  playerId: playerId,
+  looping: looping,
+);
 
 /// 查询当前播放位置 / Returns current playback position.
 ///
@@ -150,29 +237,45 @@ Future<void>  playerSetLooping({required PlatformInt64 playerId , required bool 
 ///
 /// # 返回值 / Returns
 /// - 位置（毫秒）/ position in milliseconds
-Future<PlatformInt64>  playerPosition({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerPosition(playerId: playerId);
+Future<PlatformInt64> playerPosition({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerPosition(playerId: playerId);
 
 /// 查询媒体总时长 / Returns media duration.
 ///
 /// # 返回值 / Returns
 /// - 时长（毫秒），未知时可能为 0 / duration in ms, may be 0 if unknown
-Future<PlatformInt64>  playerDuration({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerDuration(playerId: playerId);
+Future<PlatformInt64> playerDuration({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerDuration(playerId: playerId);
 
 /// 查询是否可 seek / Returns whether seeking is supported.
-Future<bool>  playerIsSeekable({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerIsSeekable(playerId: playerId);
+Future<bool> playerIsSeekable({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerIsSeekable(playerId: playerId);
 
 /// 查询当前 pipeline 能力 / Returns active pipeline capabilities.
-Future<PipelineCapabilitiesDto>  playerGetPipelineCapabilities({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerGetPipelineCapabilities(playerId: playerId);
+Future<PipelineCapabilitiesDto> playerGetPipelineCapabilities({
+  required PlatformInt64 playerId,
+}) => RustLib.instance.api.crateApiPlayerPlayerGetPipelineCapabilities(
+  playerId: playerId,
+);
 
 /// 同步 VideoOverlay 矩形尺寸 / Syncs VideoOverlay rectangle dimensions.
 ///
 /// # 参数 / Parameters
 /// - `width` — overlay 宽（像素）/ width in pixels
 /// - `height` — overlay 高（像素）/ height in pixels
-Future<void>  syncVideoOverlayRectangle({required PlatformInt64 playerId , required int width , required int height }) => RustLib.instance.api.crateApiPlayerSyncVideoOverlayRectangle(playerId: playerId, width: width, height: height);
+Future<void> syncVideoOverlayRectangle({
+  required PlatformInt64 playerId,
+  required int width,
+  required int height,
+}) => RustLib.instance.api.crateApiPlayerSyncVideoOverlayRectangle(
+  playerId: playerId,
+  width: width,
+  height: height,
+);
 
 /// 获取可用轨道列表 / Returns available media tracks.
-Future<List<MediaTrack>>  playerGetTracks({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerGetTracks(playerId: playerId);
+Future<List<MediaTrack>> playerGetTracks({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerPlayerGetTracks(playerId: playerId);
 
 /// 选择或取消选择轨道 / Selects or deselects a track.
 ///
@@ -180,16 +283,42 @@ Future<List<MediaTrack>>  playerGetTracks({required PlatformInt64 playerId }) =>
 /// - `track_id` — GStreamer 流 ID / stream id
 /// - `track_type` — 轨道类型 / track type
 /// - `enable` — `true` 启用该轨 / `true` to enable
-Future<void>  playerSelectTrack({required PlatformInt64 playerId , required int trackId , required TrackType trackType , required bool enable }) => RustLib.instance.api.crateApiPlayerPlayerSelectTrack(playerId: playerId, trackId: trackId, trackType: trackType, enable: enable);
+Future<void> playerSelectTrack({
+  required PlatformInt64 playerId,
+  required int trackId,
+  required TrackType trackType,
+  required bool enable,
+}) => RustLib.instance.api.crateApiPlayerPlayerSelectTrack(
+  playerId: playerId,
+  trackId: trackId,
+  trackType: trackType,
+  enable: enable,
+);
 
 /// 获取当前视频元数据 / Returns current video metadata.
-Future<VideoMetadata>  playerGetVideoMetadata({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerPlayerGetVideoMetadata(playerId: playerId);
+Future<VideoMetadata> playerGetVideoMetadata({
+  required PlatformInt64 playerId,
+}) => RustLib.instance.api.crateApiPlayerPlayerGetVideoMetadata(
+  playerId: playerId,
+);
 
 /// 设置视频顺时针旋转角度（0、90、180 或 270）/ Sets clockwise video rotation in degrees.
-Future<void>  playerSetVideoRotation({required PlatformInt64 playerId , required int rotateDegrees }) => RustLib.instance.api.crateApiPlayerPlayerSetVideoRotation(playerId: playerId, rotateDegrees: rotateDegrees);
+Future<void> playerSetVideoRotation({
+  required PlatformInt64 playerId,
+  required int rotateDegrees,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetVideoRotation(
+  playerId: playerId,
+  rotateDegrees: rotateDegrees,
+);
 
 /// 设置宽高比缩放模式 / Sets aspect ratio scaling mode.
-Future<void>  playerSetAspectRatioMode({required PlatformInt64 playerId , required AspectRatioMode mode }) => RustLib.instance.api.crateApiPlayerPlayerSetAspectRatioMode(playerId: playerId, mode: mode);
+Future<void> playerSetAspectRatioMode({
+  required PlatformInt64 playerId,
+  required AspectRatioMode mode,
+}) => RustLib.instance.api.crateApiPlayerPlayerSetAspectRatioMode(
+  playerId: playerId,
+  mode: mode,
+);
 
 /// 销毁播放器并停止 pipeline / Tears down the player and stops the pipeline.
 ///
@@ -198,33 +327,26 @@ Future<void>  playerSetAspectRatioMode({required PlatformInt64 playerId , requir
 ///
 /// # 返回值 / Returns
 /// - 始终 `Ok(())`（幂等，重复 dispose 不报错）/ always `Ok(())` (idempotent)
-Future<void>  disposePlayer({required PlatformInt64 playerId }) => RustLib.instance.api.crateApiPlayerDisposePlayer(playerId: playerId);
+Future<void> disposePlayer({required PlatformInt64 playerId}) =>
+    RustLib.instance.api.crateApiPlayerDisposePlayer(playerId: playerId);
 
-            /// 创建播放器时返回的标识符 / Identifiers returned when a player is created.
+/// 创建播放器时返回的标识符 / Identifiers returned when a player is created.
 ///
 /// `player_id` 用于所有后续 FRB 控制调用；Platform View 应通过 `creationParams` 绑定相同 id。
 /// `player_id` addresses all subsequent control calls; bind a Platform View with the same id via `creationParams`.
-class PlayerHandle  {
-                /// 播放器唯一 ID / Unique player identifier.
-final PlatformInt64 playerId;
+class PlayerHandle {
+  /// 播放器唯一 ID / Unique player identifier.
+  final PlatformInt64 playerId;
 
-                const PlayerHandle({required this.playerId ,});
+  const PlayerHandle({required this.playerId});
 
-                
-                
+  @override
+  int get hashCode => playerId.hashCode;
 
-                
-        @override
-        int get hashCode => playerId.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is PlayerHandle &&
-                runtimeType == other.runtimeType
-                && playerId == other.playerId;
-        
-            }
-            
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlayerHandle &&
+          runtimeType == other.runtimeType &&
+          playerId == other.playerId;
+}

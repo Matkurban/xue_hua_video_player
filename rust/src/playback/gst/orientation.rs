@@ -59,10 +59,7 @@ fn update_videoflip_direction(flip: &gst::Element, rotate_degrees: i32) -> Resul
         return Ok(());
     }
     if flip.find_property("video-direction").is_some() {
-        flip.set_property(
-            "video-direction",
-            rotate_video_direction(rotate_degrees),
-        );
+        flip.set_property("video-direction", rotate_video_direction(rotate_degrees));
     } else if flip.find_property("method").is_some() {
         flip.set_property_from_str("method", rotate_method(rotate_degrees));
     }
@@ -80,10 +77,7 @@ pub(crate) fn make_videoflip_element() -> Result<gst::Element> {
 }
 
 /// 更新已链接管线中的 `videoflip` / Updates an in-pipeline `videoflip`.
-pub(crate) fn apply_rotation_to_element(
-    flip: &gst::Element,
-    rotate_degrees: i32,
-) -> Result<()> {
+pub(crate) fn apply_rotation_to_element(flip: &gst::Element, rotate_degrees: i32) -> Result<()> {
     validate_rotate_degrees(rotate_degrees)?;
     update_videoflip_direction(flip, rotate_degrees)
 }

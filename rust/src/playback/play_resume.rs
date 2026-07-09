@@ -346,9 +346,7 @@ mod tests {
     #[test]
     fn resume_playing_rejects_caller_held_shell_lock() {
         use crate::playback::bus::Emitter;
-        use crate::playback::gst::{
-            InternalAspectRatioMode, InternalVideoMetadata,
-        };
+        use crate::playback::gst::{InternalAspectRatioMode, InternalVideoMetadata};
         use crate::playback::shell::new_test_shell;
         use crate::playback::tracks::TrackCache;
         use gstreamer as gst;
@@ -398,9 +396,7 @@ mod tests {
     #[test]
     fn manual_eos_replay_resets_rate_to_one() {
         use crate::playback::bus::Emitter;
-        use crate::playback::gst::{
-            InternalAspectRatioMode, InternalVideoMetadata,
-        };
+        use crate::playback::gst::{InternalAspectRatioMode, InternalVideoMetadata};
         use crate::playback::shell::new_test_shell;
         use crate::playback::tracks::TrackCache;
         use gstreamer as gst;

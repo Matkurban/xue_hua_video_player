@@ -51,7 +51,9 @@ class PlaybackSession
   final FlutterSignal<bool> _supportsTracks = signal(true);
   final FlutterSignal<bool> _supportsOrientation = signal(false);
   final FlutterSignal<int> _mediaGeneration = signal(0);
-  final FlutterSignal<VideoRotation> _videoRotation = signal(VideoRotation.deg0);
+  final FlutterSignal<VideoRotation> _videoRotation = signal(
+    VideoRotation.deg0,
+  );
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   late final ReadonlySignal<int> mediaGeneration = _mediaGeneration;

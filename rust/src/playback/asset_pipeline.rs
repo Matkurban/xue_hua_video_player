@@ -17,7 +17,9 @@ use parking_lot::Mutex;
 use crate::media::AppSrcFeedState;
 use crate::playback::bus::Emitter;
 use crate::playback::frame::FrameSink;
-use crate::playback::gst::{create_platform_video_sink, make_videoflip_element, InternalVideoMetadata};
+use crate::playback::gst::{
+    create_platform_video_sink, make_videoflip_element, InternalVideoMetadata,
+};
 #[cfg(target_os = "android")]
 use crate::playback::sink::OverlaySizeSync;
 use crate::playback::sink::{attach_video_probe, build_audio_sink_bin};
@@ -35,7 +37,12 @@ pub fn build_asset_pipeline(
     metadata_cache: Option<Arc<Mutex<InternalVideoMetadata>>>,
     frame_sink: &Arc<FrameSink>,
     #[cfg(target_os = "android")] overlay_size_sync: Option<OverlaySizeSync>,
-) -> Result<(gst::Pipeline, gst::Element, Arc<AppSrcFeedState>, gst::Element)> {
+) -> Result<(
+    gst::Pipeline,
+    gst::Element,
+    Arc<AppSrcFeedState>,
+    gst::Element,
+)> {
     let pipeline = gst::Pipeline::new();
     let video_sink = create_platform_video_sink(frame_sink)?;
     attach_video_probe(
