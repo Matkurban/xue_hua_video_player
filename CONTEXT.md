@@ -110,6 +110,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 - Plugin podspecs remain for host apps that still use CocoaPods (`build_pod.sh` + `-force_load`).
 - CocoaPods injects `STRIP_STYLE=non-global` and Runner `-force_load` via `user_target_xcconfig` so Dart `DynamicLibrary.process()` / `dlsym` can resolve `xhvp_*` in Release/Archive.
 - SPM hosts (including this repo’s **example**) must set Runner Strip Style to **Non-Global Symbols** themselves; see README “Apple Release / FFI symbols”.
+- Under SPM, CocoaPods `vendored_frameworks` does **not** embed GStreamer. Hosts with a `macos/Podfile` must call `install_gstreamer_embed_script!` from [`macos/gstreamer_podfile_helper.rb`](macos/gstreamer_podfile_helper.rb) in `post_install` (see README). Pure-SPM example uses a Runner Run Script (`embed_gstreamer_framework.sh`).
 - `xhvp_ffi_retain_symbols()` (called from plugin `register`) keeps Dart-looked-up ABI symbols from dead-strip.
 - The **example** app is SPM-only (no `Podfile`); macOS Runner embeds GStreamer via an Xcode Run Script phase (`macos/scripts/embed_gstreamer_framework.sh`).
 - After editing `native/`, clean the example (`flutter clean`) so SPM/Pods recompile C; do not run from a stale copy under another path (e.g. `VideoPlayer/` vs `XueHuaPackages/`).

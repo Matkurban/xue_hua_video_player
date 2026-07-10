@@ -69,7 +69,7 @@ to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.4.3
+  xue_hua_video_player: ^1.4.4
 ```
 
 Then:
@@ -292,10 +292,44 @@ build with a clean tree and symbolicate with
 
 ### macOS
 
-The Mac App Store requires **App Sandbox**. This plugin automatically embeds the
-official `GStreamer.framework` into `.app/Contents/Frameworks/` at build time;
-the Rust core configures `GST_PLUGIN_SYSTEM_PATH` and `GIO_MODULE_DIR` at
-startup — no manual Xcode Copy Files phase.
+The Mac App Store requires **App Sandbox**. At runtime the C core configures
+`GST_PLUGIN_SYSTEM_PATH` and `GIO_MODULE_DIR` for the embedded framework.
+
+**Important:** when Flutter integrates this plugin via **Swift Package Manager**
+(SPM — default when `Package.swift` is present), CocoaPods
+`vendored_frameworks` does **not** run, so GStreamer is **not** copied into the
+`.app` automatically. Without an embed step you get:
+
+```text
+dyld: Library not loaded: @rpath/GStreamer.framework/Versions/1.0/lib/GStreamer
+```
+
+#### Embed GStreamer (required for SPM hosts with a Podfile)
+
+In `macos/Podfile`, resolve the plugin and call the helper from `post_install`:
+
+```ruby
+require 'json'
+plugins = JSON.parse(File.read(File.expand_path('../.flutter-plugins-dependencies', __dir__)))
+xhvp = plugins.dig('plugins', 'macos')&.find { |p| p['name'] == 'xue_hua_video_player' }
+raise 'xue_hua_video_player not found; run flutter pub get first' unless xhvp
+require File.expand_path('macos/gstreamer_podfile_helper.rb', xhvp['path'])
+
+# ...
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_macos_build_settings(target)
+  end
+  install_gstreamer_embed_script!(installer)
+end
+```
+
+Then `cd macos && pod install`. This adds an Xcode Run Script that copies the
+slim runtime into `YourApp.app/Contents/Frameworks/GStreamer.framework`.
+
+Pure-SPM apps without a Podfile (this repo’s `example`): keep the existing
+Runner Run Script that calls `macos/scripts/embed_gstreamer_framework.sh`.
 
 Add at minimum to `macos/Runner/DebugProfile.entitlements` and
 `Release.entitlements`:
@@ -489,18 +523,24 @@ custom paths). Maintainers may still run `sh tool/setup_gstreamer_macos.sh
 #### Consumers: build setup
 
 1. Enable App Sandbox + `com.apple.security.network.client` (see
-   [Permissions](#permissions-per-platform)).
-2. Run `flutter pub get`, then `cd macos && pod install` (first run downloads
-   the GStreamer cache automatically).
-3. Run `flutter build macos --release` and verify
-   `YourApp.app/Contents/Frameworks/GStreamer.framework` exists.
+   [Permissions](#permissions--platform-configuration)).
+2. Run `flutter pub get`.
+3. Wire the GStreamer embed helper into `macos/Podfile` `post_install` (see
+   [macOS](#macos) — **required under SPM**), then `cd macos && pod install`
+   (first run downloads the GStreamer cache if needed).
+4. Run `flutter build macos --release` and verify
+   `YourApp.app/Contents/Frameworks/GStreamer.framework` exists:
 
-The plugin embeds GStreamer via CocoaPods `vendored_frameworks` — **no Podfile
-changes required**.
+```bash
+ls YourApp.app/Contents/Frameworks/GStreamer.framework/Versions/1.0/lib/GStreamer
+```
 
-The Rust core sets `GST_PLUGIN_SYSTEM_PATH`, `GIO_MODULE_DIR`, and a writable
-`GST_REGISTRY` before `gst::init()` (`setup_macos_env()` in
-`rust/src/player.rs`).
+If that path is missing, dyld will fail at launch with
+`Library not loaded: @rpath/GStreamer.framework/...`.
+
+The C core sets `GST_PLUGIN_SYSTEM_PATH`, `GIO_MODULE_DIR`, and a writable
+`GST_REGISTRY` before `gst_init()` (`xhvp_setup_macos_env()` in
+`native/src/apple_env.c`).
 
 #### Local Homebrew dev (not for MAS)
 
@@ -694,9 +734,10 @@ source (`XHVP_GSTREAMER_SRC`). See [third_party/gstreamer.md](third_party/gstrea
   files were installed and `PKG_CONFIG_PATH` points at
   `...\1.0\msvc_x86_64\lib\pkgconfig`.
 - **macOS black screen / dyld cannot load GStreamer:** confirm
-  `.app/Contents/Frameworks/GStreamer.framework` exists; if missing, re-run
-  `cd macos && pod install` (**v1.0.4+** embeds via `vendored_frameworks`
-  automatically). Enable sandbox `network.client`; for Homebrew-only dev set
+  `.app/Contents/Frameworks/GStreamer.framework` exists. Under SPM this requires
+  `install_gstreamer_embed_script!(installer)` in `macos/Podfile` `post_install`
+  (see [macOS](#macos)), then `pod install` and rebuild. Enable sandbox
+  `network.client`; for Homebrew-only dev set
   `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` (store builds require the official
   framework).
 

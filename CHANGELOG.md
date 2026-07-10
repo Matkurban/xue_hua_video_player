@@ -1,3 +1,14 @@
+## 1.4.4
+
+### Bug fixes
+
+- **macOS SPM: `dyld: Library not loaded: @rpath/GStreamer.framework/...`**:
+  Flutter’s SPM integration skips CocoaPods `vendored_frameworks`, so GStreamer
+  was never copied into the `.app`. Revive
+  `macos/gstreamer_podfile_helper.rb` — call `install_gstreamer_embed_script!`
+  from the host `macos/Podfile` `post_install` (see README). Pure-SPM apps keep
+  the example Run Script.
+
 ## 1.4.3
 
 ### Bug fixes

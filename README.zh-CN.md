@@ -65,7 +65,7 @@
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.4.3
+  xue_hua_video_player: ^1.4.4
 ```
 
 然后执行：
@@ -233,9 +233,43 @@ Android 仍遵循
 
 ### macOS
 
-Mac App Store 要求开启 **App Sandbox**。本插件会在构建时自动将官方 `GStreamer.framework`
-嵌入 `.app/Contents/Frameworks/`，Rust 核心在启动时配置 `GST_PLUGIN_SYSTEM_PATH` 与
-`GIO_MODULE_DIR`，无需在 Xcode 里手动 Copy Files。
+Mac App Store 要求开启 **App Sandbox**。运行时 C 核心会为已嵌入的 framework 配置
+`GST_PLUGIN_SYSTEM_PATH` 与 `GIO_MODULE_DIR`。
+
+**重要：** Flutter 通过 **Swift Package Manager（SPM）** 集成本插件时（存在
+`Package.swift` 时的默认路径），CocoaPods 的 `vendored_frameworks` **不会**执行，
+因此 **不会**自动把 GStreamer 拷进 `.app`。缺少嵌入步骤会出现：
+
+```text
+dyld: Library not loaded: @rpath/GStreamer.framework/Versions/1.0/lib/GStreamer
+```
+
+#### 嵌入 GStreamer（带 Podfile 的 SPM 宿主必做）
+
+在 `macos/Podfile` 中解析插件路径，并在 `post_install` 调用 helper：
+
+```ruby
+require 'json'
+plugins = JSON.parse(File.read(File.expand_path('../.flutter-plugins-dependencies', __dir__)))
+xhvp = plugins.dig('plugins', 'macos')&.find { |p| p['name'] == 'xue_hua_video_player' }
+raise 'xue_hua_video_player not found; run flutter pub get first' unless xhvp
+require File.expand_path('macos/gstreamer_podfile_helper.rb', xhvp['path'])
+
+# ...
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_macos_build_settings(target)
+  end
+  install_gstreamer_embed_script!(installer)
+end
+```
+
+然后执行 `cd macos && pod install`。这会给 Runner 增加 Run Script，把 slim runtime
+拷到 `YourApp.app/Contents/Frameworks/GStreamer.framework`。
+
+无 Podfile 的纯 SPM 工程（本仓库 `example`）：保留调用
+`macos/scripts/embed_gstreamer_framework.sh` 的 Runner Run Script。
 
 在 `macos/Runner/DebugProfile.entitlements` 和 `Release.entitlements` 中至少加入：
 
@@ -414,14 +448,22 @@ Rust 核心在构建时链接 GStreamer，所以构建时必须能找到 GStream
 #### 消费方：构建配置
 
 1. 开启 App Sandbox + `com.apple.security.network.client`（见 [权限](#权限与各平台配置)）。
-2. `flutter pub get` → `cd macos && pod install`（首次会自动下载 GStreamer 缓存）。
-3. `flutter build macos --release`，确认产物中存在
-   `YourApp.app/Contents/Frameworks/GStreamer.framework`。
+2. 执行 `flutter pub get`。
+3. 按 [macOS](#macos) 将 GStreamer embed helper 写入 `macos/Podfile` 的
+   `post_install`（**SPM 下必做**），再 `cd macos && pod install`（首次会按需下载
+   GStreamer 缓存）。
+4. `flutter build macos --release`，确认产物中存在
+   `YourApp.app/Contents/Frameworks/GStreamer.framework`：
 
-插件通过 CocoaPods `vendored_frameworks` 自动嵌入 GStreamer，**无需**修改 `Podfile`。
+```bash
+ls YourApp.app/Contents/Frameworks/GStreamer.framework/Versions/1.0/lib/GStreamer
+```
 
-Rust 核心会在 `gst::init()` 前设置 `GST_PLUGIN_SYSTEM_PATH`、`GIO_MODULE_DIR` 以及沙盒可写的
-`GST_REGISTRY` 路径（见 `rust/src/player.rs` 中的 `setup_macos_env()`）。
+若该路径不存在，启动会报
+`Library not loaded: @rpath/GStreamer.framework/...`。
+
+C 核心会在 `gst_init()` 前设置 `GST_PLUGIN_SYSTEM_PATH`、`GIO_MODULE_DIR` 以及沙盒可写的
+`GST_REGISTRY` 路径（见 `native/src/apple_env.c` 中的 `xhvp_setup_macos_env()`）。
 
 #### 本地 Homebrew 调试（非 MAS）
 
@@ -589,9 +631,10 @@ dart run ffigen --config ffigen.yaml
 - **Windows `pkg-config` 找不到 `glib-2.0`**：确认已安装**开发**文件，且 `PKG_CONFIG_PATH`
   指向 `...\1.0\msvc_x86_64\lib\pkgconfig`。
 - **macOS 黑屏 / dyld 找不到 GStreamer**：确认
-  `.app/Contents/Frameworks/GStreamer.framework` 已存在；若缺失，重新
-  `cd macos && pod install`（需 **v1.0.4+**，通过 `vendored_frameworks` 自动嵌入）。
-  沙盒需开启 `network.client`；Homebrew 调试请设置
+  `.app/Contents/Frameworks/GStreamer.framework` 已存在。SPM 下需在
+  `macos/Podfile` 的 `post_install` 调用 `install_gstreamer_embed_script!`
+  （见 [macOS](#macos)），再 `pod install` 并重新构建。沙盒需开启
+  `network.client`；Homebrew 调试请设置
   `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1`（上架必须用官方 Framework）。
 
 ## 维护者
