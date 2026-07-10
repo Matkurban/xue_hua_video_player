@@ -54,3 +54,16 @@ done
 
 rm -f "${refs_file}"
 echo "[xue_hua_video_player] Orphan dylib cleanup removed ${removed} file(s)"
+
+# Removing an intermediate versioned symlink (e.g. libtag.1.dylib) can leave
+# dangling links (libtag.dylib -> libtag.1.dylib). Drop those so codesign
+# does not fail with "No such file or directory".
+dangling=0
+while IFS= read -r -d '' link; do
+  rm -f "${link}"
+  dangling=$((dangling + 1))
+  echo "[xue_hua_video_player] Removed dangling symlink: $(basename "${link}")"
+done < <(find "${LIB_DIR}" -type l ! -exec test -e {} \; -print0 2>/dev/null)
+if [[ "${dangling}" -gt 0 ]]; then
+  echo "[xue_hua_video_player] Dangling symlink cleanup removed ${dangling} link(s)"
+fi

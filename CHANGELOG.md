@@ -1,3 +1,12 @@
+## 1.4.5
+
+### Bug fixes
+
+- **macOS embed codesign: `libtag.dylib: No such file or directory`**: orphan
+  dylib prune could leave dangling versioned symlinks; with a real signing
+  identity `codesign` then failed the embed Run Script. Prune now deletes
+  dangling links, and embed only codesigns regular `-type f` Mach-Os.
+
 ## 1.4.4
 
 ### Bug fixes

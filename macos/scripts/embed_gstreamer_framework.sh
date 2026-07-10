@@ -53,9 +53,11 @@ sign_if_needed() {
 
 identity="${EXPANDED_CODE_SIGN_IDENTITY:-}"
 if [[ -n "${identity}" ]] && [[ "${identity}" != "-" ]]; then
+  # Only regular files — skip symlinks (dangling ones break codesign).
   while IFS= read -r -d '' lib; do
+    [[ -f "${lib}" ]] || continue
     sign_if_needed "${lib}"
-  done < <(find "${DEST}" \( -name '*.dylib' -o -name '*.so' \) -print0)
+  done < <(find "${DEST}" \( -name '*.dylib' -o -name '*.so' \) -type f -print0)
 fi
 
 sign_if_needed "${DEST}"
