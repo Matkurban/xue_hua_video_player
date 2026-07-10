@@ -132,6 +132,107 @@ GstElement *xhvp_desktop_make_video_sink(XhvpPlayer *p) {
 #if defined(__ANDROID__)
 #include <android/native_window.h>
 
+/* Update layout metadata from negotiated video caps and notify Dart.
+ * Android has no appsink frames; without this, aspectRatio stays at 16:9 and
+ * portrait content is double-letterboxed into a landscape SurfaceProducer. */
+static void xhvp_apply_video_size_from_caps(XhvpPlayer *p, GstCaps *caps) {
+  if (!p || !caps || gst_caps_is_empty(caps) || gst_caps_is_any(caps)) {
+    return;
+  }
+  const GstStructure *s = gst_caps_get_structure(caps, 0);
+  if (!s) {
+    return;
+  }
+  gint width = 0;
+  gint height = 0;
+  if (!gst_structure_get_int(s, "width", &width) ||
+      !gst_structure_get_int(s, "height", &height) || width <= 0 ||
+      height <= 0) {
+    return;
+  }
+  gint par_n = 1;
+  gint par_d = 1;
+  gst_structure_get_fraction(s, "pixel-aspect-ratio", &par_n, &par_d);
+  if (par_n <= 0) {
+    par_n = 1;
+  }
+  if (par_d <= 0) {
+    par_d = 1;
+  }
+  const gint dar_n = width * par_n;
+  const gint dar_d = height * par_d;
+  if (p->width == width && p->height == height && p->par_n == par_n &&
+      p->par_d == par_d && p->dar_n == dar_n && p->dar_d == dar_d) {
+    return;
+  }
+  p->width = width;
+  p->height = height;
+  p->par_n = par_n;
+  p->par_d = par_d;
+  p->dar_n = dar_n;
+  p->dar_d = dar_d;
+  xhvp_player_emit(p, XHVP_EVENT_VIDEO_SIZE, "");
+  xhvp_player_emit(p, XHVP_EVENT_METADATA_CHANGED, "");
+}
+
+static GstPadProbeReturn xhvp_android_sink_caps_probe(GstPad *pad,
+                                                      GstPadProbeInfo *info,
+                                                      gpointer user_data) {
+  XhvpPlayer *p = user_data;
+  if (!p || !p->in_use) {
+    return GST_PAD_PROBE_OK;
+  }
+  if (!(info->type & GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM)) {
+    return GST_PAD_PROBE_OK;
+  }
+  GstEvent *event = GST_PAD_PROBE_INFO_EVENT(info);
+  if (!event || GST_EVENT_TYPE(event) != GST_EVENT_CAPS) {
+    return GST_PAD_PROBE_OK;
+  }
+  GstCaps *caps = NULL;
+  gst_event_parse_caps(event, &caps);
+  if (caps) {
+    xhvp_apply_video_size_from_caps(p, caps);
+  }
+  (void)pad;
+  return GST_PAD_PROBE_OK;
+}
+
+static void xhvp_try_update_video_size_from_sink(XhvpPlayer *p) {
+  if (!p || !p->pipeline) {
+    return;
+  }
+  GstElement *overlay = NULL;
+  if (p->overlay_element && GST_IS_ELEMENT(p->overlay_element)) {
+    overlay = gst_object_ref(p->overlay_element);
+  } else {
+    GstElement *vsink = NULL;
+    g_object_get(p->pipeline, "video-sink", &vsink, NULL);
+    if (vsink) {
+      if (GST_IS_BIN(vsink)) {
+        overlay = gst_bin_get_by_name(GST_BIN(vsink), "xhvp-glimagesink");
+      } else {
+        overlay = gst_object_ref(vsink);
+      }
+      gst_object_unref(vsink);
+    }
+  }
+  if (!overlay) {
+    return;
+  }
+  GstPad *sinkpad = gst_element_get_static_pad(overlay, "sink");
+  gst_object_unref(overlay);
+  if (!sinkpad) {
+    return;
+  }
+  GstCaps *caps = gst_pad_get_current_caps(sinkpad);
+  if (caps) {
+    xhvp_apply_video_size_from_caps(p, caps);
+    gst_caps_unref(caps);
+  }
+  gst_object_unref(sinkpad);
+}
+
 GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
   /* MediaCodec (amcvideodec) emits GLMemory / external-OES. The sink bin must
    * bridge with glupload → glcolorconvert before gltransformation/glimagesink.
@@ -165,6 +266,10 @@ GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
     return NULL;
   }
 
+  /* Dart FittedBox owns fit/fill/stretch; native must fill the buffer or
+   * portrait frames are letterboxed into a landscape SurfaceProducer. */
+  g_object_set(sink, "force-aspect-ratio", FALSE, NULL);
+
   GstElement *bin = gst_bin_new("xhvp-video-sink");
   gst_bin_add_many(GST_BIN(bin), glupload, glcc, glt, sink, NULL);
   if (!gst_element_link_many(glupload, glcc, glt, sink, NULL)) {
@@ -181,6 +286,14 @@ GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
   p->orient_element = glt;
   p->overlay_element = GST_IS_VIDEO_OVERLAY(sink) ? sink : NULL;
   xhvp_apply_orient_element(glt, p->rotate_degrees);
+
+  /* Post-transform pad: size matches what is drawn into the overlay window. */
+  GstPad *sink_pad = gst_element_get_static_pad(sink, "sink");
+  if (sink_pad) {
+    gst_pad_add_probe(sink_pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+                      xhvp_android_sink_caps_probe, p, NULL);
+    gst_object_unref(sink_pad);
+  }
   return bin;
 }
 
@@ -586,6 +699,9 @@ int32_t xhvp_pipeline_load_uri(XhvpPlayer *p, const char *uri, bool auto_play) {
   }
 
   xhvp_player_set_state(p, XHVP_STATE_READY);
+  /* Caps may already be negotiated after preroll; emit size so Dart layout
+   * does not stay on the 16:9 fallback until the next CAPS event. */
+  xhvp_try_update_video_size_from_sink(p);
 
   /* Do not return play()'s result as load failure: buffering/autoplug can
    * make set_state(PLAYING) report FAILURE while the pipeline is usable. */
@@ -1127,6 +1243,8 @@ int32_t xhvp_pipeline_set_aspect(XhvpPlayer *p, int32_t mode) {
   if (mode < 0 || mode > 2) {
     return XHVP_ERR_FAIL;
   }
+  /* Stored for API compatibility. Layout (fit/fill/stretch) is owned by Dart
+   * FittedBox; Android glimagesink keeps force-aspect-ratio=false. */
   p->aspect_mode = mode;
   return XHVP_ERR_OK;
 }

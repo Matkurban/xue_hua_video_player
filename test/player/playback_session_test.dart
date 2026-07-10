@@ -271,6 +271,16 @@ void main() {
       expect(session.aspectRatio.value, closeTo(4 / 3, 0.001));
     });
 
+    test('portrait videoSize drives aspectRatio below 1', () async {
+      await session.initialize();
+      port.emit(
+        event(kind: PlayerEventKind.videoSize, width: 1080, height: 1920),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.videoSize.value, const Size(1080, 1920));
+      expect(session.aspectRatio.value, closeTo(9 / 16, 0.001));
+    });
+
     test(
       'metadataChanged does not clobber isSeekable from capabilities',
       () async {

@@ -113,10 +113,15 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 ## Presentation layout (Dart)
 
 - Aspect ratio modes (`fit` / `fill` / `stretch`) are applied in
-  `PlaybackPresentation` via `FittedBox` (Android also forwards mode to the sink).
+  `PlaybackPresentation` via `FittedBox`. Dart owns letterboxing; Android
+  `glimagesink` uses `force-aspect-ratio=false` so the sink fills the buffer
+  (native must not letterbox again into a landscape SurfaceProducer).
   The FittedBox child is a unit `SizedBox(width: ratio, height: 1)`; Android
   `SurfaceProducer.setSize` uses the fitted video rect (video aspect via
   `applyBoxFit` / cover scale), not that unit box and not the raw viewport.
+- Android has no appsink frames: emit `VIDEO_SIZE` / `METADATA_CHANGED` from
+  negotiated `glimagesink` sink-pad caps (pad probe + post-PAUSED query) so
+  Dart `aspectRatio` is not stuck on the 16:9 fallback for portrait media.
 - Video rotation is applied in the native video-sink bin (`videoflip` on
   desktop/Apple, `gltransformation` on Android). Dart does not transform the
   Texture; letterboxing follows post-rotation width/height from the pipeline.

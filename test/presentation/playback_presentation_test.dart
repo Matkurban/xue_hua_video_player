@@ -395,4 +395,35 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
   });
+
+  group('androidBufferLogicalSize', () {
+    test('portrait 9:16 fit fills width in a portrait viewport', () {
+      const viewport = Size(390, 844);
+      const ratio = 9 / 16;
+      final size = androidBufferLogicalSize(
+        aspectRatio: ratio,
+        mode: AspectRatioMode.fit,
+        viewport: viewport,
+      );
+
+      expect(size.width, closeTo(viewport.width, 0.5));
+      expect(size.height, closeTo(viewport.width / ratio, 0.5));
+      expect(size.height, lessThan(viewport.height));
+      // Must keep portrait aspect — not a tiny centered 16:9 postage stamp.
+      expect(size.width / size.height, closeTo(ratio, 0.01));
+    });
+
+    test('landscape 16:9 fit does not use portrait viewport aspect', () {
+      const viewport = Size(390, 844);
+      const ratio = 16 / 9;
+      final size = androidBufferLogicalSize(
+        aspectRatio: ratio,
+        mode: AspectRatioMode.fit,
+        viewport: viewport,
+      );
+
+      expect(size.width / size.height, closeTo(ratio, 0.01));
+      expect(size.height, lessThan(viewport.height));
+    });
+  });
 }

@@ -66,12 +66,11 @@ class PlaybackPresentation extends StatelessWidget {
                         constraints.maxWidth,
                         constraints.maxHeight,
                       );
-                      final bufferLogical =
-                          _VideoAspectLayout.androidBufferLogicalSize(
-                            aspectRatio: ratio,
-                            mode: mode,
-                            viewport: viewport,
-                          );
+                      final bufferLogical = androidBufferLogicalSize(
+                        aspectRatio: ratio,
+                        mode: mode,
+                        viewport: viewport,
+                      );
                       // Size.zero → null so TextureVideoSurface can MediaQuery-fallback.
                       final androidLayout =
                           bufferLogical.width > 1 && bufferLogical.height > 1
@@ -98,6 +97,44 @@ class PlaybackPresentation extends StatelessWidget {
   }
 }
 
+/// Maps [AspectRatioMode] to the [BoxFit] used by presentation layout.
+BoxFit boxFitForAspectRatioMode(AspectRatioMode mode) {
+  return switch (mode) {
+    AspectRatioMode.fit => BoxFit.contain,
+    AspectRatioMode.fill => BoxFit.cover,
+    AspectRatioMode.stretch => BoxFit.fill,
+  };
+}
+
+/// Logical size for Android [SurfaceProducer.setSize]: matches Texture aspect.
+///
+/// Uses the fitted video rectangle (video aspect via [applyBoxFit] / cover
+/// scale), not the raw viewport — a portrait viewport buffer mapped into a
+/// landscape Texture would squash height.
+Size androidBufferLogicalSize({
+  required double aspectRatio,
+  required AspectRatioMode mode,
+  required Size viewport,
+}) {
+  if (!viewport.width.isFinite ||
+      !viewport.height.isFinite ||
+      viewport.width <= 1 ||
+      viewport.height <= 1) {
+    return Size.zero;
+  }
+  final ratio = aspectRatio > 0 ? aspectRatio : 16 / 9;
+  final input = Size(ratio, 1.0);
+  final fit = boxFitForAspectRatioMode(mode);
+  if (fit == BoxFit.fill) {
+    return viewport;
+  }
+  if (fit == BoxFit.cover) {
+    final s = math.max(viewport.width / ratio, viewport.height);
+    return Size(ratio * s, s);
+  }
+  return applyBoxFit(BoxFit.contain, input, viewport).destination;
+}
+
 /// 为外部 [Texture] 渲染计算视频 widget 尺寸 / Sizes the video widget for external [Texture] rendering.
 ///
 /// 三种 mode 共用同一 widget 树，仅 [BoxFit] 不同，避免 reparent Texture 子树。
@@ -117,46 +154,13 @@ class _VideoAspectLayout extends StatelessWidget {
   final AspectRatioMode mode;
   final Widget child;
 
-  static BoxFit boxFitForMode(AspectRatioMode mode) {
-    return switch (mode) {
-      AspectRatioMode.fit => BoxFit.contain,
-      AspectRatioMode.fill => BoxFit.cover,
-      AspectRatioMode.stretch => BoxFit.fill,
-    };
-  }
-
-  /// Logical size for Android [SurfaceProducer.setSize]: matches Texture aspect.
-  static Size androidBufferLogicalSize({
-    required double aspectRatio,
-    required AspectRatioMode mode,
-    required Size viewport,
-  }) {
-    if (!viewport.width.isFinite ||
-        !viewport.height.isFinite ||
-        viewport.width <= 1 ||
-        viewport.height <= 1) {
-      return Size.zero;
-    }
-    final ratio = aspectRatio > 0 ? aspectRatio : 16 / 9;
-    final input = Size(ratio, 1.0);
-    final fit = boxFitForMode(mode);
-    if (fit == BoxFit.fill) {
-      return viewport;
-    }
-    if (fit == BoxFit.cover) {
-      final s = math.max(viewport.width / ratio, viewport.height);
-      return Size(ratio * s, s);
-    }
-    return applyBoxFit(BoxFit.contain, input, viewport).destination;
-  }
-
   @override
   Widget build(BuildContext context) {
     final ratio = aspectRatio > 0 ? aspectRatio : 16 / 9;
 
     return SizedBox.expand(
       child: FittedBox(
-        fit: boxFitForMode(mode),
+        fit: boxFitForAspectRatioMode(mode),
         alignment: Alignment.center,
         clipBehavior: Clip.hardEdge,
         child: SizedBox(width: ratio, height: 1, child: child),

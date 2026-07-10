@@ -1,3 +1,14 @@
+## 1.4.1
+
+### Bug fixes
+
+- **Android portrait video tiny in center**: emit `VIDEO_SIZE` /
+  `METADATA_CHANGED` from negotiated `glimagesink` sink-pad caps (pad probe +
+  post-PAUSED query) so Dart `aspectRatio` is not stuck on the 16:9 fallback.
+  Set `glimagesink` `force-aspect-ratio=false` so Dart `FittedBox` owns
+  fit/fill/stretch and native does not double-letterbox into a landscape
+  SurfaceProducer.
+
 ## 1.4.0
 
 ### Breaking changes
