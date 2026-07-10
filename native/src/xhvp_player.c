@@ -29,7 +29,7 @@ void xhvp_player_set_state(XhvpPlayer *p, int32_t state) {
   xhvp_player_emit(p, XHVP_EVENT_STATE_CHANGED, "");
 }
 
-const char *xhvp_version(void) { return "1.4.5"; }
+const char *xhvp_version(void) { return "1.4.6"; }
 
 int32_t xhvp_init(void) { return xhvp_runtime_start(); }
 

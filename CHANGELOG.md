@@ -1,3 +1,12 @@
+## 1.4.6
+
+### Bug fixes
+
+- **macOS MAS ITMS-90296 (App sandbox not enabled)**: embedded
+  `gst-plugin-scanner` / `gst-ptp-helper` under `libexec` lacked
+  `com.apple.security.app-sandbox`. Strip now removes `Versions/1.0/libexec`
+  (same as `bin`); playback uses in-process plugin scanning.
+
 ## 1.4.5
 
 ### Bug fixes
