@@ -32,6 +32,9 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     required this.bufferingScrimColor,
     required this.bufferingIndicatorColor,
     required this.bufferingTextColor,
+    required this.fitScreenIcon,
+    required this.fillScreenIcon,
+    required this.stretchScreenIcon,
     this.bufferingTextStyle,
   });
 
@@ -48,11 +51,14 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     primaryIconSize: 24,
     secondaryIconSize: 20,
     centerButtonSize: 48,
-    barPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    barPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     borderRadius: 0,
     bufferingScrimColor: Colors.transparent,
     bufferingIndicatorColor: Color(0xFFFFFFFF),
     bufferingTextColor: Color(0xFFFFFFFF),
+    fitScreenIcon: Icons.fit_screen,
+    fillScreenIcon: Icons.crop_free,
+    stretchScreenIcon: Icons.aspect_ratio,
   );
 
   /// Cupertino 预设（细轨道、圆角半透明栏）/ Cupertino preset.
@@ -73,6 +79,9 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     bufferingScrimColor: Colors.transparent,
     bufferingIndicatorColor: Color(0xFFEBEBF5),
     bufferingTextColor: Color(0xFFEBEBF5),
+    fitScreenIcon: Icons.fit_screen,
+    fillScreenIcon: Icons.crop_free,
+    stretchScreenIcon: Icons.aspect_ratio,
   );
 
   /// 空闲控件图标颜色 / Color of idle control icons.
@@ -125,4 +134,13 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
 
   /// 缓冲进度文字样式；为 null 时用 [bufferingTextColor] + 默认字号 / Optional buffering label style.
   final TextStyle? bufferingTextStyle;
+
+  /// 铺满模式适应图标 / Icon for fit mode.
+  final IconData fitScreenIcon;
+
+  /// 铺满模式铺满图标 / Icon for fill mode.
+  final IconData fillScreenIcon;
+
+  /// 铺满模式拉伸图标 / Icon for stretch mode.
+  final IconData stretchScreenIcon;
 }

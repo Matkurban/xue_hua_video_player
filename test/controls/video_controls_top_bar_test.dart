@@ -72,7 +72,7 @@ void main() {
           ),
         );
 
-        expect(find.text('适应'), findsNothing);
+        expect(find.byIcon(Icons.fit_screen), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -113,7 +113,7 @@ void main() {
         );
 
         expect(find.text('Episode 1'), findsOneWidget);
-        expect(find.text('适应'), findsOneWidget);
+        expect(find.byIcon(Icons.fit_screen), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

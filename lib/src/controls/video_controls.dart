@@ -302,7 +302,6 @@ class _VideoControlsState extends State<VideoControls> {
             model: widget.model,
             theme: theme,
             slots: widget.immersive.fullscreen.value.overlaySlots,
-            labels: widget.immersive.fullscreen.value.aspectRatioLabels,
             orientationLabels:
                 widget.immersive.fullscreen.value.orientationLabels,
             showOrientationMenu:

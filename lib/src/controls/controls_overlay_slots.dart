@@ -9,6 +9,7 @@ class VideoControlsOverlaySlots {
     this.actions = const [],
     this.actionsPadding = const EdgeInsets.only(right: 8),
     this.showAspectRatioMenu = true,
+    this.actionsSpacing = 6.0,
   });
 
   /// 左侧 leading 插槽 / Leading slot (e.g. back button).
@@ -26,6 +27,9 @@ class VideoControlsOverlaySlots {
   /// 是否在 actions 末尾追加铺满模式按钮 / Append aspect ratio menu to actions.
   final bool showAspectRatioMenu;
 
+  /// actions 区域子控件的间距 / Spacing between action widgets.
+  final double actionsSpacing;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -34,7 +38,8 @@ class VideoControlsOverlaySlots {
           title == other.title &&
           _listEquals(actions, other.actions) &&
           actionsPadding == other.actionsPadding &&
-          showAspectRatioMenu == other.showAspectRatioMenu;
+          showAspectRatioMenu == other.showAspectRatioMenu &&
+          actionsSpacing == other.actionsSpacing;
 
   @override
   int get hashCode => Object.hash(
@@ -43,6 +48,7 @@ class VideoControlsOverlaySlots {
     Object.hashAll(actions),
     actionsPadding,
     showAspectRatioMenu,
+    actionsSpacing,
   );
 
   static bool _listEquals(List<Widget> a, List<Widget> b) {

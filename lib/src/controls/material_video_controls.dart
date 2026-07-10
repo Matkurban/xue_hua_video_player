@@ -138,7 +138,7 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                       builder: (context, constraints) {
                         final compact = constraints.maxWidth < 280;
                         return Padding(
-                          padding: const EdgeInsets.only(left: 12),
+                          padding: const EdgeInsets.only(left: 12, right: 12),
                           child: Row(
                             children: [
                               if (compact)
@@ -281,16 +281,28 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 8,
                                         ),
-                                        child: SignalBuilder(
-                                          builder: (context) => Text(
-                                            '${model.speed.value}x',
-                                            style: TextStyle(
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.speed,
+                                              size: theme.secondaryIconSize,
                                               color: theme.iconColor,
-                                              fontSize:
-                                                  theme.secondaryIconSize * 0.7,
-                                              fontWeight: FontWeight.w600,
                                             ),
-                                          ),
+                                            const SizedBox(width: 4),
+                                            SignalBuilder(
+                                              builder: (context) => Text(
+                                                '${model.speed.value}x',
+                                                style: TextStyle(
+                                                  color: theme.iconColor,
+                                                  fontSize:
+                                                      theme.secondaryIconSize *
+                                                      0.7,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     );
@@ -306,6 +318,7 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                                       tapTargetSize:
                                           MaterialTapTargetSize.shrinkWrap,
                                       visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
                                     ),
                                     color: theme.iconColor,
                                     icon: Icon(

@@ -29,6 +29,9 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
     Color? bufferingIndicatorColor,
     Color? bufferingTextColor,
     TextStyle? bufferingTextStyle,
+    IconData? fitScreenIcon,
+    IconData? fillScreenIcon,
+    IconData? stretchScreenIcon,
   }) {
     final _this = (this as VideoControlsTheme);
 
@@ -51,6 +54,9 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
           bufferingIndicatorColor ?? _this.bufferingIndicatorColor,
       bufferingTextColor: bufferingTextColor ?? _this.bufferingTextColor,
       bufferingTextStyle: bufferingTextStyle ?? _this.bufferingTextStyle,
+      fitScreenIcon: fitScreenIcon ?? _this.fitScreenIcon,
+      fillScreenIcon: fillScreenIcon ?? _this.fillScreenIcon,
+      stretchScreenIcon: stretchScreenIcon ?? _this.stretchScreenIcon,
     );
   }
 
@@ -131,6 +137,11 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
         other.bufferingTextStyle,
         t,
       ),
+      fitScreenIcon: t < 0.5 ? _this.fitScreenIcon : other.fitScreenIcon,
+      fillScreenIcon: t < 0.5 ? _this.fillScreenIcon : other.fillScreenIcon,
+      stretchScreenIcon: t < 0.5
+          ? _this.stretchScreenIcon
+          : other.stretchScreenIcon,
     );
   }
 
@@ -163,14 +174,17 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
         _other.bufferingScrimColor == _this.bufferingScrimColor &&
         _other.bufferingIndicatorColor == _this.bufferingIndicatorColor &&
         _other.bufferingTextColor == _this.bufferingTextColor &&
-        _other.bufferingTextStyle == _this.bufferingTextStyle;
+        _other.bufferingTextStyle == _this.bufferingTextStyle &&
+        _other.fitScreenIcon == _this.fitScreenIcon &&
+        _other.fillScreenIcon == _this.fillScreenIcon &&
+        _other.stretchScreenIcon == _this.stretchScreenIcon;
   }
 
   @override
   int get hashCode {
     final _this = (this as VideoControlsTheme);
 
-    return Object.hash(
+    return Object.hashAll([
       runtimeType,
       _this.iconColor,
       _this.activeIconColor,
@@ -189,7 +203,10 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
       _this.bufferingIndicatorColor,
       _this.bufferingTextColor,
       _this.bufferingTextStyle,
-    );
+      _this.fitScreenIcon,
+      _this.fillScreenIcon,
+      _this.stretchScreenIcon,
+    ]);
   }
 }
 

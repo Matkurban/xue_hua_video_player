@@ -129,7 +129,7 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         await pumpControls(tester);
-        expect(find.text('适应'), findsOneWidget);
+        expect(find.byIcon(Icons.fit_screen), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -156,7 +156,7 @@ void main() {
 
         expect(model.seekCallCount, 1);
         expect(model.lastSeek, const Duration(seconds: 25));
-        expect(find.text('适应'), findsNothing);
+        expect(find.byIcon(Icons.fit_screen), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -210,8 +210,8 @@ void main() {
         immersive.aspectRatioMode.value = AspectRatioMode.fill;
         await tester.pump();
 
-        expect(find.text('铺满'), findsOneWidget);
-        expect(find.text('适应'), findsNothing);
+        expect(find.byIcon(Icons.crop_free), findsOneWidget);
+        expect(find.byIcon(Icons.fit_screen), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

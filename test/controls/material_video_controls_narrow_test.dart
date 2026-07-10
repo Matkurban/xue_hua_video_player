@@ -23,7 +23,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SizedBox(
-            width: 106,
+            width: 120,
             height: 200,
             child: MaterialVideoControls(
               model: model,
