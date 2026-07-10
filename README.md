@@ -25,6 +25,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - [Quick start](#quick-start)
 - [Integrating into your app (read this first)](#integrating-into-your-app-read-this-first)
 - [Permissions & platform configuration](#permissions--platform-configuration)
+- [Apple Release / FFI symbols (iOS & macOS)](#apple-release--ffi-symbols-ios--macos)
 - [API reference](#api-reference)
 - [Native GStreamer setup (per platform)](#native-gstreamer-setup-per-platform)
 - [Architecture](#architecture)
@@ -63,14 +64,12 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 ## Installation
 
-This package is distributed via Git. Add it to your app's `pubspec.yaml`:
+Add the package from [pub.dev](https://pub.dev/packages/xue_hua_video_player)
+to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_video_player:
-    git:
-      url: https://github.com/Matkurban/xue_hua_video_player.git
-      ref: v1.0.0
+  xue_hua_video_player: ^1.4.2
 ```
 
 Then:
@@ -313,6 +312,59 @@ checklist.
 
 For local dev without the official framework, set
 `XUE_HUA_ALLOW_HOMEBREW_GSTREAMER=1` (not suitable for store submission).
+
+### Apple Release / FFI symbols (iOS & macOS)
+
+On Apple platforms Dart loads the C player via `DynamicLibrary.process()` and
+resolves `xhvp_*` with `dlsym`. Release / Archive builds can strip those global
+symbols, which surfaces as:
+
+```text
+Failed to lookup symbol 'xhvp_init': dlsym(RTLD_DEFAULT, xhvp_init): symbol not found
+```
+
+The plugin already:
+
+- Marks ABI exports `__attribute__((used))` and calls `xhvp_ffi_retain_symbols()`
+  from plugin registration (keeps symbols past dead-code strip).
+- CocoaPods: injects Runner `-force_load` of `libxue_hua_video_player.a` and
+  `STRIP_STYLE=non-global` via `user_target_xcconfig`.
+
+Host apps still need **Strip Style = Non-Global Symbols** so `dlsym` can see
+global names after Archive. See also
+[Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop).
+
+| Integration | Do you need to set Strip Style manually? |
+| --- | --- |
+| **CocoaPods** (typical Flutter apps with a `Podfile`) | Usually **no**. After upgrading this plugin, run `cd ios && pod install` and/or `cd macos && pod install`. Confirm Runner → Build Settings → Strip Style is **Non-Global Symbols** for Release/Profile. |
+| **Swift Package Manager (SPM)** | **Yes.** Podspec settings do not apply. Configure Xcode as below. This repo’s `example` already sets `STRIP_STYLE = non-global`. |
+
+#### SPM / manual Xcode steps
+
+1. Open `ios/Runner.xcworkspace` or `macos/Runner.xcworkspace`.
+2. Select target **Runner** → **Build Settings**.
+3. Search **Strip Style** (or `STRIP_STYLE`).
+4. For **Release** and **Profile**, change **All Symbols** → **Non-Global Symbols**.
+5. Clean and rebuild: `flutter build ios --release` / `flutter build macos --release`
+   (or Archive).
+
+Or add to the Release/Profile blocks in `project.pbxproj`:
+
+```
+STRIP_STYLE = non-global;
+```
+
+#### Verify symbols are present
+
+```bash
+# macOS Release .app
+nm -gU YourApp.app/Contents/MacOS/YourApp | grep xhvp_init
+
+# iOS (Runner binary inside the .app)
+nm -gU Runner.app/Runner | grep xhvp_init
+```
+
+You should see `_xhvp_init`. An empty result means symbols were still stripped.
 
 ### Windows
 
@@ -618,6 +670,11 @@ source (`XHVP_GSTREAMER_SRC`). See [third_party/gstreamer.md](third_party/gstrea
 
 ## Troubleshooting
 
+- **Release crash: `Failed to lookup symbol 'xhvp_init'` (iOS/macOS only):**
+  global FFI symbols were stripped. See
+  [Apple Release / FFI symbols](#apple-release--ffi-symbols-ios--macos)
+  (Strip Style = Non-Global Symbols; CocoaPods usually injects this after
+  `pod install`).
 - **iOS launch `g_dir_open_with_errno` / `g_filename_to_utf8` / ORC mmap errors:**
   GLib/GStreamer need writable `HOME`/`XDG_*`/`GST_REGISTRY`, ORC JIT is blocked
   by the Hardened Runtime, and static iOS builds must not scan a NULL plugin

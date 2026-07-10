@@ -1,6 +1,9 @@
 import Cocoa
 import FlutterMacOS
 
+@_silgen_name("xhvp_ffi_retain_symbols")
+func xhvp_ffi_retain_symbols()
+
 public class XueHuaVideoPlayerPlugin: NSObject, FlutterPlugin {
   public static let textureChannelName = "xue_hua_video_player/texture"
 
@@ -14,6 +17,8 @@ public class XueHuaVideoPlayerPlugin: NSObject, FlutterPlugin {
   }
 
   public static func register(with registrar: FlutterPluginRegistrar) {
+    // Keep Dart FFI ABI symbols alive for DynamicLibrary.process() / dlsym.
+    xhvp_ffi_retain_symbols()
     let instance = XueHuaVideoPlayerPlugin(textures: registrar.textures)
     let channel = FlutterMethodChannel(
       name: textureChannelName, binaryMessenger: registrar.messenger)

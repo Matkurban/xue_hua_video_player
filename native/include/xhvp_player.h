@@ -10,7 +10,9 @@
 #define XHVP_EXPORT __declspec(dllimport)
 #endif
 #else
-#define XHVP_EXPORT __attribute__((visibility("default")))
+/* visibility + used: keep Dart FFI symbols visible to dlsym on Apple Release. */
+#define XHVP_EXPORT                                                            \
+  __attribute__((visibility("default"))) __attribute__((used))
 #endif
 
 #ifdef __cplusplus
@@ -130,6 +132,12 @@ XHVP_EXPORT bool xhvp_texture_copy_latest(int64_t player_id, uint8_t *dst,
                                           uint32_t dst_len, int32_t *out_width,
                                           int32_t *out_height,
                                           int32_t *out_stride);
+
+/**
+ * Touch every Dart-looked-up ABI symbol so Apple Release dead-strip / LTO
+ * cannot drop them. Call once from the Flutter plugin register path.
+ */
+XHVP_EXPORT void xhvp_ffi_retain_symbols(void);
 
 #ifdef __cplusplus
 }

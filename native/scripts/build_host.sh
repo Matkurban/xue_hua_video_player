@@ -15,6 +15,7 @@ SRCS=(
   "${ROOT}/src/frame.c"
   "${ROOT}/src/pipeline.c"
   "${ROOT}/src/xhvp_player.c"
+  "${ROOT}/src/xhvp_ffi_keep.c"
 )
 
 UNAME="$(uname -s)"

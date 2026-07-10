@@ -1,3 +1,14 @@
+## 1.4.2
+
+### Bug fixes
+
+- **iOS/macOS Release: `Failed to lookup symbol 'xhvp_init'`**: Apple Release /
+  Archive dead-strip and Strip Style **All Symbols** removed Dart FFI globals
+  that only `dlsym` uses. Keep ABI with `__attribute__((used))`,
+  `xhvp_ffi_retain_symbols()` from plugin register, CocoaPods
+  `user_target_xcconfig` (`-force_load` + `STRIP_STYLE=non-global`), and
+  example SPM Runner Strip Style. See README “Apple Release / FFI symbols”.
+
 ## 1.4.1
 
 ### Bug fixes

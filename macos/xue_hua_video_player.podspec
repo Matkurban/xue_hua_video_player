@@ -53,9 +53,6 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     other_ldflags = '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a ' + gst_libs
     framework_search_paths = nil
     Pod::UI.puts '[xue_hua_video_player] Using Homebrew GStreamer (debug only; not suitable for Mac App Store)'
-    s.user_target_xcconfig = {
-      'XUE_HUA_ALLOW_HOMEBREW_GSTREAMER' => '1',
-    }
   else
     ensure_script = File.join(__dir__, 'scripts', 'ensure_gstreamer_macos.sh')
     unless system({ 'GST_VER' => gst_ver }, 'sh', ensure_script)
@@ -102,6 +99,8 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     framework_search_paths = framework_root
   end
 
+  force_load = '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a'
+
   s.script_phases = [
     {
       :name => 'Build C player library',
@@ -112,6 +111,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
         '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
         '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
         '${PODS_TARGET_SRCROOT}/../native/src/xhvp_player.c',
+        '${PODS_TARGET_SRCROOT}/../native/src/xhvp_ffi_keep.c',
       ],
       :output_files => ['${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a'],
     },
@@ -128,4 +128,14 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     pod_target_xcconfig['FRAMEWORK_SEARCH_PATHS'] = framework_search_paths
   end
   s.pod_target_xcconfig = pod_target_xcconfig
+
+  # Runner link + keep global symbols for Dart DynamicLibrary.process() / dlsym.
+  user_xcconfig = {
+    'OTHER_LDFLAGS' => force_load,
+    'STRIP_STYLE' => 'non-global',
+  }
+  if use_homebrew
+    user_xcconfig['XUE_HUA_ALLOW_HOMEBREW_GSTREAMER'] = '1'
+  end
+  s.user_target_xcconfig = user_xcconfig
 end

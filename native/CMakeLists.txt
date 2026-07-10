@@ -12,6 +12,7 @@ set(XHVP_SOURCES
   src/frame.c
   src/pipeline.c
   src/xhvp_player.c
+  src/xhvp_ffi_keep.c
 )
 
 if(APPLE)

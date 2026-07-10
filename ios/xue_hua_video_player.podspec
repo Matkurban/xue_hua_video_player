@@ -36,9 +36,12 @@ A Flutter video player plugin that decodes local/network video with GStreamer
       '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
       '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
       '${PODS_TARGET_SRCROOT}/../native/src/xhvp_player.c',
+      '${PODS_TARGET_SRCROOT}/../native/src/xhvp_ffi_keep.c',
     ],
     :output_files => ["${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a"],
   }
+
+  force_load = '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
@@ -46,7 +49,12 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     'ENABLE_BITCODE' => 'NO',
     'HEADER_SEARCH_PATHS' => '"' + gst_headers + '"',
     'FRAMEWORK_SEARCH_PATHS' => '"' + gst_framework_parent + '"',
-    'OTHER_LDFLAGS' => '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a -framework GStreamer -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework Metal -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AssetsLibrary -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
+    'OTHER_LDFLAGS' => force_load + ' -framework GStreamer -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework Metal -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AssetsLibrary -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
+  }
+  # Runner link + keep global symbols for Dart DynamicLibrary.process() / dlsym.
+  s.user_target_xcconfig = {
+    'OTHER_LDFLAGS' => force_load,
+    'STRIP_STYLE' => 'non-global',
   }
   s.vendored_frameworks = []
 end
