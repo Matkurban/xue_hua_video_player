@@ -64,7 +64,7 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.byIcon(Icons.forward_10), findsOneWidget);
+        expect(find.byIcon(Icons.forward_5), findsOneWidget);
         expect(find.byIcon(CupertinoIcons.play_arrow_solid), findsOneWidget);
         await tester.pump(const Duration(seconds: 1));
       } finally {

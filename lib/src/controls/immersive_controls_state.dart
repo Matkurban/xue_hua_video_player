@@ -28,6 +28,7 @@ class ImmersiveHudSnapshot {
     required this.kind,
     required this.value,
     this.forward = true,
+    this.gesture = false,
   });
 
   /// 反馈类型 / Feedback kind.
@@ -38,6 +39,9 @@ class ImmersiveHudSnapshot {
 
   /// 进退方向；仅 [ImmersiveHudKind.seek] 使用 / Seek direction; seek only.
   final bool forward;
+
+  /// 是否是手势滑动触发 / Whether triggered by gesture drag.
+  final bool gesture;
 }
 
 /// 沉浸控件 signals 单一数据源 / Single source of truth for immersive control signals.

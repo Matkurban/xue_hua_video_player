@@ -229,7 +229,7 @@ void main() {
         expect(controlsOpacity.opacity, 1);
 
         await tester.tapAt(const Offset(160, 120));
-        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
 
         final hidden = tester.widget<AnimatedOpacity>(
           find.byKey(const ValueKey('video-controls-opacity')),
@@ -268,12 +268,30 @@ void main() {
         expect(visible.opacity, 1);
 
         await tester.tapAt(const Offset(160, 120));
-        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
 
         final hidden = tester.widget<AnimatedOpacity>(
           find.byKey(const ValueKey('video-controls-opacity')),
         );
         expect(hidden.opacity, 0);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('desktop double-tap toggles play/pause', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        await pumpControls(tester);
+        final initialCalls = model.togglePlayPauseCallCount;
+
+        await tester.tapAt(const Offset(160, 120));
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tapAt(const Offset(160, 120));
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(model.togglePlayPauseCallCount, initialCalls + 1);
+        await tester.pump(const Duration(seconds: 1));
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

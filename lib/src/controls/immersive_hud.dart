@@ -56,6 +56,9 @@ class _HudContent extends StatelessWidget {
     final (IconData icon, String? text) = switch (snapshot.kind) {
       ImmersiveHudKind.seek => (
         () {
+          if (snapshot.gesture) {
+            return snapshot.forward ? Icons.fast_forward : Icons.fast_rewind;
+          }
           final val = snapshot.value.round();
           if (val == VideoSeekStep.s5.seconds) {
             return snapshot.forward ? Icons.forward_5 : Icons.replay_5;

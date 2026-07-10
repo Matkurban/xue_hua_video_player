@@ -96,6 +96,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
           kind: ImmersiveHudKind.seek,
           value: seconds.abs(),
           forward: seconds > 0,
+          gesture: true,
         ),
       );
     }
@@ -178,6 +179,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
             kind: ImmersiveHudKind.seek,
             value: seconds.abs(),
             forward: forward,
+            gesture: true,
           ),
         );
       }
@@ -198,6 +200,16 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: widget.onTap,
+        onDoubleTap: () async {
+          final wasPlaying = widget.model.isPlaying.value;
+          await widget.model.togglePlayPause();
+          widget.immersive.showHud(
+            ImmersiveHudSnapshot(
+              kind: ImmersiveHudKind.playPause,
+              value: wasPlaying ? 0.0 : 1.0,
+            ),
+          );
+        },
         onPanStart: _onPanStart,
         onPanUpdate: _onPanUpdate,
         onPanEnd: _onPanEnd,

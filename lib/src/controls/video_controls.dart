@@ -258,6 +258,16 @@ class _VideoControlsState extends State<VideoControls> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _toggle,
+              onDoubleTap: () async {
+                final wasPlaying = widget.model.isPlaying.value;
+                await widget.model.togglePlayPause();
+                widget.immersive.showHud(
+                  ImmersiveHudSnapshot(
+                    kind: ImmersiveHudKind.playPause,
+                    value: wasPlaying ? 0.0 : 1.0,
+                  ),
+                );
+              },
               child: const SizedBox.expand(),
             ),
           ),
