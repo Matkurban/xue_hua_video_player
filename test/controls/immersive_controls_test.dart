@@ -24,7 +24,7 @@ void main() {
       immersive = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(
-          seekStep: Duration(seconds: 5),
+          seekStep: VideoSeekStep.s5,
           desktopImmersive: true,
           aspectRatioLabels: AspectRatioModeLabels(
             fit: '适应',

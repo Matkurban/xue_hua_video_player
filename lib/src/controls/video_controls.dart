@@ -139,7 +139,7 @@ class _VideoControlsState extends State<VideoControls> {
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-    final step = widget.immersive.fullscreen.value.seekStep;
+    final step = widget.immersive.fullscreen.value.seekStep.duration;
     final position = widget.model.position.value;
     final duration = widget.model.duration.value;
 

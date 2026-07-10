@@ -88,23 +88,42 @@ class VideoRotationLabels {
       Object.hash(rotateAngle, rotate0, rotate90, rotate180, rotate270);
 }
 
-/// @nodoc
-@Deprecated('Use VideoRotationLabels instead')
-typedef VideoOrientationLabels = VideoRotationLabels;
+/// 进退步长枚举 / Enum representing standard video seek steps.
+enum VideoSeekStep {
+  /// 5 秒 / 5 seconds.
+  s5(5),
+
+  /// 10 秒 / 10 seconds.
+  s10(10),
+
+  /// 15 秒 / 15 seconds.
+  s15(15),
+
+  /// 30 秒 / 30 seconds.
+  s30(30);
+
+  const VideoSeekStep(this.seconds);
+
+  /// 步长的秒数值 / The step value in seconds.
+  final int seconds;
+
+  /// 返回对应的 Duration / Returns matching Duration.
+  Duration get duration => Duration(seconds: seconds);
+}
 
 /// 全屏沉浸控件配置 / Configuration for fullscreen immersive controls.
 class VideoControlsFullscreenConfig {
   /// 创建沉浸控件配置 / Creates immersive controls configuration.
   ///
   /// # 参数 / Parameters
-  /// - `seekStep` — 手势/快捷键单次进退时长 / seek delta per gesture or key press
+  /// - `seekStep` — 手势/快捷键单次进退步长 / seek step per gesture or key press
   /// - `desktopImmersive` — 桌面端是否默认开启沉浸能力 / immersive features on desktop
   /// - `aspectRatioLabels` — 铺满模式菜单文案 / labels for aspect ratio menu
   /// - `overlaySlots` — 沉浸顶栏 leading/title/actions 插槽 / top bar slots
   /// - `showOrientationMenu` — 是否显示方向设置按钮（移动端仅全屏；桌面端顶栏可见时）/ orientation button visibility
   /// - `orientationLabels` — 方向面板文案 / labels for orientation panel
   const VideoControlsFullscreenConfig({
-    this.seekStep = const Duration(seconds: 5),
+    this.seekStep = VideoSeekStep.s5,
     this.desktopImmersive = true,
     this.aspectRatioLabels = const AspectRatioModeLabels(),
     this.overlaySlots = const VideoControlsOverlaySlots(),
@@ -112,8 +131,8 @@ class VideoControlsFullscreenConfig {
     this.orientationLabels = const VideoRotationLabels(),
   });
 
-  /// 单次进退时长 / Seek step per gesture or arrow key.
-  final Duration seekStep;
+  /// 单次进退步长 / Seek step per gesture or arrow key.
+  final VideoSeekStep seekStep;
 
   /// 桌面端沉浸能力开关（默认开启，无全屏按钮）/ Desktop immersive toggle (default on, no fullscreen button).
   final bool desktopImmersive;

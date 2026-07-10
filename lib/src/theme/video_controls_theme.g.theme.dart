@@ -22,6 +22,7 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
     Color? backgroundColor,
     double? primaryIconSize,
     double? secondaryIconSize,
+    double? centerButtonSize,
     EdgeInsets? barPadding,
     double? borderRadius,
     Color? bufferingScrimColor,
@@ -42,6 +43,7 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
       backgroundColor: backgroundColor ?? _this.backgroundColor,
       primaryIconSize: primaryIconSize ?? _this.primaryIconSize,
       secondaryIconSize: secondaryIconSize ?? _this.secondaryIconSize,
+      centerButtonSize: centerButtonSize ?? _this.centerButtonSize,
       barPadding: barPadding ?? _this.barPadding,
       borderRadius: borderRadius ?? _this.borderRadius,
       bufferingScrimColor: bufferingScrimColor ?? _this.bufferingScrimColor,
@@ -102,6 +104,11 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
         other.secondaryIconSize,
         t,
       )!,
+      centerButtonSize: lerpDouble$(
+        _this.centerButtonSize,
+        other.centerButtonSize,
+        t,
+      )!,
       barPadding: EdgeInsets.lerp(_this.barPadding, other.barPadding, t)!,
       borderRadius: lerpDouble$(_this.borderRadius, other.borderRadius, t)!,
       bufferingScrimColor: Color.lerp(
@@ -150,6 +157,7 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
         _other.backgroundColor == _this.backgroundColor &&
         _other.primaryIconSize == _this.primaryIconSize &&
         _other.secondaryIconSize == _this.secondaryIconSize &&
+        _other.centerButtonSize == _this.centerButtonSize &&
         _other.barPadding == _this.barPadding &&
         _other.borderRadius == _this.borderRadius &&
         _other.bufferingScrimColor == _this.bufferingScrimColor &&
@@ -174,6 +182,7 @@ mixin _$VideoControlsTheme on ThemeExtension<VideoControlsTheme> {
       _this.backgroundColor,
       _this.primaryIconSize,
       _this.secondaryIconSize,
+      _this.centerButtonSize,
       _this.barPadding,
       _this.borderRadius,
       _this.bufferingScrimColor,

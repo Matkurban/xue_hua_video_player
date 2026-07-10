@@ -26,6 +26,7 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     required this.backgroundColor,
     required this.primaryIconSize,
     required this.secondaryIconSize,
+    required this.centerButtonSize,
     required this.barPadding,
     required this.borderRadius,
     required this.bufferingScrimColor,
@@ -46,6 +47,7 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     backgroundColor: Color(0x99000000),
     primaryIconSize: 24,
     secondaryIconSize: 20,
+    centerButtonSize: 48,
     barPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     borderRadius: 0,
     bufferingScrimColor: Colors.transparent,
@@ -65,6 +67,7 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
     backgroundColor: Color(0x66000000),
     primaryIconSize: 24,
     secondaryIconSize: 20,
+    centerButtonSize: 48,
     barPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
     borderRadius: 14,
     bufferingScrimColor: Colors.transparent,
@@ -101,6 +104,9 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme>
 
   /// 次要图标尺寸（静音、循环、倍速）/ Secondary icon size.
   final double secondaryIconSize;
+
+  /// 中央播放/暂停按钮容器尺寸 / Central play/pause button container size.
+  final double centerButtonSize;
 
   /// 底栏内边距 / Bottom bar padding.
   final EdgeInsets barPadding;

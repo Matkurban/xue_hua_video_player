@@ -3,6 +3,7 @@ import 'package:signals/signals_flutter.dart';
 
 import '../utils/platform_util.dart';
 import 'immersive_controls_state.dart';
+import 'fullscreen_config.dart';
 
 /// 按 HUD 类型与平台返回对齐方式 / Alignment for HUD kind and platform.
 Alignment hudAlignmentFor(ImmersiveHudSnapshot snap) {
@@ -54,7 +55,18 @@ class _HudContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final (IconData icon, String? text) = switch (snapshot.kind) {
       ImmersiveHudKind.seek => (
-        snapshot.forward ? Icons.forward_10 : Icons.replay_10,
+        () {
+          final val = snapshot.value.round();
+          if (val == VideoSeekStep.s5.seconds) {
+            return snapshot.forward ? Icons.forward_5 : Icons.replay_5;
+          } else if (val == VideoSeekStep.s10.seconds) {
+            return snapshot.forward ? Icons.forward_10 : Icons.replay_10;
+          } else if (val == VideoSeekStep.s30.seconds) {
+            return snapshot.forward ? Icons.forward_30 : Icons.replay_30;
+          } else {
+            return snapshot.forward ? Icons.fast_forward : Icons.fast_rewind;
+          }
+        }(),
         '${snapshot.value.round()}s',
       ),
       ImmersiveHudKind.brightness => (
@@ -77,11 +89,11 @@ class _HudContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 36),
+            Icon(icon, color: Colors.white, size: 28),
             if (text != null) ...[
               const SizedBox(height: 6),
               Text(

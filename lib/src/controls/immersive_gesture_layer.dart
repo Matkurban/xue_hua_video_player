@@ -84,7 +84,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
   }
 
   void _previewHorizontalSeek(double width) {
-    final stepSeconds = widget.immersive.fullscreen.value.seekStep.inSeconds;
+    final stepSeconds = widget.immersive.fullscreen.value.seekStep.seconds;
     final seconds = seekSecondsFromDrag(
       horizontalDrag: _horizontalDrag,
       width: width,
@@ -154,7 +154,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
     if (_isHorizontal &&
         _horizontalDrag.abs() >= _seekDragThreshold &&
         size != null) {
-      final stepSeconds = widget.immersive.fullscreen.value.seekStep.inSeconds;
+      final stepSeconds = widget.immersive.fullscreen.value.seekStep.seconds;
       final seconds = seekSecondsFromDrag(
         horizontalDrag: _horizontalDrag,
         width: size.width,

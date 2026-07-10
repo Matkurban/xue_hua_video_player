@@ -30,8 +30,6 @@ class CenterButton extends StatelessWidget {
   /// 沉浸 HUD；非空时隐藏中央按钮避免与正中 HUD 重叠 / Hides button while center HUD is shown.
   final ReadonlySignal<ImmersiveHudSnapshot?>? hud;
 
-  static const double _buttonSize = 56;
-
   static bool _hideForHud(ImmersiveHudSnapshot snap) =>
       isMobilePlatform || snap.kind == ImmersiveHudKind.playPause;
 
@@ -41,20 +39,26 @@ class CenterButton extends StatelessWidget {
       builder: (context) {
         final snap = hud?.value;
         if (snap != null && _hideForHud(snap)) {
-          return const SizedBox(width: _buttonSize, height: _buttonSize);
+          return SizedBox(
+            width: theme.centerButtonSize,
+            height: theme.centerButtonSize,
+          );
         }
         final PlayerState state = model.state.value;
         final buffering = model.bufferingPercent.value;
         if (buffering < 100 || state == PlayerState.buffering) {
-          return const SizedBox(width: _buttonSize, height: _buttonSize);
+          return SizedBox(
+            width: theme.centerButtonSize,
+            height: theme.centerButtonSize,
+          );
         }
         final playing = state == PlayerState.playing;
         final icon = playing
             ? CupertinoIcons.pause_solid
             : CupertinoIcons.play_arrow_solid;
         return SizedBox(
-          width: _buttonSize,
-          height: _buttonSize,
+          width: theme.centerButtonSize,
+          height: theme.centerButtonSize,
           child: ClipOval(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
