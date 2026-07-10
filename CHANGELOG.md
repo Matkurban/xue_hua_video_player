@@ -1,3 +1,12 @@
+## 1.4.3
+
+### Bug fixes
+
+- **Controls chrome auto-hide**: top bar now fades with the bottom controls after
+  [autoHide] while playing (previously only the bottom bar hid).
+- **Desktop mouse move shows controls**: pointer hover/move over the video
+  resurfaces chrome and resets the auto-hide timer.
+
 ## 1.4.2
 
 ### Bug fixes

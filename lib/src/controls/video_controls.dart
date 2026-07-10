@@ -250,79 +250,90 @@ class _VideoControlsState extends State<VideoControls> {
             immersive: widget.immersive,
           );
 
-    return Positioned.fill(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _toggle,
-              onDoubleTap: () async {
-                final wasPlaying = widget.model.isPlaying.value;
-                await widget.model.togglePlayPause();
-                widget.immersive.showHud(
-                  ImmersiveHudSnapshot(
-                    kind: ImmersiveHudKind.playPause,
-                    value: wasPlaying ? 0.0 : 1.0,
-                  ),
-                );
-              },
-              child: const SizedBox.expand(),
-            ),
-          ),
-          SignalBuilder(
-            builder: (context) {
-              if (!widget.immersive.immersiveActive.value) {
-                return const SizedBox.shrink();
-              }
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (isMobilePlatform)
-                    ImmersiveGestureLayer(
-                      immersive: widget.immersive,
-                      model: widget.model,
-                      onTap: _toggle,
-                    ),
-                ],
-              );
-            },
-          ),
-          if (!isMobilePlatform)
-            Focus(
-              focusNode: _focusNode,
-              autofocus: true,
-              onKeyEvent: _onKeyEvent,
-              // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
-              child: const IgnorePointer(child: SizedBox.expand()),
-            ),
-          VideoControlsTopBar(
-            immersive: widget.immersive,
-            model: widget.model,
-            theme: theme,
-            slots: widget.immersive.fullscreen.value.overlaySlots,
-            orientationLabels:
-                widget.immersive.fullscreen.value.orientationLabels,
-            showOrientationMenu:
-                widget.immersive.fullscreen.value.showOrientationMenu,
-          ),
-          SignalBuilder(
-            builder: (context) {
-              return AnimatedOpacity(
-                key: const ValueKey('video-controls-opacity'),
-                opacity: _visible.value ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: IgnorePointer(
-                  ignoring: !_visible.value,
-                  child: controls,
+    final chrome = Stack(
+      fit: StackFit.expand,
+      children: [
+        VideoControlsTopBar(
+          immersive: widget.immersive,
+          model: widget.model,
+          theme: theme,
+          slots: widget.immersive.fullscreen.value.overlaySlots,
+          orientationLabels:
+              widget.immersive.fullscreen.value.orientationLabels,
+          showOrientationMenu:
+              widget.immersive.fullscreen.value.showOrientationMenu,
+        ),
+        controls,
+      ],
+    );
+
+    Widget body = Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggle,
+            onDoubleTap: () async {
+              final wasPlaying = widget.model.isPlaying.value;
+              await widget.model.togglePlayPause();
+              widget.immersive.showHud(
+                ImmersiveHudSnapshot(
+                  kind: ImmersiveHudKind.playPause,
+                  value: wasPlaying ? 0.0 : 1.0,
                 ),
               );
             },
+            child: const SizedBox.expand(),
           ),
-          ImmersiveHud(immersive: widget.immersive),
-        ],
-      ),
+        ),
+        SignalBuilder(
+          builder: (context) {
+            if (!widget.immersive.immersiveActive.value) {
+              return const SizedBox.shrink();
+            }
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                if (isMobilePlatform)
+                  ImmersiveGestureLayer(
+                    immersive: widget.immersive,
+                    model: widget.model,
+                    onTap: _toggle,
+                  ),
+              ],
+            );
+          },
+        ),
+        if (!isMobilePlatform)
+          Focus(
+            focusNode: _focusNode,
+            autofocus: true,
+            onKeyEvent: _onKeyEvent,
+            // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
+            child: const IgnorePointer(child: SizedBox.expand()),
+          ),
+        SignalBuilder(
+          builder: (context) {
+            return AnimatedOpacity(
+              key: const ValueKey('video-controls-opacity'),
+              opacity: _visible.value ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_visible.value,
+                child: chrome,
+              ),
+            );
+          },
+        ),
+        ImmersiveHud(immersive: widget.immersive),
+      ],
     );
+
+    if (!isMobilePlatform) {
+      body = MouseRegion(onHover: (_) => _keepAlive(), child: body);
+    }
+
+    return Positioned.fill(child: body);
   }
 }

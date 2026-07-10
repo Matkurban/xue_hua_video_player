@@ -125,6 +125,10 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     _position.value = position;
   }
 
+  void setState(PlayerState state) {
+    _state.value = state;
+  }
+
   void dispose() {
     isPlaying.dispose();
     _state.dispose();

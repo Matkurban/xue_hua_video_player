@@ -65,7 +65,7 @@
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.4.2
+  xue_hua_video_player: ^1.4.3
 ```
 
 然后执行：

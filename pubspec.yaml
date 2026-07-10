@@ -1,6 +1,6 @@
 name: xue_hua_video_player
 description: "Cross-platform Flutter video player plugin decoding local/network video with GStreamer (native C core + Dart FFI) and rendering into Flutter external Texture widgets."
-version: 1.4.2
+version: 1.4.3
 homepage: https://github.com/Matkurban/xue_hua_video_player
 repository: https://github.com/Matkurban/xue_hua_video_player
 issue_tracker: https://github.com/Matkurban/xue_hua_video_player/issues
