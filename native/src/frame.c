@@ -93,7 +93,7 @@ GstFlowReturn xhvp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
   if (p->width != width || p->height != height) {
     p->width = width;
     p->height = height;
-    /* Always track post-transform size as DAR (videoflip swaps axes). */
+    /* Post-videoflip size is display size (axes already swapped for 90/270). */
     p->dar_n = width;
     p->dar_d = height;
     if (p->par_n == 0) {

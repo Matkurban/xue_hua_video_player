@@ -89,7 +89,8 @@ class PlaybackSession
     () => _state.value == PlayerState.completed,
   );
 
-  /// 显示宽高比；优先 DAR 元数据 / Display aspect ratio; prefers DAR metadata.
+  /// 显示宽高比；优先 DAR，否则由 [videoSize] 推算（均为 post-orient 尺寸）。
+  /// Display aspect from DAR or [videoSize] (post-orient pipeline size).
   @override
   late final ReadonlySignal<double> aspectRatio = computed(() {
     final meta = _videoMetadata.value;
@@ -170,13 +171,15 @@ class PlaybackSession
     }
   }
 
-  /// 经统一 Rust 解析器加载 [source] / Loads [source] via the unified Rust media resolver.
+  /// 经统一解析器加载 [source] / Loads [source] via the unified media resolver.
   ///
-  /// 调用前 [_resetForOpen] 清空上一媒体状态；加载后更新 pipeline 能力并刷新轨道。
-  /// Clears prior media state via [_resetForOpen]; updates capabilities and tracks after load.
+  /// 调用前 [_resetForOpen] 清空上一媒体状态，并 [setVideoRotation] 同步 native 为 0°；
+  /// 加载后更新 pipeline 能力并刷新轨道。
+  /// Clears prior media state via [_resetForOpen]; resets native rotation before load.
   Future<void> open(VideoSource source, {bool autoPlay = false}) async {
     _resetForOpen();
     await _guard(() async {
+      await _port.setVideoRotation(0);
       await _port.loadSource(
         _mediaSourceResolver.resolve(source),
         autoPlay: autoPlay,

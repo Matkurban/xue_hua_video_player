@@ -390,6 +390,13 @@ void main() {
 
       // Rotation is applied in the native GStreamer sink, not Dart.
       expect(find.byType(RotatedBox), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(FittedBox),
+          matching: find.byType(Transform),
+        ),
+        findsNothing,
+      );
       expect(find.byType(FittedBox), findsOneWidget);
 
       debugDefaultTargetPlatformOverride = null;

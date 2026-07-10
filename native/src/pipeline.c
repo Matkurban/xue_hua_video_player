@@ -133,8 +133,8 @@ GstElement *xhvp_desktop_make_video_sink(XhvpPlayer *p) {
 #include <android/native_window.h>
 
 /* Update layout metadata from negotiated video caps and notify Dart.
- * Android has no appsink frames; without this, aspectRatio stays at 16:9 and
- * portrait content is double-letterboxed into a landscape SurfaceProducer. */
+ * Android has no appsink frames; probe post-glvideoflip so 90/270 report
+ * swapped width/height and Dart SurfaceProducer matches the buffer. */
 static void xhvp_apply_video_size_from_caps(XhvpPlayer *p, GstCaps *caps) {
   if (!p || !caps || gst_caps_is_empty(caps) || gst_caps_is_any(caps)) {
     return;
@@ -202,26 +202,25 @@ static void xhvp_try_update_video_size_from_sink(XhvpPlayer *p) {
   if (!p || !p->pipeline) {
     return;
   }
-  GstElement *overlay = NULL;
-  if (p->overlay_element && GST_IS_ELEMENT(p->overlay_element)) {
-    overlay = gst_object_ref(p->overlay_element);
-  } else {
-    GstElement *vsink = NULL;
-    g_object_get(p->pipeline, "video-sink", &vsink, NULL);
-    if (vsink) {
-      if (GST_IS_BIN(vsink)) {
-        overlay = gst_bin_get_by_name(GST_BIN(vsink), "xhvp-glimagesink");
-      } else {
-        overlay = gst_object_ref(vsink);
-      }
-      gst_object_unref(vsink);
-    }
-  }
-  if (!overlay) {
+  /* Prefer post-orient pad (glimagesink) so size reflects glvideoflip swap. */
+  GstElement *vsink = NULL;
+  g_object_get(p->pipeline, "video-sink", &vsink, NULL);
+  if (!vsink) {
     return;
   }
-  GstPad *sinkpad = gst_element_get_static_pad(overlay, "sink");
-  gst_object_unref(overlay);
+  GstElement *probe_el = NULL;
+  if (GST_IS_BIN(vsink)) {
+    probe_el = gst_bin_get_by_name(GST_BIN(vsink), "xhvp-glimagesink");
+    if (!probe_el) {
+      probe_el = gst_bin_get_by_name(GST_BIN(vsink), "xhvp-glvideoflip");
+    }
+  }
+  if (!probe_el) {
+    probe_el = gst_object_ref(vsink);
+  }
+  gst_object_unref(vsink);
+  GstPad *sinkpad = gst_element_get_static_pad(probe_el, "sink");
+  gst_object_unref(probe_el);
   if (!sinkpad) {
     return;
   }
@@ -235,28 +234,28 @@ static void xhvp_try_update_video_size_from_sink(XhvpPlayer *p) {
 
 GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
   /* MediaCodec (amcvideodec) emits GLMemory / external-OES. The sink bin must
-   * bridge with glupload → glcolorconvert before gltransformation/glimagesink.
-   * Omitting the bridge fails caps negotiation (decoder allocate/release
-   * thrash) and stalls the whole playbin — no position, no A/V. Do not insert
+   * bridge with glupload → glcolorconvert before glvideoflip/glimagesink.
+   * glvideoflip stays on GLMemory, swaps caps for 90/270, and aspect-scales
+   * so Dart SurfaceProducer can match post-orient size. Do not insert
    * gldownload / CPU videoconvert / videoflip on this path. */
   GstElement *glupload =
       gst_element_factory_make("glupload", "xhvp-glupload");
   GstElement *glcc =
       gst_element_factory_make("glcolorconvert", "xhvp-glcolorconvert");
-  GstElement *glt =
-      gst_element_factory_make("gltransformation", "xhvp-gltransform");
+  GstElement *glflip =
+      gst_element_factory_make("glvideoflip", "xhvp-glvideoflip");
   GstElement *sink =
       gst_element_factory_make("glimagesink", "xhvp-glimagesink");
 
-  if (!glupload || !glcc || !glt || !sink) {
+  if (!glupload || !glcc || !glflip || !sink) {
     if (glupload) {
       gst_object_unref(glupload);
     }
     if (glcc) {
       gst_object_unref(glcc);
     }
-    if (glt) {
-      gst_object_unref(glt);
+    if (glflip) {
+      gst_object_unref(glflip);
     }
     if (sink) {
       gst_object_unref(sink);
@@ -271,8 +270,8 @@ GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
   g_object_set(sink, "force-aspect-ratio", FALSE, NULL);
 
   GstElement *bin = gst_bin_new("xhvp-video-sink");
-  gst_bin_add_many(GST_BIN(bin), glupload, glcc, glt, sink, NULL);
-  if (!gst_element_link_many(glupload, glcc, glt, sink, NULL)) {
+  gst_bin_add_many(GST_BIN(bin), glupload, glcc, glflip, sink, NULL);
+  if (!gst_element_link_many(glupload, glcc, glflip, sink, NULL)) {
     gst_object_unref(bin);
     p->orient_element = NULL;
     p->overlay_element = NULL;
@@ -283,11 +282,11 @@ GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
   GstPad *ghost = gst_ghost_pad_new("sink", pad);
   gst_object_unref(pad);
   gst_element_add_pad(bin, ghost);
-  p->orient_element = glt;
+  p->orient_element = glflip;
   p->overlay_element = GST_IS_VIDEO_OVERLAY(sink) ? sink : NULL;
-  xhvp_apply_orient_element(glt, p->rotate_degrees);
+  xhvp_apply_orient_element(glflip, p->rotate_degrees);
 
-  /* Post-transform pad: size matches what is drawn into the overlay window. */
+  /* Post-orient pad: size matches glvideoflip output (axes swapped for 90/270). */
   GstPad *sink_pad = gst_element_get_static_pad(sink, "sink");
   if (sink_pad) {
     gst_pad_add_probe(sink_pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
@@ -433,6 +432,7 @@ static void xhvp_reset_media_fields(XhvpPlayer *p) {
   p->seekable = true;
   p->buffering_percent = 100;
   p->pending_rate_seek = false;
+  p->rotate_degrees = 0;
   p->color_matrix[0] = '\0';
   p->color_range[0] = '\0';
   p->hdr_format[0] = '\0';
@@ -1218,7 +1218,7 @@ int32_t xhvp_pipeline_set_rotation(XhvpPlayer *p, int32_t degrees) {
   xhvp_apply_orient_element(p->orient_element, degrees);
 
   /* Eagerly swap layout metadata for 90/270 so Dart letterboxes before the
-   * next appsink frame arrives with swapped width/height. */
+   * next post-orient caps/frame (videoflip / glvideoflip swap axes). */
   const bool prev_swap = (prev == 90 || prev == 270);
   const bool next_swap = (degrees == 90 || degrees == 270);
   if (prev_swap != next_swap && p->width > 0 && p->height > 0) {

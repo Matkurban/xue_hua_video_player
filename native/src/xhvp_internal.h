@@ -45,7 +45,7 @@ typedef struct XhvpPlayer {
   GstElement *pipeline;
   GstElement *appsink;
   GstElement *appsrc;
-  GstElement *orient_element; /* videoflip or gltransformation; owned by sink bin */
+  GstElement *orient_element; /* videoflip or glvideoflip; owned by sink bin */
   guint bus_watch_id;
   guint position_timer_id;
 

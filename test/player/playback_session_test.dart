@@ -281,6 +281,25 @@ void main() {
       expect(session.aspectRatio.value, closeTo(9 / 16, 0.001));
     });
 
+    test('aspectRatio follows post-orient videoSize after rotation', () async {
+      await session.initialize();
+      port.emit(
+        event(kind: PlayerEventKind.videoSize, width: 1920, height: 1080),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.aspectRatio.value, closeTo(16 / 9, 0.001));
+
+      // Native videoflip/glvideoflip emit swapped size; Dart does not invert.
+      await session.setVideoRotation(VideoRotation.deg90);
+      expect(session.aspectRatio.value, closeTo(16 / 9, 0.001));
+
+      port.emit(
+        event(kind: PlayerEventKind.videoSize, width: 1080, height: 1920),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.aspectRatio.value, closeTo(9 / 16, 0.001));
+    });
+
     test(
       'metadataChanged does not clobber isSeekable from capabilities',
       () async {
@@ -363,6 +382,7 @@ void main() {
       await session.open(VideoSource.network('https://example.com/b.mp4'));
 
       expect(session.videoRotation.value, VideoRotation.deg0);
+      expect(port.lastVideoRotationDegrees, 0);
     });
 
     test('setVideoRotation updates videoRotation signal', () async {

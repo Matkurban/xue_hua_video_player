@@ -16,7 +16,7 @@ import 'playback_presentation_model.dart';
 /// 根据 [model.playerId] 路由至 [TextureVideoSurface]，并用 [SignalBuilder] 响应 [aspectRatio] 变化。
 /// Routes to [TextureVideoSurface] from [model.playerId] and reacts to [aspectRatio] via [SignalBuilder].
 ///
-/// 画面旋转由 native GStreamer（`videoflip` / `gltransformation`）完成，此处不变换 Texture。
+/// 画面旋转由 native GStreamer（`videoflip` / `glvideoflip`）完成，此处不变换 Texture。
 /// Video rotation is applied in the native GStreamer sink bin; this layer does not transform Texture.
 class PlaybackPresentation extends StatelessWidget {
   /// 创建呈现层 / Creates the presentation layer.
