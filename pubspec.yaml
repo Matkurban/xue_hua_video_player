@@ -7,7 +7,7 @@ issue_tracker: https://github.com/Matkurban/xue_hua_video_player/issues
 
 environment:
   sdk: ^3.12.2
-  flutter: '>=3.3.0'
+  flutter: '>=3.44.0'
 
 dependencies:
   chat_context_menu: ^3.0.1
