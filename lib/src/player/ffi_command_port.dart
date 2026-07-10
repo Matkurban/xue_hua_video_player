@@ -118,9 +118,7 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
 
   @override
   Future<PipelineCapabilitiesDto> getPipelineCapabilities() async {
-    final map = await _native<Map<String, bool>>(
-      FfiCapabilitiesRequest(_id),
-    );
+    final map = await _native<Map<String, bool>>(FfiCapabilitiesRequest(_id));
     return capabilitiesFromMap(map);
   }
 
@@ -150,9 +148,7 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
   @override
   Future<void> seek(Duration position) async {
     _check(
-      await _native<int>(
-        FfiIntOpRequest('seek', _id, position.inMilliseconds),
-      ),
+      await _native<int>(FfiIntOpRequest('seek', _id, position.inMilliseconds)),
       'seek',
     );
   }

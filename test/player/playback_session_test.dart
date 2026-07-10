@@ -1,5 +1,4 @@
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
 import 'package:xue_hua_video_player/src/model/video_source.dart';
@@ -76,14 +75,17 @@ void main() {
       expect(session.playerId.value, 42);
     });
 
-    test('dispose releases native texture while playerId is still valid', () async {
-      await session.initialize();
-      expect(session.playerId.value, 42);
+    test(
+      'dispose releases native texture while playerId is still valid',
+      () async {
+        await session.initialize();
+        expect(session.playerId.value, 42);
 
-      await session.dispose();
+        await session.dispose();
 
-      expect(disposeTextureCount, 1);
-    });
+        expect(disposeTextureCount, 1);
+      },
+    );
 
     test('supportsOrientation defaults false before open', () {
       expect(session.supportsOrientation.value, isFalse);

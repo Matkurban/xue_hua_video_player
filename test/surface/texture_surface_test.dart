@@ -102,7 +102,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(createTextureCount, 1);
 
-        await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SizedBox())));
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: SizedBox())),
+        );
         await tester.pumpAndSettle();
 
         expect(
@@ -258,10 +260,7 @@ void main() {
 
           await tester.pumpWidget(
             MediaQuery(
-              data: const MediaQueryData(
-                size: screen,
-                devicePixelRatio: dpr,
-              ),
+              data: const MediaQueryData(size: screen, devicePixelRatio: dpr),
               child: MaterialApp(
                 home: Scaffold(
                   body: TextureVideoSurface(

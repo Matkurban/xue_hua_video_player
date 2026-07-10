@@ -38,11 +38,7 @@ final class MediaSourceDto_FlutterAsset extends MediaSourceDto {
 }
 
 /// 媒体轨道类型。
-enum TrackType {
-  audio,
-  video,
-  subtitle,
-}
+enum TrackType { audio, video, subtitle }
 
 /// 当前媒体内的音轨、视频轨或字幕轨。
 class MediaTrack {
@@ -61,8 +57,7 @@ class MediaTrack {
   final bool selected;
 
   @override
-  int get hashCode =>
-      Object.hash(id, trackType, language, label, selected);
+  int get hashCode => Object.hash(id, trackType, language, label, selected);
 
   @override
   bool operator ==(Object other) =>
@@ -168,25 +163,25 @@ class PlayerEvent {
 
   @override
   int get hashCode => Object.hashAll([
-        kind,
-        positionMs,
-        durationMs,
-        width,
-        height,
-        bufferingPercent,
-        state,
-        message,
-        fps,
-        pixelAspectWidth,
-        pixelAspectHeight,
-        displayAspectWidth,
-        displayAspectHeight,
-        interlaced,
-        colorMatrix,
-        colorRange,
-        hdrFormat,
-        isSeekable,
-      ]);
+    kind,
+    positionMs,
+    durationMs,
+    width,
+    height,
+    bufferingPercent,
+    state,
+    message,
+    fps,
+    pixelAspectWidth,
+    pixelAspectHeight,
+    displayAspectWidth,
+    displayAspectHeight,
+    interlaced,
+    colorMatrix,
+    colorRange,
+    hdrFormat,
+    isSeekable,
+  ]);
 
   @override
   bool operator ==(Object other) =>
@@ -242,18 +237,18 @@ class VideoMetadata {
 
   @override
   int get hashCode => Object.hashAll([
-        width,
-        height,
-        fps,
-        pixelAspectWidth,
-        pixelAspectHeight,
-        displayAspectWidth,
-        displayAspectHeight,
-        interlaced,
-        colorMatrix,
-        colorRange,
-        hdrFormat,
-      ]);
+    width,
+    height,
+    fps,
+    pixelAspectWidth,
+    pixelAspectHeight,
+    displayAspectWidth,
+    displayAspectHeight,
+    interlaced,
+    colorMatrix,
+    colorRange,
+    hdrFormat,
+  ]);
 
   @override
   bool operator ==(Object other) =>

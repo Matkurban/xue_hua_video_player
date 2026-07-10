@@ -55,8 +55,10 @@ class XueHuaPlayerController
   final PlaybackSession _session;
 
   ImmersiveControlsState? _immersive;
-  Computed<bool>? _isFullscreenAttached;
-  final FlutterSignal<bool> _isFullscreenDetached = signal(false);
+
+  final FlutterSignal<bool> _isFullscreen = signal(false);
+
+  void Function()? _disposeFullscreenEffect;
 
   /// 是否已完成 [initialize]（原生 player 已创建且事件流已订阅）/ Whether [initialize] completed.
   @override
@@ -129,8 +131,7 @@ class XueHuaPlayerController
   ///
   /// 未 [attachImmersive] 或桌面端恒为 `false`。
   /// Always `false` on desktop or before [attachImmersive].
-  ReadonlySignal<bool> get isFullscreen =>
-      _isFullscreenAttached ?? _isFullscreenDetached;
+  ReadonlySignal<bool> get isFullscreen => _isFullscreen;
 
   /// 是否正在播放（`state == playing`）/ Whether playback is active.
   @override
@@ -150,17 +151,19 @@ class XueHuaPlayerController
   void attachImmersive(ImmersiveControlsState immersive) {
     detachImmersive();
     _immersive = immersive;
-    _isFullscreenAttached = computed(() {
-      if (!isMobilePlatform) return false;
-      return immersive.landscapeLocked.value;
+    _disposeFullscreenEffect = effect(() {
+      _isFullscreen.value = isMobilePlatform
+          ? immersive.landscapeLocked.value
+          : false;
     });
   }
 
   /// 解除沉浸绑定 / Detaches immersive state.
   void detachImmersive() {
-    _isFullscreenAttached?.dispose();
-    _isFullscreenAttached = null;
+    _disposeFullscreenEffect?.call();
+    _disposeFullscreenEffect = null;
     _immersive = null;
+    _isFullscreen.value = false;
   }
 
   /// 进入移动端全屏（横屏锁定）/ Enters mobile landscape fullscreen.
@@ -238,7 +241,7 @@ class XueHuaPlayerController
   /// 释放 player 与事件订阅 / Disposes the player and event subscription.
   Future<void> dispose() async {
     detachImmersive();
-    _isFullscreenDetached.dispose();
+    _isFullscreen.dispose();
     await _session.dispose();
   }
 }

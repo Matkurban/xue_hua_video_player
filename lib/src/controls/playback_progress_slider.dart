@@ -21,7 +21,9 @@ class PlaybackSliderSnapshot {
   final bool enabled;
 
   final VoidCallback? onSeekStart;
+
   final ValueChanged<double>? onSeekChanged;
+
   final ValueChanged<double>? onSeekEnd;
 }
 

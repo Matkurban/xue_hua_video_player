@@ -32,26 +32,45 @@ class PlaybackSession
            mediaSourceResolver ?? const MediaSourceResolver();
 
   final PlayerCommandPort _port;
+
   final MediaSourceResolver _mediaSourceResolver;
 
   final FlutterSignal<PlayerState> _state = signal(PlayerState.idle);
+
   final FlutterSignal<Duration> _position = signal(Duration.zero);
+
   final FlutterSignal<Duration> _duration = signal(Duration.zero);
+
   final FlutterSignal<Size> _videoSize = signal(Size.zero);
+
   final FlutterSignal<int> _bufferingPercent = signal(100);
+
   final FlutterSignal<double> _volume = signal(1.0);
+
   final FlutterSignal<double> _speed = signal(1.0);
+
   final FlutterSignal<bool> _looping = signal(false);
+
   final FlutterSignal<bool> _muted = signal(false);
+
   final FlutterSignal<String?> _error = signal<String?>(null);
+
   final FlutterSignal<int?> _playerId = signal<int?>(null);
+
   final FlutterSignal<bool> _initialized = signal(false);
+
   final FlutterSignal<List<MediaTrack>> _tracks = signal(const []);
+
   final FlutterSignal<VideoMetadata?> _videoMetadata = signal(null);
+
   final FlutterSignal<bool> _isSeekable = signal(true);
+
   final FlutterSignal<bool> _supportsTracks = signal(true);
+
   final FlutterSignal<bool> _supportsOrientation = signal(false);
+
   final FlutterSignal<int> _mediaGeneration = signal(0);
+
   final FlutterSignal<VideoRotation> _videoRotation = signal(
     VideoRotation.deg0,
   );

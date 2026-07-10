@@ -51,8 +51,11 @@ class _VideoControlsState extends State<VideoControls> {
   final FocusNode _focusNode = FocusNode();
 
   Timer? _hideTimer;
+
   late final void Function() _disposeStateEffect;
+
   bool _orientationLocked = false;
+
   late final void Function() _disposeOrientationEffect;
 
   List<DeviceOrientation>? _savedOrientations;
@@ -72,24 +75,22 @@ class _VideoControlsState extends State<VideoControls> {
       final locked = widget.immersive.landscapeLocked.value;
       _orientationLocked = locked;
       if (locked) {
-        unawaited(
-          SystemChrome.setPreferredOrientations([
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ]),
-        );
-      } else if (_savedOrientations != null) {
-        unawaited(SystemChrome.setPreferredOrientations(_savedOrientations!));
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else {
+        if (_savedOrientations != null) {
+          SystemChrome.setPreferredOrientations(_savedOrientations!);
+        }
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       }
     });
     if (isMobilePlatform) {
-      unawaited(_cacheOrientations());
+      // Flutter has no getter for current preferred orientations; restore all on exit.
+      _savedOrientations = DeviceOrientation.values;
     }
-  }
-
-  Future<void> _cacheOrientations() async {
-    // Flutter has no getter for current preferred orientations; restore all on exit.
-    _savedOrientations = DeviceOrientation.values;
   }
 
   @override
@@ -100,10 +101,8 @@ class _VideoControlsState extends State<VideoControls> {
     _visible.dispose();
     _focusNode.dispose();
     if (_orientationLocked) {
-      unawaited(
-        SystemChrome.setPreferredOrientations(
-          _savedOrientations ?? DeviceOrientation.values,
-        ),
+      SystemChrome.setPreferredOrientations(
+        _savedOrientations ?? DeviceOrientation.values,
       );
     }
     super.dispose();

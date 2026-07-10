@@ -142,12 +142,7 @@ final class FfiLoadUriRequest extends FfiRequest {
 }
 
 final class FfiLoadAssetRequest extends FfiRequest {
-  FfiLoadAssetRequest(
-    this.playerId,
-    this.assetKey,
-    this.bytes,
-    this.autoPlay,
-  );
+  FfiLoadAssetRequest(this.playerId, this.assetKey, this.bytes, this.autoPlay);
   final int playerId;
   final String assetKey;
   final Uint8List bytes;
@@ -257,7 +252,13 @@ final class FfiGetTracksRequest extends FfiRequest {
 }
 
 final class FfiIntOpRequest extends FfiRequest {
-  const FfiIntOpRequest(this.op, this.playerId, [this.arg0, this.arg1, this.arg2]);
+  const FfiIntOpRequest(
+    this.op,
+    this.playerId, [
+    this.arg0,
+    this.arg1,
+    this.arg2,
+  ]);
   final String op;
   final int playerId;
   final Object? arg0;

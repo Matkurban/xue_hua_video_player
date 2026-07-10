@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
@@ -65,31 +66,6 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
   void dispose() {
     _scrub.dispose();
     super.dispose();
-  }
-
-  Future<void> _showSpeedSheet() async {
-    widget.onInteract();
-    final model = widget.model;
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: [
-          for (final s in speeds)
-            CupertinoActionSheetAction(
-              onPressed: () {
-                model.setSpeed(s);
-                Navigator.of(context).pop();
-              },
-              child: Text('${s}x'),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
   }
 
   @override
@@ -207,18 +183,77 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          GestureDetector(
-                            onTap: _showSpeedSheet,
-                            child: SignalBuilder(
-                              builder: (context) => Text(
-                                '${model.speed.value}x',
-                                style: TextStyle(
-                                  color: theme.iconColor,
-                                  fontSize: theme.secondaryIconSize * 0.7,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                          ChatContextMenuWrapper(
+                            topPadding: 0,
+                            backgroundColor: theme.backgroundColor,
+                            borderRadius: BorderRadius.circular(
+                              theme.borderRadius,
                             ),
+                            padding: EdgeInsets.zero,
+                            menuBuilder: (context, hideMenu) {
+                              return SignalBuilder(
+                                builder: (context) {
+                                  final current = model.speed.value;
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      for (final s in speeds)
+                                        InkWell(
+                                          onTap: () {
+                                            widget.onInteract();
+                                            model.setSpeed(s);
+                                            hideMenu();
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 10,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 20,
+                                                  child: s == current
+                                                      ? Icon(
+                                                          Icons.check,
+                                                          size: 16,
+                                                          color:
+                                                              theme.textColor,
+                                                        )
+                                                      : null,
+                                                ),
+                                                Text(
+                                                  '${s}x',
+                                                  style: TextStyle(
+                                                    color: theme.textColor,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                            widgetBuilder: (context, showMenu, _) {
+                              return GestureDetector(
+                                onTap: showMenu,
+                                child: SignalBuilder(
+                                  builder: (context) => Text(
+                                    '${model.speed.value}x',
+                                    style: TextStyle(
+                                      color: theme.iconColor,
+                                      fontSize: theme.secondaryIconSize * 0.7,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                           if (widget.showFullscreenButton &&
                               widget.landscapeLocked != null &&
