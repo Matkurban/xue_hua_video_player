@@ -128,104 +128,123 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                       ),
                     ),
                   ),
-                  Row(
-                    children: [
-                      SignalBuilder(
-                        builder: (context) => Text(
-                          '${formatDuration(model.position.value)} / ${formatDuration(model.duration.value)}',
-                          style: TextStyle(
-                            color: theme.textColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      SignalBuilder(
-                        builder: (context) => IconButton(
-                          style: IconButton.styleFrom(
-                            tapTargetSize: .shrinkWrap,
-                            visualDensity: .compact,
-                          ),
-                          color: theme.iconColor,
-                          icon: Icon(
-                            model.muted.value || model.volume.value == 0
-                                ? Icons.volume_off
-                                : Icons.volume_up,
-                            size: theme.secondaryIconSize,
-                          ),
-                          onPressed: () {
-                            widget.onInteract();
-                            model.toggleMuted();
-                          },
-                        ),
-                      ),
-                      SignalBuilder(
-                        builder: (context) => IconButton(
-                          style: IconButton.styleFrom(
-                            tapTargetSize: .shrinkWrap,
-                            visualDensity: .compact,
-                          ),
-                          color: model.looping.value
-                              ? theme.iconColor
-                              : theme.iconColor.withValues(alpha: 0.5),
-                          icon: Icon(Icons.loop, size: theme.secondaryIconSize),
-                          onPressed: () async {
-                            widget.onInteract();
-                            await model.setLooping(!model.looping.value);
-                          },
-                        ),
-                      ),
-                      SignalBuilder(
-                        builder: (context) => PopupMenuButton<double>(
-                          tooltip: 'Playback speed',
-                          initialValue: model.speed.value,
-                          onSelected: (v) {
-                            widget.onInteract();
-                            model.setSpeed(v);
-                          },
-                          itemBuilder: (context) => [
-                            for (final s in speeds)
-                              PopupMenuItem<double>(
-                                value: s,
-                                child: Text('${s}x'),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 280;
+                      return Row(
+                        children: [
+                          Flexible(
+                            child: SignalBuilder(
+                              builder: (context) => FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '${formatDuration(model.position.value)} / ${formatDuration(model.duration.value)}',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: theme.textColor,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
+                            ),
+                          ),
+                          SignalBuilder(
+                            builder: (context) => IconButton(
+                              style: IconButton.styleFrom(
+                                tapTargetSize: .shrinkWrap,
+                                visualDensity: .compact,
+                              ),
+                              color: theme.iconColor,
+                              icon: Icon(
+                                model.muted.value || model.volume.value == 0
+                                    ? Icons.volume_off
+                                    : Icons.volume_up,
+                                size: theme.secondaryIconSize,
+                              ),
+                              onPressed: () {
+                                widget.onInteract();
+                                model.toggleMuted();
+                              },
+                            ),
+                          ),
+                          if (!compact) ...[
+                            SignalBuilder(
+                              builder: (context) => IconButton(
+                                style: IconButton.styleFrom(
+                                  tapTargetSize: .shrinkWrap,
+                                  visualDensity: .compact,
+                                ),
+                                color: model.looping.value
+                                    ? theme.iconColor
+                                    : theme.iconColor.withValues(alpha: 0.5),
+                                icon: Icon(
+                                  Icons.loop,
+                                  size: theme.secondaryIconSize,
+                                ),
+                                onPressed: () async {
+                                  widget.onInteract();
+                                  await model.setLooping(!model.looping.value);
+                                },
+                              ),
+                            ),
+                            SignalBuilder(
+                              builder: (context) => PopupMenuButton<double>(
+                                tooltip: 'Playback speed',
+                                initialValue: model.speed.value,
+                                onSelected: (v) {
+                                  widget.onInteract();
+                                  model.setSpeed(v);
+                                },
+                                itemBuilder: (context) => [
+                                  for (final s in speeds)
+                                    PopupMenuItem<double>(
+                                      value: s,
+                                      child: Text('${s}x'),
+                                    ),
+                                ],
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  child: Text(
+                                    '${model.speed.value}x',
+                                    style: TextStyle(
+                                      color: theme.iconColor,
+                                      fontSize: theme.secondaryIconSize * 0.7,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              '${model.speed.value}x',
-                              style: TextStyle(
+                          if (widget.showFullscreenButton &&
+                              widget.landscapeLocked != null &&
+                              widget.onFullscreenToggle != null)
+                            SignalBuilder(
+                              builder: (context) => IconButton(
+                                style: IconButton.styleFrom(
+                                  tapTargetSize: .shrinkWrap,
+                                  visualDensity: .compact,
+                                ),
                                 color: theme.iconColor,
-                                fontSize: theme.secondaryIconSize * 0.7,
-                                fontWeight: FontWeight.w600,
+                                icon: Icon(
+                                  widget.landscapeLocked!.value
+                                      ? Icons.fullscreen_exit
+                                      : Icons.fullscreen,
+                                  size: theme.secondaryIconSize,
+                                ),
+                                onPressed: () {
+                                  widget.onInteract();
+                                  widget.onFullscreenToggle!();
+                                },
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                      if (widget.showFullscreenButton &&
-                          widget.landscapeLocked != null &&
-                          widget.onFullscreenToggle != null)
-                        SignalBuilder(
-                          builder: (context) => IconButton(
-                            style: IconButton.styleFrom(
-                              tapTargetSize: .shrinkWrap,
-                              visualDensity: .compact,
-                            ),
-                            color: theme.iconColor,
-                            icon: Icon(
-                              widget.landscapeLocked!.value
-                                  ? Icons.fullscreen_exit
-                                  : Icons.fullscreen,
-                              size: theme.secondaryIconSize,
-                            ),
-                            onPressed: () {
-                              widget.onInteract();
-                              widget.onFullscreenToggle!();
-                            },
-                          ),
-                        ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

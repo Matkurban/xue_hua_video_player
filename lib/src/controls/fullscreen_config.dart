@@ -1,4 +1,4 @@
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 import 'controls_overlay_slots.dart';
 
 /// [AspectRatioMode] 的显示文案 / Display labels for each [AspectRatioMode].

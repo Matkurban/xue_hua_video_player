@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xue_hua_video_player/src/controls/fullscreen_config.dart';
 import 'package:xue_hua_video_player/src/controls/immersive_controls_state.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 void main() {
   group('ImmersiveControlsState', () {

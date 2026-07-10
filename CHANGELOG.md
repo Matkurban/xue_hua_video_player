@@ -1,29 +1,143 @@
 ## Unreleased
 
+### Breaking changes
+
+- **Native stack**: replace Rust `flutter_rust_bridge` + `gstreamer-rs` with a
+  **thin C player core** (`native/`) driven by **Dart FFI**. Dart public API
+  (`XueHuaPlayerController`, `PlaybackSession`, `PlayerCommandPort`) is unchanged.
+  Consumers no longer need a Rust toolchain; platform builds link GStreamer SDK
+  binaries and compile `native/` instead of cargokit.
+- **GStreamer patches**: when upstream C must change, use
+  [Matkurban/gstreamer](https://github.com/Matkurban/gstreamer) as the patch
+  source (`XHVP_GSTREAMER_SRC`); see `third_party/gstreamer.md`.
+
+### Features
+
+- C ABI `xhvp_player_*` / `xhvp_texture_*` with dedicated GMainContext thread,
+  `playbin3` URI playback, appsink BGRA frames (desktop/Apple), Android
+  `glupload` → `glcolorconvert` → `gltransformation` → `glimagesink`
+  VideoOverlay via existing SurfaceProducer JNI bridge.
+- **Swift Package Manager** support for iOS and macOS (dual CocoaPods + SPM),
+  with plugin sources under `ios|macos/xue_hua_video_player/`.
+- Android plugin module converted to Kotlin DSL (`build.gradle.kts` /
+  `settings.gradle.kts`), modern AGP (`minSdk 24`, Java 17).
+- **Android Java package**: `com.flutter_rust_bridge.xue_hua_video_player` →
+  `xue_hua.video_player` (Gradle namespace, Manifest, ProGuard, JNI symbols).
+  Dart pub package name remains `xue_hua_video_player`.
+- Example iOS/macOS apps are SPM-only (CocoaPods deintegrated); macOS embeds
+  GStreamer via an Xcode Run Script.
+
 ### Bug fixes
 
-- **Android SIGABRT on `reqwesthttpsrc` preroll (pthread_key)**: rebuild `libgstreqwest.a`
-  for Android with `tokio::current_thread` instead of the SDK's multi-thread runtime
-  (blocking pool spawns extra OS threads that exhaust Bionic pthread keys on SDK-heavy
-  apps). `build_gstreamer_umbrella.sh` now runs `build_reqwest_plugin_android.sh`
-  before ndk-build and **fails** if the umbrella still contains `new_multi_thread` /
-  `BlockingPool`. Gradle `buildGstreamerUmbrella` up-to-date checks those symbols so a
-  stale jniLibs copy cannot ship. FRB `SimpleThreadPool` is capped at one thread on Android.
-  Plugin `register` forces Tokio `RUNTIME` LazyLock at `GStreamer.init` time.
-- **Android SIGABRT in co-hosted FRB plugins (e.g. pinyin)**: remove full HTTP pipeline
-  warmup from `GStreamerInitProvider`; use `AndroidNativeRuntimeBootstrap` instead
-  (FRB + `xhvp-gst` + sync GstGL + reqwest factory). Patched `libgstreqwest.a` initializes
-  Tokio at plugin register, not on first network preroll.
-- **Android SIGABRT on `gldisplay-event` (glimagesink preroll)**: warm up GstGL display
-  synchronously on `xhvp-gst` at process start (`glimagesink` Ready→Null) so
-  `gldisplay-event` claims pthread keys before SDK-heavy code exhausts the Bionic budget.
-- **Android stale umbrella packaging**: `jniLibs` existence-only up-to-date check could
-  leave an unpatched `libgstreamer_android.so` in the APK after rebuilding libs/; fixed
-  via symbol verification in the umbrella script and Gradle.
-- **Android `ring` / `armeabi-v7a` reqwest build**: set `CC_<target_with_underscores>` /
-  `TARGET_CC` to the NDK API-level clang wrapper so cc-rs finds
-  `armv7a-linux-androideabi34-clang` instead of the nonexistent
-  `arm-linux-androideabi-clang`.
+- **Android abandoned Surface / no picture after enter preview**: texture
+  lifetime now follows the player (`disposeTexture` from
+  `PlaybackSession.dispose`), not `TextureVideoSurface` dispose — Hero /
+  SignalBuilder remounts no longer `ImageReader_close` the 1×1 producer mid-
+  PLAYING. Eager DisplayMetrics 16:9 `setSize` on texture create; cleanup
+  always clears then posts a rebind via `getSurface()`.
+- **Android stuck PAUSED when layout `setSize` never runs** (IM Hero / late
+  texture id): revert defer-PLAYING-until-buffer>1×1 (deadlocked with no
+  `ImageReader` resize). Sync Android buffer size immediately after
+  `createTexture`; fall back to MediaQuery-fitted 16:9 when layout size is
+  null/unusable. Pass `null` instead of `Size.zero` from presentation.
+- **Android black screen after layout `setSize`**: apply the new
+  `ANativeWindow` with `invoke_sync`. Cleanup now clears+rebinds instead of
+  skipping when the bound `Surface` still looks valid.
+- **Material controls overflow on narrow/Hero widths**: Flexible+FittedBox
+  time label; hide loop/speed under 280px (keep mute + fullscreen).
+- **Android SIGABRT on layout `setSize` (vivo / Android 16)**: unbind
+  VideoOverlay and release `ANativeWindow` **synchronously** before
+  `SurfaceProducer.setSize` / `release`. The prior skip-cleanup-while-resizing
+  fix left `glimagesink` holding a destroyed Surface →
+  `eglCreateWindowSurface` → FORTIFY destroyed-mutex abort. Skip redundant
+  rebinds of the same `Surface` instance.
+- **Android squashed video height**: size `SurfaceProducer` to the fitted
+  video rectangle (video aspect via `applyBoxFit` / cover scale), not the raw
+  Stack viewport. Portrait viewport + 16:9 Texture stretched the buffer and
+  compressed height.
+- **Android black picture (audio OK, position advances)**: drive
+  `SurfaceProducer.setSize` from layout (not the FittedBox unit box
+  `SizedBox(height: 1)`). Syncing from Texture constraints left ImageReader at
+  1×1 — black when scaled. Per Flutter `SurfaceProducer.setSize` (physical
+  pixels).
+- **Android unable to play (playing but no A/V / position stuck)**: restore the
+  MediaCodec GL bridge in the C video-sink bin —
+  `glupload` → `glcolorconvert` → `gltransformation` → `glimagesink`. The
+  Rust→C port had dropped `glupload`/`glcolorconvert`, so `amcvideodec` failed
+  caps negotiation (HEVC/AVC allocate→release thrash) and playbin stalled
+  despite `PlayerState.playing`. Do not reintroduce `gldownload` on this path.
+- **Android unable to play (no A/V)**: restore early SurfaceProducer bind
+  (including default 1×1) and real `gst_element_set_state(PLAYING)` whenever an
+  `ANativeWindow` exists. Prior size>1 / no-1×1 gates left `android_window==0`
+  so `glimagesink` stalled the whole playbin (silence + black). Double
+  `gst_video_overlay_expose` on apply; Dart no longer fakes `playing` at
+  buffering 100% while native is still buffering.
+- **Android black screen (1×1 ImageReader)**: drive `SurfaceProducer.setSize`
+  from Flutter layout physical pixels (`syncTextureSize`), then re-bind the
+  overlay; prefer live `ANativeWindow` dimensions in `apply_overlay`. Do not
+  size from decoded video caps. Skip `onSurfaceCleanup`→destroy while resizing
+  (setSize race cleared the new window).
+- **Android no video / false load -1**: keep `ANativeWindow` across media
+  reload (`destroy` only unbinds VideoOverlay; release on surface
+  cleanup/dispose only). SurfaceProducer does not re-fire
+  `onSurfaceAvailable` on reload. Drain the GST main context after a failed
+  preroll `get_state`, then return OK while the pipeline still exists so Dart
+  does not tear down a usable session; schedule deferred play whenever a
+  window is held.
+- **Android false load -1 / stream error**: ignore child-element
+  `GST_MESSAGE_ERROR` during codec autoplug; Android `load_uri` returns OK
+  after PAUSED and starts play asynchronously; widen usable-state check on
+  `set_state` FAILURE; keep asset temp file if pipeline still exists (avoids
+  `Internal data stream error` from premature unlink).
+- **Android load crash / false -1**: copy event `message` into a durable
+  player buffer before async Dart `NativeCallable.listener` (fixes
+  `FormatException` on stack ERROR strings); treat `set_state` FAILURE as OK
+  when pipeline is already PAUSED/PLAYING after codec autoplug; harden event
+  UTF-8 decode in `event_pump.dart`.
+- **iOS startup GLib/ORC warnings**: port sandbox env setup before `gst_init`
+  (`native/src/apple_env.c`: `ORC_CODE=backup`, writable `HOME`/`XDG_*`/
+  `GST_REGISTRY`). Fixes `g_dir_open_with_errno`, `g_filename_to_utf8`, and
+  ORC W+X mmap failures under Hardened Runtime.
+- **iOS HTTPS network video**: register GIO OpenSSL TLS backend
+  (`native/src/ios_tls.c`) and configure `souphttpsrc` via playbin
+  `source-setup` (`ssl-strict=false`, UA). Fixes
+  `Stream doesn't contain enough data` / `load_uri` `-1` after Rust→C migration.
+- **Android `ANativeWindow` lifecycle**: retain/release on surface bind/clear;
+  surface ops look up player by id on the GST thread.
+- **Safe pipeline destroy**: wait for `GST_STATE_NULL` before unref; clear
+  appsink callbacks; guard frame callback after teardown.
+- **FFI serialization**: replace per-call `Isolate.run` with one long-lived
+  worker isolate command queue (avoids dispose/load races and UI freezes).
+- **SurfaceProducer**: bind using producer width/height only; remove
+  caps→`setSize` / `setTextureContentSizeSync` path.
+- **Overlay / pause**: cache overlay element; clear `pending_auto_play` on
+  pause/stop; restore consumer ProGuard keeps for GStreamer + JNI classes.
+- **Tracks**: free `select_streams` GList; mark `selected` from
+  `STREAMS_SELECTED`; marshal GST ops by player id; null `playerId` early on
+  session dispose.
+- playbin3 track listing via `GstStreamCollection` (no `n-audio` /
+  `current-audio` GObject CRITICAL spam).
+- Buffering state machine: keep UI out of sticky `buffering` when percent
+  reaches 100; avoid READY/PAUSED clobbering during download rebuffer.
+- Asset load failures surface as Dart `StateError` with the asset key.
+- **Asset temp file**: `g_file_open_tmp` template must end with `XXXXXX`
+  (was `xhvp-asset-XXXXXX.mp4`, which always failed).
+- **Playback speed**: rate seeks use `KEY_UNIT` (not `ACCURATE`), check seek
+  result, defer while buffering, and attach `scaletempo` audio-sink when
+  available so pitch stays natural.
+- **Video rotation**: apply via GStreamer video-sink bin (`videoflip` /
+  `gltransformation`); Dart presentation no longer wraps Texture in
+  `RotatedBox` (avoids black frames).
+- **Playback speed jump-to-end / color shift**: do not use flushing
+  `SEEK_TYPE_NONE` (playbin3 can land at EOS) or `INSTANT_RATE_CHANGE` (can
+  corrupt videoconvert/appsink colors). Flush seek to queried/cached position
+  with `SEEK_TYPE_SET`; desktop sink pins BGRA via capsfilter before appsink.
+- **Rotation aspect**: keep DAR in sync with post-`videoflip` width/height so
+  90°/270° letterbox correctly.
+- **EOS replay**: `play()` after completed seeks to 0 (was resuming near EOS).
+- **Seek buffering**: clear sticky buffering after seek; Dart no longer sets
+  optimistic buffering on scrub.
+- **UI freeze**: blocking FFI transport runs off the UI isolate.
 
 ## 1.3.6
 

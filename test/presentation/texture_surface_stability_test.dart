@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/src/presentation/playback_presentation.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 import 'package:xue_hua_video_player/src/surface/texture_surface.dart';
 
 import '../support/fake_playback_presentation_model.dart';

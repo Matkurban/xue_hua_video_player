@@ -1,7 +1,7 @@
 import 'package:signals/signals_flutter.dart';
 
 import '../enum/video_rotation.dart';
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 
 /// 内置视频控件窄接口：只读 transport 状态 + 命令 / Narrow seam for built-in controls: readonly transport state and commands.
 ///

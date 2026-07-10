@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../enum/video_controls_style.dart';
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/platform_util.dart';
 import 'cupertino_video_controls.dart';
@@ -97,6 +97,7 @@ class _VideoControlsState extends State<VideoControls> {
     _hideTimer?.cancel();
     _disposeStateEffect();
     _disposeOrientationEffect();
+    _visible.dispose();
     _focusNode.dispose();
     if (_orientationLocked) {
       unawaited(

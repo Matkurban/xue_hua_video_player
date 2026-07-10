@@ -8,7 +8,7 @@ Pod::Spec.new do |s|
   s.summary          = 'GStreamer-backed video player Flutter plugin.'
   s.description      = <<-DESC
 A Flutter video player plugin that decodes local/network video with GStreamer
-(via a Rust flutter_rust_bridge core) and renders into Flutter Platform Views.
+(via a native C core + Dart FFI) and renders into Flutter Texture widgets.
                        DESC
   s.homepage         = 'https://github.com/Matkurban/xue_hua_video_player'
   s.license          = { :file => '../LICENSE' }
@@ -16,10 +16,10 @@ A Flutter video player plugin that decodes local/network video with GStreamer
   s.module_name      = 'xue_hua_video_player'
 
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'xue_hua_video_player/Sources/xue_hua_video_player/**/*.{swift,c,m,h}'
   s.dependency 'FlutterMacOS'
 
-  s.platform = :osx, '10.13'
+  s.platform = :osx, '10.15'
   s.swift_version = '5.0'
 
   # --- GStreamer (macOS) -----------------------------------------------------
@@ -49,7 +49,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
     end
     rust_build_script = 'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; ' \
       "export PKG_CONFIG_PATH=\"#{gst_pkg_config_path}:$PKG_CONFIG_PATH\"; " \
-      'sh "$PODS_TARGET_SRCROOT/../cargokit/build_pod.sh" ../rust xue_hua_video_player'
+      'sh "$PODS_TARGET_SRCROOT/../native/scripts/build_pod.sh"'
     other_ldflags = '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a ' + gst_libs
     framework_search_paths = nil
     Pod::UI.puts '[xue_hua_video_player] Using Homebrew GStreamer (debug only; not suitable for Mac App Store)'
@@ -92,8 +92,8 @@ A Flutter video player plugin that decodes local/network video with GStreamer
       "export SYSTEM_DEPS_#{p}_INCLUDE=\"#{gst_headers}\"; "
     }.join
     rust_build_script = 'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; ' \
-      'export PKG_CONFIG_ALLOW_CROSS=1; ' + gst_env +
-      'sh "$PODS_TARGET_SRCROOT/../cargokit/build_pod.sh" ../rust xue_hua_video_player'
+      'export GST_VER="' + gst_ver + '"; ' \
+      'sh "$PODS_TARGET_SRCROOT/../native/scripts/build_pod.sh"'
     other_ldflags = '-force_load ${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a ' \
       '-framework GStreamer -liconv -lresolv -lz -lbz2 ' \
       '-framework CoreFoundation -framework CoreMedia -framework CoreVideo ' \
@@ -104,10 +104,15 @@ A Flutter video player plugin that decodes local/network video with GStreamer
 
   s.script_phases = [
     {
-      :name => 'Build Rust library',
+      :name => 'Build C player library',
       :script => rust_build_script,
       :execution_position => :before_compile,
-      :input_files => ['${BUILT_PRODUCTS_DIR}/cargokit_phony'],
+      :input_files => [
+        '${PODS_TARGET_SRCROOT}/../native/include/xhvp_player.h',
+        '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
+        '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
+        '${PODS_TARGET_SRCROOT}/../native/src/xhvp_player.c',
+      ],
       :output_files => ['${PODS_CONFIGURATION_BUILD_DIR}/xue_hua_video_player/libxue_hua_video_player.a'],
     },
   ]

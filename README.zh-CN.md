@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-一个跨平台的 Flutter **视频播放器**插件：底层通过 Rust（[`flutter_rust_bridge`]）驱动
+一个跨平台的 Flutter **视频播放器**插件：底层通过 **原生 C 核心 + Dart FFI** 驱动
 **GStreamer** 解码本地与网络视频，并通过 Flutter 外部 **`Texture`** 与自定义原生桥接渲染
 （Android：`glimagesink` + `SurfaceProducer`；Apple/桌面：`appsink` BGRA 帧）。
 
@@ -75,8 +75,8 @@ dependencies:
 flutter pub get
 ```
 
-Rust 核心在应用构建时通过 [cargokit] **从源码编译**。构建应用的机器需要安装 **Rust
-工具链**（`rustup`）。各平台在构建时都需要 GStreamer SDK（部分平台运行时也需要其运行库）。
+原生播放器核心（`native/`）在应用构建时以 **C** 编译（CMake / CocoaPods / NDK），
+**不需要** Rust 工具链。各平台在构建时都需要 GStreamer SDK（部分平台运行时也需要其运行库）。
 Android 会在**首次构建时自动下载**官方 GStreamer Android SDK，并通过 ndk-build 生成伞形
 `libgstreamer_android.so`（见下文 [Android](#android全部-abi)）。
 
@@ -135,7 +135,7 @@ await controller.open(const VideoSource.file('/path/to/video.mp4'));
 await controller.open(const VideoSource.asset('assets/sample.mp4'));
 ```
 
-打包资源由 Rust 通过 `AppSrc` 从 `flutter_assets` 推流，无需复制到临时文件。
+打包资源由 Dart FFI 读入字节后写入原生临时文件加载（非 AppSrc）。
 
 ## 在应用中集成（请先阅读）
 
@@ -228,8 +228,8 @@ Android 仍遵循
 - GStreamer 使用自身的 socket + OpenSSL 进行网络通信，**不**走 `NSURLSession`，因此 App
   Transport Security（ATS）**不会**拦截播放，GStreamer 的流也**无需**配置
   `NSAppTransportSecurity`（`http://` 与 `https://` 均可播放）。
-- 静态 iOS framework 的插件与 TLS 后端在 Rust 核心中注册（`rust/src/player.rs`，
-  `#[cfg(target_os = "ios")]`）。为兼容那些不在内置 CA 链中的主机，HTTPS 证书校验被有意
+- 静态 iOS framework 的插件与 TLS 后端在 C 核心中注册（`native/src/ios_plugins.c`、
+  `native/src/ios_tls.c`，由 `native/src/runtime.c` 调用）。为兼容那些不在内置 CA 链中的主机，HTTPS 证书校验被有意
   放宽（`ssl-strict = false`）—— 见[HTTPS 安全提示](#https-安全提示)。
 
 ### macOS
@@ -436,11 +436,10 @@ iOS 模拟器。
 3. 连接真机后构建/运行：`flutter run -d <device>`（或用 `flutter build ios --no-codesign`
    验证构建）。
 
-由于 iOS 的 `GStreamer.framework` 是静态的，其插件不会被自动发现。Rust 核心会注册播放所需
-的插件与 OpenSSL TLS 后端（`rust/src/player.rs` 中的 `register_ios_static_plugins()` /
-`register_ios_tls_backend()`，受 `#[cfg(target_os = "ios")]` 保护），并在 `gst::init()`
-之前准备运行环境（`ORC_CODE=backup`、`HOME`/`TMPDIR`/`XDG_*`）。若需要尚未注册的元件，请把
-它加入插件列表。
+由于 iOS 的 `GStreamer.framework` 是静态的，其插件不会被自动发现。C 核心会注册播放所需
+的插件与 OpenSSL TLS 后端（`native/src/runtime.c` 中的 `xhvp_register_ios_static_plugins()` /
+`xhvp_register_ios_tls_backend()`，仅 iOS），并在 `gst_init()` 之前准备运行环境。若需要尚未
+注册的元件，请把它加入 `native/src/ios_plugins.c` 的插件列表。
 
 ### Android（全部 ABI）
 
@@ -448,7 +447,7 @@ iOS 模拟器。
 
 1. 下载官方 GStreamer Android universal SDK（若缓存中不存在）
 2. 通过 ndk-build 为每个 ABI 生成伞形 `libgstreamer_android.so`
-3. 通过 cargokit 从源码编译 Rust 的 `libxue_hua_video_player.so`（需要 Rust 工具链）
+3. 通过 NDK CMake 编译 C 版 `libxue_hua_video_player.so`（`native/` + JNI）
 
 伞形库（静态链接的全部 GStreamer + 插件）与 `libc++_shared.so` 输出到
 `android/build/gstreamer/jniLibs/<abi>/` 并打进插件 AAR。**首次构建需要网络**；后续构建复用缓存
@@ -496,32 +495,37 @@ sh android/scripts/build_gstreamer_umbrella.sh \
 ## 架构
 
 ```
-Dart:  XueHuaPlayerController ──FRB 调用──► Rust API (rust/src/api/player.rs)
+Dart:  XueHuaPlayerController ──FFI──► FfiPlayerCommandPort (xhvp_player_*)
        XueHuaVideoView (Texture) ◄──native texture── GStreamer sink
-Rust:  PlaybackEngine  playbin3 ─► appsink（Apple/桌面）或 glimagesink（Android）
-                     │ 总线消息 ─► StreamSink<PlayerEvent> ─► Dart
+C:     native/ playbin3 ─► appsink（Apple/桌面）或 glimagesink（Android）
+                     │ 总线 ─► XhvpEventCallback ─► Dart Stream
 ```
 
 - 解码：`playbin3` + 平台 sink（`appsink` 或 `glimagesink`）。
-- 渲染：Flutter `Texture`；Android 为 `SurfaceProducer` + VideoOverlay；Apple/桌面经 Rust C-ABI 拉取 BGRA 帧。
-- 不依赖 `irondash_texture`。
+- 渲染：Flutter `Texture`；Android 为 `SurfaceProducer` + VideoOverlay；Apple/桌面经 C ABI（`xhvp_texture_*`）拉取 BGRA 帧。
+- 控制面：Dart FFI → 窄 `xhvp_player_*` API（见 `native/include/xhvp_player.h`）。
 
-### 重新生成绑定
+### 重新生成 FFI 绑定
 
-修改 Rust API 后：
+修改 `native/include/xhvp_player.h` 后：
 
 ```bash
-flutter_rust_bridge_codegen generate
+dart run ffigen --config ffigen.yaml
 ```
 
-### 内置依赖补丁
+### GStreamer 上游补丁
 
-已移除（`irondash_texture`）。视频渲染使用上文所述的自定义 Texture 桥接。
+需要改 GStreamer C 源时，以 [Matkurban/gstreamer](https://github.com/Matkurban/gstreamer) 为补丁源（`XHVP_GSTREAMER_SRC`），见 [third_party/gstreamer.md](third_party/gstreamer.md)。
 
 ## 常见问题
 
-- **网络视频报 `Can't typefind stream`（iOS）**：未配置 CA 数据库导致 TLS 握手失败。本版本已
-  注册 OpenSSL TLS 后端并放宽 `ssl-strict`；请确保使用 v1.0.0+。
+- **iOS 启动出现 `g_dir_open_with_errno` / `g_filename_to_utf8` / ORC mmap 错误：**
+  GLib/GStreamer 需要可写的 `HOME`/`XDG_*`/`GST_REGISTRY`，且 Hardened Runtime
+  会阻止 ORC JIT。C 核心在 `gst_init` 前设置这些变量（`native/src/apple_env.c`，
+  `ORC_CODE=backup`）。不要添加 `allow-jit`。
+- **网络视频报 `Can't typefind stream` / `Stream doesn't contain enough data`（iOS）**：
+  未配置 CA 数据库导致 TLS 握手失败。C 核心会注册 OpenSSL TLS 后端
+  （`native/src/ios_tls.c`）并在 playbin `source-setup` 中放宽 `ssl-strict`。
 - **APK 体积过大**：四种 Android ABI 各自携带较大的 GStreamer 运行时。可收窄 `abiFilters`，
   或发布按 ABI 拆分的 APK / App Bundle。
 - **Android 首次构建失败 / 无网络**：首次构建会下载 GStreamer Android SDK。离线 CI 可预先
@@ -544,6 +548,4 @@ flutter_rust_bridge_codegen generate
 
 见 [LICENSE](LICENSE)。
 
-[`flutter_rust_bridge`]: https://pub.dev/packages/flutter_rust_bridge
 [`signals`]: https://pub.dev/packages/signals
-[cargokit]: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin

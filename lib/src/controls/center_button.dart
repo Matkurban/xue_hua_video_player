@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/platform_util.dart';
 import 'immersive_controls_state.dart';

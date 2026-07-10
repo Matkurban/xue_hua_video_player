@@ -3,8 +3,8 @@
 English | [简体中文](README.zh-CN.md)
 
 A cross-platform Flutter **video player** plugin that decodes local and network
-video with **GStreamer** (through a Rust [`flutter_rust_bridge`] core) and renders
-into Flutter external **`Texture`** widgets via a custom native bridge (GStreamer
+video with **GStreamer** (native **C** core + **Dart FFI**) and renders into
+Flutter external **`Texture`** widgets via a custom native bridge (GStreamer
 `appsink` on Apple/desktop; `glimagesink` + `SurfaceProducer` on Android).
 
 - Repository: <https://github.com/Matkurban/xue_hua_video_player>
@@ -79,13 +79,12 @@ Then:
 flutter pub get
 ```
 
-The Rust core is **compiled from source** during your app build via [cargokit].
-You need the **Rust toolchain** (`rustup`) on the machine that builds the app.
-Each platform also needs the GStreamer SDK at build time (and its runtime
-libraries at run time where applicable). On Android the official GStreamer Android
-SDK is **downloaded automatically** on the first build and the umbrella
-`libgstreamer_android.so` is produced via ndk-build (see [Android](#android-all-abis)
-below).
+The native player core (`native/`) is **compiled from C** during your app build
+(CMake / CocoaPods / NDK). No Rust toolchain is required. Each platform needs the
+GStreamer SDK at build time (and its runtime libraries at run time where
+applicable). On Android the official GStreamer Android SDK is **downloaded
+automatically** on the first build and the umbrella `libgstreamer_android.so` is
+produced via ndk-build (see [Android](#android-all-abis) below).
 
 ## Quick start
 
@@ -142,7 +141,7 @@ await controller.open(const VideoSource.file('/path/to/video.mp4'));
 await controller.open(const VideoSource.asset('assets/sample.mp4'));
 ```
 
-Bundled assets are streamed from Rust via `AppSrc` (no Dart-side temp-file copy).
+Bundled assets are loaded via Dart FFI bytes into a native temp file (not AppSrc).
 
 ## Integrating into your app (read this first)
 
@@ -285,8 +284,9 @@ build with a clean tree and symbolicate with
   `NSURLSession`, so App Transport Security (ATS) does **not** block playback and
   no `NSAppTransportSecurity` entry is required for GStreamer streams (both
   `http://` and `https://` work).
-- The static iOS framework's plugins and TLS backend are registered in the Rust
-  core (`rust/src/player.rs`, `#[cfg(target_os = "ios")]`). HTTPS certificate
+- The static iOS framework's plugins and TLS backend are registered in the C
+  core (`native/src/ios_plugins.c`, `native/src/ios_tls.c`, called from
+  `native/src/runtime.c`). HTTPS certificate
   verification is intentionally relaxed (`ssl-strict = false`) so streams from
   hosts without a bundled CA chain still play — see the
   [security note](#security-note-on-https).
@@ -522,12 +522,11 @@ Simulator slice, so the Apple-Silicon iOS Simulator is not supported.
    `flutter build ios --no-codesign` to verify the build).
 
 Because the iOS `GStreamer.framework` is static, its plugins are not
-auto-discovered. The Rust core registers the ones needed for playback and the
-OpenSSL TLS backend (`register_ios_static_plugins()` /
-`register_ios_tls_backend()` in `rust/src/player.rs`, guarded by
-`#[cfg(target_os = "ios")]`), and prepares the runtime environment
-(`ORC_CODE=backup`, `HOME`/`TMPDIR`/`XDG_*`) before `gst::init()`. Add to the
-plugin list if you need an element that isn't registered yet.
+auto-discovered. The C core registers the ones needed for playback and the
+OpenSSL TLS backend (`xhvp_register_ios_static_plugins()` /
+`xhvp_register_ios_tls_backend()` in `native/src/runtime.c`, iOS-only), and
+prepares the runtime environment before `gst_init()`. Add to the plugin list in
+`native/src/ios_plugins.c` if you need an element that isn't registered yet.
 
 ### Android (all ABIs)
 
@@ -536,8 +535,7 @@ build the plugin:
 
 1. Downloads the official GStreamer Android universal SDK (if not already cached)
 2. Runs ndk-build to produce the umbrella `libgstreamer_android.so` per ABI
-3. Compiles the Rust `libxue_hua_video_player.so` via cargokit (requires the
-   Rust toolchain)
+3. Compiles the C `libxue_hua_video_player.so` via NDK CMake (`native/` + JNI)
 
 The umbrella library (all of GStreamer + its plugins, linked statically) and
 `libc++_shared.so` land in `android/build/gstreamer/jniLibs/<abi>/` and are
@@ -592,35 +590,44 @@ sh android/scripts/build_gstreamer_umbrella.sh \
 ## Architecture
 
 ```
-Dart:  XueHuaPlayerController ──FRB calls──► Rust API (rust/src/api/player.rs)
+Dart:  XueHuaPlayerController ──FFI──► FfiPlayerCommandPort (xhvp_player_*)
        XueHuaVideoView (Texture) ◄──native texture── GStreamer sink
-Rust:  PlaybackEngine  playbin3 ─► appsink (Apple/desktop) or glimagesink (Android)
-                     │ bus messages ─► StreamSink<PlayerEvent> ─► Dart
+C:     native/ playbin3 ─► appsink (Apple/desktop) or glimagesink (Android)
+                     │ bus ─► XhvpEventCallback ─► Dart Stream
 ```
 
 - Decoding: `playbin3` with platform video sink (`appsink` or `glimagesink`).
 - Rendering: Flutter `Texture` + native `TextureRegistry`; Android uses
-  `SurfaceProducer` + VideoOverlay; Apple/desktop pull BGRA frames via Rust
-  C-ABI (`xhvp_texture_*`).
-- No `irondash_texture` dependency.
+  `SurfaceProducer` + VideoOverlay; Apple/desktop pull BGRA frames via C ABI
+  (`xhvp_texture_*`).
+- Control plane: Dart FFI → narrow `xhvp_player_*` API (see `native/include/xhvp_player.h`).
 
-### Regenerating bindings
+### Regenerating FFI bindings
 
-After changing the Rust API:
+After changing `native/include/xhvp_player.h`:
 
 ```bash
-flutter_rust_bridge_codegen generate
+dart run ffigen --config ffigen.yaml
 ```
 
-### Vendored dependency patch
+### GStreamer upstream patches
 
-Removed (`irondash_texture`). Video rendering uses the custom texture bridge described above.
+When GStreamer C itself must change, use the
+[Matkurban/gstreamer](https://github.com/Matkurban/gstreamer) fork as the patch
+source (`XHVP_GSTREAMER_SRC`). See [third_party/gstreamer.md](third_party/gstreamer.md).
 
 ## Troubleshooting
 
-- **`Can't typefind stream` on network video (iOS):** caused by a failed TLS
-  handshake when no CA database is configured. This build registers the OpenSSL
-  TLS backend and relaxes `ssl-strict`; make sure you are on v1.0.0+.
+- **iOS launch `g_dir_open_with_errno` / `g_filename_to_utf8` / ORC mmap errors:**
+  GLib/GStreamer need writable `HOME`/`XDG_*`/`GST_REGISTRY`, ORC JIT is blocked
+  by the Hardened Runtime, and static iOS builds must not scan a NULL plugin
+  path. The C core sets these before `gst_init` (`native/src/apple_env.c`:
+  `ORC_CODE=backup`, empty `GST_PLUGIN_SYSTEM_PATH`). Do not add `allow-jit`.
+- **`Can't typefind stream` / `Stream doesn't contain enough data` on network
+  video (iOS):** usually a failed TLS handshake when no CA database is
+  configured. The C core registers the OpenSSL TLS backend
+  (`native/src/ios_tls.c`) and relaxes `ssl-strict` on `souphttpsrc` via
+  playbin `source-setup`.
 - **APK too large:** all four Android ABIs each carry a large GStreamer runtime.
   Narrow `abiFilters` or ship per-ABI APKs / an App Bundle.
 - **Android first build fails / no network:** the GStreamer Android SDK is
@@ -646,6 +653,4 @@ Removed (`irondash_texture`). Video rendering uses the custom texture bridge des
 
 See [LICENSE](LICENSE).
 
-[`flutter_rust_bridge`]: https://pub.dev/packages/flutter_rust_bridge
 [`signals`]: https://pub.dev/packages/signals
-[cargokit]: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin

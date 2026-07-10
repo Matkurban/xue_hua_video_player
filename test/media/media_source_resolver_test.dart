@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xue_hua_video_player/src/media/media_source_resolver.dart';
 import 'package:xue_hua_video_player/src/model/video_source.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 void main() {
   const resolver = MediaSourceResolver();

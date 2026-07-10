@@ -9,11 +9,11 @@ import 'media/media_source_resolver.dart';
 import 'model/video_source.dart';
 import 'player/command_port.dart';
 import 'player/playback_session.dart';
-import 'rust/player_events.dart';
+import 'domain/player_events.dart';
 import 'utils/platform_util.dart';
 
 export 'enum/video_rotation.dart';
-export 'rust/player_events.dart'
+export 'domain/player_events.dart'
     show
         AspectRatioMode,
         MediaTrack,

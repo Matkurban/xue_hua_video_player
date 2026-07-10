@@ -1,0 +1,17 @@
+# Run with: dart run ffigen --config ffigen.yaml
+name: XhvpBindings
+description: Bindings for xue_hua_video_player native C ABI.
+output: 'lib/src/ffi/xhvp_bindings.dart'
+headers:
+  entry-points:
+    - 'native/include/xhvp_player.h'
+  include-directives:
+    - 'native/include/xhvp_player.h'
+preamble: |
+  // ignore_for_file: always_specify_types, type_annotate_public_apis
+  // ignore_for_file: camel_case_types, non_constant_identifier_names
+  // ignore_for_file: unused_element, constant_identifier_names
+comments:
+  style: any
+  length: full
+silence-enum-warning: true

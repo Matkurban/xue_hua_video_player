@@ -1,7 +1,7 @@
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/src/controls/playback_controls_model.dart';
 import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 /// Test double for [PlaybackControlsModel].
 class FakePlaybackControlsModel implements PlaybackControlsModel {

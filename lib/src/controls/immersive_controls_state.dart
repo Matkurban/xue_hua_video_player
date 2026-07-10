@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:signals/signals_flutter.dart';
 
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 import '../utils/platform_util.dart';
 import 'fullscreen_config.dart';
 

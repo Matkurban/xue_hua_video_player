@@ -8,7 +8,8 @@ import '../controls/playback_controls_model.dart';
 import '../presentation/playback_presentation_model.dart';
 import '../media/media_source_resolver.dart';
 import '../model/video_source.dart';
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
+import '../surface/texture_surface.dart';
 import 'command_port.dart';
 
 /// 深度编排模块：signals、事件分发、open 生命周期与 transport / Deep orchestration: signals, event dispatch, open lifecycle, transport.
@@ -166,12 +167,13 @@ class PlaybackSession
     });
   }
 
-  /// 播放；EOS 后手动 replay 会将 [speed] 重置为 1.0 / Plays; resets [speed] to 1.0 after manual replay from EOS.
+  /// 播放；EOS 后手动 replay 会将 [speed] 重置为 1.0 并从 0 起播 / Plays; resets speed and position after EOS replay.
   Future<void> play() {
     // Manual replay after EOS resets speed to 1x (engine resets its rate too);
     // keep the UI in sync. Normal pause->resume (not completed) keeps the speed.
     if (_state.value == PlayerState.completed) {
       _speed.value = 1.0;
+      _position.value = Duration.zero;
     }
     return _guard(_port.play);
   }
@@ -183,10 +185,10 @@ class PlaybackSession
   @override
   Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
 
-  /// 跳转；播放中会乐观显示 buffering / Seeks; optimistically shows buffering while playing.
+  /// 跳转；仅更新位置预览，缓冲态由 native BUFFERING 事件驱动 / Seeks; position preview only — buffering from native events.
   @override
   Future<void> seek(Duration position) async {
-    _previewSeek(position, showBuffering: isPlaying.value);
+    _previewSeek(position, showBuffering: false);
     await _guard(() => _port.seek(position));
   }
 
@@ -233,9 +235,18 @@ class PlaybackSession
       _guard(() => _port.setAspectRatioMode(mode));
 
   /// 取消订阅、销毁 player 并释放全部 signals / Cancels subscription, disposes player and all signals.
+  ///
+  /// Releases the native Flutter texture while [playerId] is still valid, then
+  /// nulls signals before awaiting port dispose so late events cannot race.
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    final id = _playerId.value;
+    if (id != null) {
+      await disposeNativePlayerTexture(id);
+    }
+    _playerId.value = null;
+    _initialized.value = false;
     await _sub?.cancel();
     await _port.dispose();
     isPlaying.dispose();
@@ -319,6 +330,16 @@ class PlaybackSession
         _state.value = event.state;
       case PlayerEventKind.buffering:
         _bufferingPercent.value = event.bufferingPercent;
+        // Native may pause during rebuffer; restore transport state from the event.
+        if (event.bufferingPercent < 100) {
+          _state.value = PlayerState.buffering;
+        } else {
+          // Buffering finished but native may still be waiting for surface /
+          // deferred play — do not fake playing (masks "not actually playing").
+          _state.value = event.state == PlayerState.buffering
+              ? PlayerState.ready
+              : event.state;
+        }
       case PlayerEventKind.eos:
         batch(() {
           _state.value = PlayerState.completed;

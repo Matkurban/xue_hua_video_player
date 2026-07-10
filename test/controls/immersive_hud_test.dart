@@ -7,7 +7,7 @@ import 'package:xue_hua_video_player/src/controls/fullscreen_config.dart';
 import 'package:xue_hua_video_player/src/controls/immersive_controls_state.dart';
 import 'package:xue_hua_video_player/src/controls/immersive_hud.dart';
 import 'package:xue_hua_video_player/src/controls/video_controls.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 import '../support/fake_playback_controls_model.dart';
 

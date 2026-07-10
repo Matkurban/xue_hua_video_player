@@ -5,8 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/src/controls/buffering_indicator.dart';
 import 'package:xue_hua_video_player/src/enum/video_controls_style.dart';
+import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
 import 'package:xue_hua_video_player/src/presentation/playback_presentation.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 import 'package:xue_hua_video_player/src/theme/video_controls_theme.dart';
 
 import '../support/fake_playback_presentation_model.dart';
@@ -359,6 +360,39 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(FittedBox), findsNothing);
+    });
+
+    testWidgets('does not wrap Texture in RotatedBox on rotation change', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel();
+      aspectRatioMode = signal(AspectRatioMode.fit);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 300,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      model.setVideoRotation(VideoRotation.deg90);
+      await tester.pumpAndSettle();
+
+      // Rotation is applied in the native GStreamer sink, not Dart.
+      expect(find.byType(RotatedBox), findsNothing);
+      expect(find.byType(FittedBox), findsOneWidget);
+
+      debugDefaultTargetPlatformOverride = null;
     });
   });
 }

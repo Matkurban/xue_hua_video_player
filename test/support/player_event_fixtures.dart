@@ -1,4 +1,4 @@
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 /// Builds [PlayerEvent] values for unit/widget tests without boilerplate.
 abstract final class PlayerEventFixtures {

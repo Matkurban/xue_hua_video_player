@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-        package="com.flutter_rust_bridge.xue_hua_video_player">
+        package="xue_hua.video_player">
     <!-- GStreamer loads native code (the umbrella libgstreamer_android.so) that
          must be present on the filesystem for the dynamic loader / GStreamer's
          runtime. Request uncompressed, extracted native libs so this propagates
@@ -13,7 +13,7 @@
              never register and playback fails with not-linked / No streams to
              output. authorities uses ${applicationId} to stay unique per app. -->
         <provider
-            android:name="com.flutter_rust_bridge.xue_hua_video_player.GStreamerInitProvider"
+            android:name="xue_hua.video_player.GStreamerInitProvider"
             android:authorities="${applicationId}.xhvp.gstreamer-init"
             android:exported="false"
             android:initOrder="199" />

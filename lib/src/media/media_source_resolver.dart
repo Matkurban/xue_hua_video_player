@@ -1,6 +1,6 @@
 import '../enum/video_source_type.dart';
 import '../model/video_source.dart';
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 
 /// 将 Dart [VideoSource] 解析为 Rust [MediaSourceDto] / Resolves a Dart [VideoSource] into a Rust [MediaSourceDto].
 ///

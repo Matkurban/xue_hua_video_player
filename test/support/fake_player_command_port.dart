@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:xue_hua_video_player/src/player/command_port.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 /// Test double for [PlayerCommandPort] — the Dart/Rust seam under [PlaybackSession].
 class FakePlayerCommandPort implements PlayerCommandPort {

@@ -1,6 +1,6 @@
 name: xue_hua_video_player
-description: "Cross-platform Flutter video player plugin decoding local/network video with GStreamer (via a Rust flutter_rust_bridge core) and rendering into Flutter external Texture widgets."
-version: 1.3.6
+description: "Cross-platform Flutter video player plugin decoding local/network video with GStreamer (native C core + Dart FFI) and rendering into Flutter external Texture widgets."
+version: 1.4.0
 homepage: https://github.com/Matkurban/xue_hua_video_player
 repository: https://github.com/Matkurban/xue_hua_video_player
 issue_tracker: https://github.com/Matkurban/xue_hua_video_player/issues
@@ -13,15 +13,13 @@ dependencies:
   chat_context_menu: ^3.0.1
   flutter:
     sdk: flutter
-  flutter_rust_bridge: 2.12.0
+  ffi: ^2.2.0
   plugin_platform_interface: ^2.0.2
   screen_brightness: ^2.1.11
   signals: ^7.1.0
   theme_extensions_builder_annotation: ^7.4.0
-  freezed_annotation: ^3.0.0
 
 dev_dependencies:
-  ffi: ^2.1.3
   ffigen: ^20.1.1
   flutter_test:
     sdk: flutter
@@ -30,13 +28,12 @@ dev_dependencies:
     sdk: flutter
   build_runner: ^2.15.0
   theme_extensions_builder: ^7.4.0
-  freezed: ^3.0.0
 
 flutter:
   plugin:
     platforms:
       android:
-        package: com.flutter_rust_bridge.xue_hua_video_player
+        package: xue_hua.video_player
         pluginClass: XueHuaVideoPlayerPlugin
         ffiPlugin: true
       ios:

@@ -1,10 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 
 import '../controls/buffering_indicator.dart';
 import '../enum/video_controls_style.dart';
-import '../rust/api/types.dart';
-import '../rust/player_events.dart';
+import '../domain/player_events.dart';
 import '../surface/texture_surface.dart';
 import '../surface/video_surface_handle.dart';
 import '../theme/video_controls_theme.dart';
@@ -14,6 +15,9 @@ import 'playback_presentation_model.dart';
 ///
 /// 根据 [model.playerId] 路由至 [TextureVideoSurface]，并用 [SignalBuilder] 响应 [aspectRatio] 变化。
 /// Routes to [TextureVideoSurface] from [model.playerId] and reacts to [aspectRatio] via [SignalBuilder].
+///
+/// 画面旋转由 native GStreamer（`videoflip` / `gltransformation`）完成，此处不变换 Texture。
+/// Video rotation is applied in the native GStreamer sink bin; this layer does not transform Texture.
 class PlaybackPresentation extends StatelessWidget {
   /// 创建呈现层 / Creates the presentation layer.
   ///
@@ -54,10 +58,34 @@ class PlaybackPresentation extends StatelessWidget {
                 _AspectRatioModeSync(
                   model: model,
                   aspectRatioMode: mode,
-                  child: _VideoAspectLayout(
-                    aspectRatio: ratio,
-                    mode: mode,
-                    child: TextureVideoSurface(handle: handle),
+                  // LayoutBuilder for viewport; buffer size = fitted video rect
+                  // (video aspect), not raw viewport (portrait would squash).
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final viewport = Size(
+                        constraints.maxWidth,
+                        constraints.maxHeight,
+                      );
+                      final bufferLogical =
+                          _VideoAspectLayout.androidBufferLogicalSize(
+                            aspectRatio: ratio,
+                            mode: mode,
+                            viewport: viewport,
+                          );
+                      // Size.zero → null so TextureVideoSurface can MediaQuery-fallback.
+                      final androidLayout =
+                          bufferLogical.width > 1 && bufferLogical.height > 1
+                          ? bufferLogical
+                          : null;
+                      return _VideoAspectLayout(
+                        aspectRatio: ratio,
+                        mode: mode,
+                        child: TextureVideoSurface(
+                          handle: handle,
+                          androidLayoutSize: androidLayout,
+                        ),
+                      );
+                    },
                   ),
                 ),
                 _BufferingOverlay(model: model, controlsStyle: controlsStyle),
@@ -74,6 +102,10 @@ class PlaybackPresentation extends StatelessWidget {
 ///
 /// 三种 mode 共用同一 widget 树，仅 [BoxFit] 不同，避免 reparent Texture 子树。
 /// All modes share one widget tree; only [BoxFit] changes to avoid reparenting the Texture subtree.
+///
+/// 单位盒 `SizedBox(width: ratio, height: 1)` 仅供 FittedBox 缩放；Android
+/// `SurfaceProducer.setSize` 使用 [androidBufferLogicalSize]（视频宽高比的
+/// 拟合矩形），勿用整屏视口（竖屏 buffer 会压扁画面）。
 class _VideoAspectLayout extends StatelessWidget {
   const _VideoAspectLayout({
     required this.aspectRatio,
@@ -85,12 +117,37 @@ class _VideoAspectLayout extends StatelessWidget {
   final AspectRatioMode mode;
   final Widget child;
 
-  static BoxFit _boxFitForMode(AspectRatioMode mode) {
+  static BoxFit boxFitForMode(AspectRatioMode mode) {
     return switch (mode) {
       AspectRatioMode.fit => BoxFit.contain,
       AspectRatioMode.fill => BoxFit.cover,
       AspectRatioMode.stretch => BoxFit.fill,
     };
+  }
+
+  /// Logical size for Android [SurfaceProducer.setSize]: matches Texture aspect.
+  static Size androidBufferLogicalSize({
+    required double aspectRatio,
+    required AspectRatioMode mode,
+    required Size viewport,
+  }) {
+    if (!viewport.width.isFinite ||
+        !viewport.height.isFinite ||
+        viewport.width <= 1 ||
+        viewport.height <= 1) {
+      return Size.zero;
+    }
+    final ratio = aspectRatio > 0 ? aspectRatio : 16 / 9;
+    final input = Size(ratio, 1.0);
+    final fit = boxFitForMode(mode);
+    if (fit == BoxFit.fill) {
+      return viewport;
+    }
+    if (fit == BoxFit.cover) {
+      final s = math.max(viewport.width / ratio, viewport.height);
+      return Size(ratio * s, s);
+    }
+    return applyBoxFit(BoxFit.contain, input, viewport).destination;
   }
 
   @override
@@ -99,7 +156,7 @@ class _VideoAspectLayout extends StatelessWidget {
 
     return SizedBox.expand(
       child: FittedBox(
-        fit: _boxFitForMode(mode),
+        fit: boxFitForMode(mode),
         alignment: Alignment.center,
         clipBehavior: Clip.hardEdge,
         child: SizedBox(width: ratio, height: 1, child: child),
@@ -154,7 +211,7 @@ class _BufferingOverlay extends StatelessWidget {
   }
 }
 
-/// 播放器就绪后将 [aspectRatioMode] 推送至 Rust pipeline / Pushes [aspectRatioMode] to Rust when the player is ready.
+/// 播放器就绪后将 [aspectRatioMode] 推送至 native pipeline / Pushes [aspectRatioMode] to native when the player is ready.
 class _AspectRatioModeSync extends StatefulWidget {
   const _AspectRatioModeSync({
     required this.model,

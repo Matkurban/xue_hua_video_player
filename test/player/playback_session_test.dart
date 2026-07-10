@@ -1,9 +1,10 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
 import 'package:xue_hua_video_player/src/model/video_source.dart';
 import 'package:xue_hua_video_player/src/player/playback_session.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 import '../support/fake_player_command_port.dart';
 import '../support/player_event_fixtures.dart';
@@ -14,14 +15,26 @@ void main() {
   group('PlaybackSession', () {
     late FakePlayerCommandPort port;
     late PlaybackSession session;
+    const textureChannel = MethodChannel('xue_hua_video_player/texture');
+    var disposeTextureCount = 0;
 
     setUp(() {
       port = FakePlayerCommandPort();
       session = PlaybackSession(port: port);
+      disposeTextureCount = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(textureChannel, (call) async {
+            if (call.method == 'disposeTexture') {
+              disposeTextureCount++;
+            }
+            return null;
+          });
     });
 
     tearDown(() async {
       await session.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(textureChannel, null);
     });
 
     PlayerEvent event({
@@ -61,6 +74,15 @@ void main() {
       await session.initialize();
       expect(session.initialized.value, isTrue);
       expect(session.playerId.value, 42);
+    });
+
+    test('dispose releases native texture while playerId is still valid', () async {
+      await session.initialize();
+      expect(session.playerId.value, 42);
+
+      await session.dispose();
+
+      expect(disposeTextureCount, 1);
     });
 
     test('supportsOrientation defaults false before open', () {
@@ -310,7 +332,7 @@ void main() {
       expect(session.error.value, isNull);
     });
 
-    test('seek while playing sets buffering state optimistically', () async {
+    test('seek while playing does not set buffering optimistically', () async {
       await session.initialize();
       port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
       await Future<void>.delayed(Duration.zero);
@@ -318,7 +340,7 @@ void main() {
       await session.seek(const Duration(seconds: 30));
 
       expect(session.position.value, const Duration(seconds: 30));
-      expect(session.state.value, PlayerState.buffering);
+      expect(session.state.value, PlayerState.playing);
     });
 
     test('open resets video rotation after prior rotation', () async {

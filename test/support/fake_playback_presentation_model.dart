@@ -1,6 +1,7 @@
 import 'package:signals/signals_flutter.dart';
+import 'package:xue_hua_video_player/src/enum/video_rotation.dart';
 import 'package:xue_hua_video_player/src/presentation/playback_presentation_model.dart';
-import 'package:xue_hua_video_player/src/rust/player_events.dart';
+import 'package:xue_hua_video_player/src/domain/player_events.dart';
 
 /// Test double for [PlaybackPresentationModel].
 class FakePlaybackPresentationModel implements PlaybackPresentationModel {
@@ -8,17 +9,20 @@ class FakePlaybackPresentationModel implements PlaybackPresentationModel {
     int? playerId = 42,
     bool initialized = true,
     double aspectRatio = 16 / 9,
+    VideoRotation videoRotation = VideoRotation.deg0,
     PlayerState state = PlayerState.idle,
     int bufferingPercent = 100,
   }) : _playerId = signal(playerId),
        _initialized = signal(initialized),
        _aspectRatio = signal(aspectRatio),
+       _videoRotation = signal(videoRotation),
        _state = signal(state),
        _bufferingPercent = signal(bufferingPercent);
 
   final FlutterSignal<int?> _playerId;
   final FlutterSignal<bool> _initialized;
   final FlutterSignal<double> _aspectRatio;
+  final FlutterSignal<VideoRotation> _videoRotation;
   final FlutterSignal<PlayerState> _state;
   final FlutterSignal<int> _bufferingPercent;
 
@@ -33,6 +37,9 @@ class FakePlaybackPresentationModel implements PlaybackPresentationModel {
 
   @override
   ReadonlySignal<double> get aspectRatio => _aspectRatio;
+
+  @override
+  ReadonlySignal<VideoRotation> get videoRotation => _videoRotation;
 
   @override
   ReadonlySignal<PlayerState> get state => _state;
@@ -52,12 +59,15 @@ class FakePlaybackPresentationModel implements PlaybackPresentationModel {
 
   void setAspectRatio(double value) => _aspectRatio.value = value;
 
+  void setVideoRotation(VideoRotation value) => _videoRotation.value = value;
+
   void setPlayerId(int? value) => _playerId.value = value;
 
   void dispose() {
     _playerId.dispose();
     _initialized.dispose();
     _aspectRatio.dispose();
+    _videoRotation.dispose();
     _state.dispose();
     _bufferingPercent.dispose();
   }
