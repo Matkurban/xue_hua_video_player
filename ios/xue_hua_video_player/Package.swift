@@ -4,18 +4,18 @@
 import PackageDescription
 
 let gstRoot = Context.environment["GSTREAMER_ROOT_IOS"]
-    ?? "\((Context.environment["HOME"] ?? ""))/Library/Developer/GStreamer/iPhone.sdk"
+    ?? "\(Context.environment["HOME"] ?? "")/Library/Developer/GStreamer/iPhone.sdk"
 
 let package = Package(
     name: "xue_hua_video_player",
     platforms: [
-        .iOS("13.0")
+        .iOS("13.0"),
     ],
     products: [
-        .library(name: "xue-hua-video-player", targets: ["xue_hua_video_player"])
+        .library(name: "xue-hua-video-player", targets: ["xue_hua_video_player"]),
     ],
     dependencies: [
-        .package(name: "FlutterFramework", path: "../FlutterFramework")
+        .package(name: "FlutterFramework", path: "../FlutterFramework"),
     ],
     targets: [
         .target(

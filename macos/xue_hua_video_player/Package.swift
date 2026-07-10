@@ -10,13 +10,13 @@ let gstCache = "\(home)/Library/Caches/xue_hua_video_player/gstreamer/\(gstVer)"
 let package = Package(
     name: "xue_hua_video_player",
     platforms: [
-        .macOS("10.15")
+        .macOS("10.15"),
     ],
     products: [
-        .library(name: "xue-hua-video-player", targets: ["xue_hua_video_player"])
+        .library(name: "xue-hua-video-player", targets: ["xue_hua_video_player"]),
     ],
     dependencies: [
-        .package(name: "FlutterFramework", path: "../FlutterFramework")
+        .package(name: "FlutterFramework", path: "../FlutterFramework"),
     ],
     targets: [
         .target(
