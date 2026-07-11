@@ -4,7 +4,6 @@
 
 #include <gst/app/gstappsink.h>
 #include <gst/gst.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -55,7 +54,7 @@ typedef struct XhvpPlayer {
   XhvpFrameReadyFn frame_cb;
   void *frame_ctx;
 
-  pthread_mutex_t frame_mu;
+  GMutex frame_mu;
   XhvpFrameBuffer frames[2];
   int latest_frame;
 
@@ -112,7 +111,7 @@ typedef struct XhvpRuntime {
   GMainContext *ctx;
   GMainLoop *loop;
   GThread *thread;
-  pthread_mutex_t players_mu;
+  GMutex players_mu;
   XhvpPlayer players[XHVP_MAX_PLAYERS];
   int64_t next_id;
 } XhvpRuntime;
@@ -132,6 +131,10 @@ void xhvp_register_ios_tls_backend(void);
 #else
 void xhvp_setup_macos_env(void);
 #endif
+#endif
+
+#if defined(_WIN32)
+void xhvp_setup_windows_env(void);
 #endif
 
 void xhvp_player_emit(XhvpPlayer *p, int32_t kind, const char *message);

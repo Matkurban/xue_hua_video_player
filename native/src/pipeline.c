@@ -1,9 +1,9 @@
 #include "xhvp_internal.h"
 
+#include <glib/gstdio.h>
 #include <gst/video/video.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 static void xhvp_apply_orient_element(GstElement *el, int32_t degrees) {
   if (!el) {
@@ -441,7 +441,7 @@ static void xhvp_reset_media_fields(XhvpPlayer *p) {
 
 static void xhvp_clear_asset_temp(XhvpPlayer *p) {
   if (p->asset_temp_path[0] != '\0') {
-    unlink(p->asset_temp_path);
+    g_unlink(p->asset_temp_path);
     p->asset_temp_path[0] = '\0';
   }
   if (p->asset_bytes) {
@@ -741,24 +741,26 @@ int32_t xhvp_pipeline_load_asset(XhvpPlayer *p, const uint8_t *bytes,
   }
 
   /* Write bytes to a temp file and play via playbin (same path as URI).
-   * GLib requires XXXXXX at the end of the template (no suffix after it). */
+   * GLib requires XXXXXX at the end of the template (no suffix after it).
+   * Use only GLib I/O after g_file_open_tmp: on Windows the FD belongs to
+   * glib's CRT and must not be passed to MSVC _write/_close. */
   gchar *tmp_path = NULL;
   gint fd = g_file_open_tmp("xhvp-asset-XXXXXX", &tmp_path, NULL);
   if (fd < 0 || !tmp_path) {
     g_free(tmp_path);
     return XHVP_ERR_FAIL;
   }
-  gssize written = write(fd, bytes, len);
-  close(fd);
-  if (written < 0 || (uint32_t)written != len) {
-    unlink(tmp_path);
+  (void)g_close(fd, NULL);
+  if (!g_file_set_contents(tmp_path, (const gchar *)bytes, (gssize)len,
+                           NULL)) {
+    g_unlink(tmp_path);
     g_free(tmp_path);
     return XHVP_ERR_FAIL;
   }
 
   gchar *file_uri = g_filename_to_uri(tmp_path, NULL, NULL);
   if (!file_uri) {
-    unlink(tmp_path);
+    g_unlink(tmp_path);
     g_free(tmp_path);
     return XHVP_ERR_FAIL;
   }
@@ -774,7 +776,7 @@ int32_t xhvp_pipeline_load_asset(XhvpPlayer *p, const uint8_t *bytes,
       p->asset_temp_path[sizeof(p->asset_temp_path) - 1] = '\0';
       g_free(tmp_path);
     } else {
-      unlink(tmp_path);
+      g_unlink(tmp_path);
       g_free(tmp_path);
     }
     return rc;

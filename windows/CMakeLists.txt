@@ -30,10 +30,17 @@ add_library(${PLUGIN_NAME} SHARED
   "${NATIVE_ROOT}/src/frame.c"
   "${NATIVE_ROOT}/src/pipeline.c"
   "${NATIVE_ROOT}/src/xhvp_player.c"
+  "${NATIVE_ROOT}/src/windows_env.c"
 )
 apply_standard_settings(${PLUGIN_NAME})
+# MSVC /WX treats C4819 as error on CP936 (Chinese) systems; force UTF-8.
+target_compile_options(${PLUGIN_NAME} PRIVATE /utf-8)
 set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET default)
-target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL XHVP_BUILDING)
+target_compile_definitions(${PLUGIN_NAME} PRIVATE
+  FLUTTER_PLUGIN_IMPL
+  XHVP_BUILDING
+  _CRT_SECURE_NO_WARNINGS
+)
 target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(${PLUGIN_NAME} PRIVATE

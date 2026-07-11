@@ -69,7 +69,7 @@ to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.4.9
+  xue_hua_video_player: ^1.5.0
 ```
 
 Then:

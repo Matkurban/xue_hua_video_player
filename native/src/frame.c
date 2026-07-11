@@ -9,7 +9,7 @@ void xhvp_frame_init(XhvpPlayer *p) {
 }
 
 void xhvp_frame_clear(XhvpPlayer *p) {
-  pthread_mutex_lock(&p->frame_mu);
+  g_mutex_lock(&p->frame_mu);
   for (int i = 0; i < 2; i++) {
     g_free(p->frames[i].data);
     p->frames[i].data = NULL;
@@ -18,7 +18,7 @@ void xhvp_frame_clear(XhvpPlayer *p) {
     p->frames[i].valid = false;
   }
   p->latest_frame = 0;
-  pthread_mutex_unlock(&p->frame_mu);
+  g_mutex_unlock(&p->frame_mu);
 }
 
 GstFlowReturn xhvp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
@@ -62,7 +62,7 @@ GstFlowReturn xhvp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
     src_stride = vmeta->stride[0];
   }
 
-  pthread_mutex_lock(&p->frame_mu);
+  g_mutex_lock(&p->frame_mu);
   const int write_idx = 1 - p->latest_frame;
   XhvpFrameBuffer *fb = &p->frames[write_idx];
   if (fb->capacity < needed) {
@@ -106,7 +106,7 @@ GstFlowReturn xhvp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
 
   XhvpFrameReadyFn cb = p->frame_cb;
   void *ctx = p->frame_ctx;
-  pthread_mutex_unlock(&p->frame_mu);
+  g_mutex_unlock(&p->frame_mu);
 
   gst_buffer_unmap(buffer, &map);
   gst_sample_unref(sample);
@@ -119,10 +119,10 @@ GstFlowReturn xhvp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
 
 bool xhvp_frame_info(XhvpPlayer *p, int32_t *w, int32_t *h, int32_t *stride,
                      uint32_t *bytes) {
-  pthread_mutex_lock(&p->frame_mu);
+  g_mutex_lock(&p->frame_mu);
   XhvpFrameBuffer *fb = &p->frames[p->latest_frame];
   if (!fb->valid) {
-    pthread_mutex_unlock(&p->frame_mu);
+    g_mutex_unlock(&p->frame_mu);
     return false;
   }
   if (w) {
@@ -137,7 +137,7 @@ bool xhvp_frame_info(XhvpPlayer *p, int32_t *w, int32_t *h, int32_t *stride,
   if (bytes) {
     *bytes = fb->size;
   }
-  pthread_mutex_unlock(&p->frame_mu);
+  g_mutex_unlock(&p->frame_mu);
   return true;
 }
 
@@ -146,10 +146,10 @@ bool xhvp_frame_copy(XhvpPlayer *p, uint8_t *dst, uint32_t dst_len, int32_t *w,
   if (!dst) {
     return false;
   }
-  pthread_mutex_lock(&p->frame_mu);
+  g_mutex_lock(&p->frame_mu);
   XhvpFrameBuffer *fb = &p->frames[p->latest_frame];
   if (!fb->valid || dst_len < fb->size) {
-    pthread_mutex_unlock(&p->frame_mu);
+    g_mutex_unlock(&p->frame_mu);
     return false;
   }
   memcpy(dst, fb->data, fb->size);
@@ -162,6 +162,6 @@ bool xhvp_frame_copy(XhvpPlayer *p, uint8_t *dst, uint32_t dst_len, int32_t *w,
   if (stride) {
     *stride = fb->stride;
   }
-  pthread_mutex_unlock(&p->frame_mu);
+  g_mutex_unlock(&p->frame_mu);
   return true;
 }

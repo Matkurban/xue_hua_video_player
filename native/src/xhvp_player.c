@@ -29,7 +29,7 @@ void xhvp_player_set_state(XhvpPlayer *p, int32_t state) {
   xhvp_player_emit(p, XHVP_EVENT_STATE_CHANGED, "");
 }
 
-const char *xhvp_version(void) { return "1.4.9"; }
+const char *xhvp_version(void) { return "1.5.0"; }
 
 int32_t xhvp_init(void) { return xhvp_runtime_start(); }
 
@@ -40,11 +40,11 @@ XhvpPlayerId xhvp_player_create(void) {
     return 0;
   }
   XhvpRuntime *rt = xhvp_runtime();
-  pthread_mutex_lock(&rt->players_mu);
+  g_mutex_lock(&rt->players_mu);
   for (int i = 0; i < XHVP_MAX_PLAYERS; i++) {
     if (!rt->players[i].in_use) {
       XhvpPlayer *p = &rt->players[i];
-      pthread_mutex_t frame_mu = p->frame_mu;
+      GMutex frame_mu = p->frame_mu;
       memset(p, 0, sizeof(*p));
       p->frame_mu = frame_mu;
       p->in_use = true;
@@ -58,11 +58,11 @@ XhvpPlayerId xhvp_player_create(void) {
       p->asset_temp_path[0] = '\0';
       xhvp_frame_init(p);
       XhvpPlayerId id = p->id;
-      pthread_mutex_unlock(&rt->players_mu);
+      g_mutex_unlock(&rt->players_mu);
       return id;
     }
   }
-  pthread_mutex_unlock(&rt->players_mu);
+  g_mutex_unlock(&rt->players_mu);
   return 0;
 }
 

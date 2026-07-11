@@ -8,34 +8,36 @@
 #endif
 
 static XhvpRuntime g_runtime;
-static pthread_once_t g_runtime_once = PTHREAD_ONCE_INIT;
+static GOnce g_runtime_once = G_ONCE_INIT;
 
-static void xhvp_runtime_players_init(void) {
-  pthread_mutex_init(&g_runtime.players_mu, NULL);
+static gpointer xhvp_runtime_players_init(gpointer data) {
+  (void)data;
+  g_mutex_init(&g_runtime.players_mu);
   g_runtime.next_id = 1;
   for (int i = 0; i < XHVP_MAX_PLAYERS; i++) {
     g_runtime.players[i].id = 0;
     g_runtime.players[i].in_use = false;
-    pthread_mutex_init(&g_runtime.players[i].frame_mu, NULL);
+    g_mutex_init(&g_runtime.players[i].frame_mu);
   }
+  return NULL;
 }
 
 XhvpRuntime *xhvp_runtime(void) {
-  pthread_once(&g_runtime_once, xhvp_runtime_players_init);
+  g_once(&g_runtime_once, xhvp_runtime_players_init, NULL);
   return &g_runtime;
 }
 
 XhvpPlayer *xhvp_player_lookup(XhvpPlayerId id) {
   XhvpRuntime *rt = xhvp_runtime();
-  pthread_mutex_lock(&rt->players_mu);
+  g_mutex_lock(&rt->players_mu);
   for (int i = 0; i < XHVP_MAX_PLAYERS; i++) {
     if (rt->players[i].in_use && rt->players[i].id == id) {
       XhvpPlayer *p = &rt->players[i];
-      pthread_mutex_unlock(&rt->players_mu);
+      g_mutex_unlock(&rt->players_mu);
       return p;
     }
   }
-  pthread_mutex_unlock(&rt->players_mu);
+  g_mutex_unlock(&rt->players_mu);
   return NULL;
 }
 
@@ -130,6 +132,8 @@ int32_t xhvp_runtime_start(void) {
   xhvp_setup_ios_env();
 #elif defined(__APPLE__)
   xhvp_setup_macos_env();
+#elif defined(_WIN32)
+  xhvp_setup_windows_env();
 #endif
 
   gst_init(NULL, NULL);

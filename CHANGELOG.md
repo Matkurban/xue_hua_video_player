@@ -1,3 +1,20 @@
+## 1.5.0
+
+### Bug fixes
+
+- **Windows: asset open Debug Assertion Failed** (`write.cpp` /
+  `(_osfile(fh) & FOPEN)`): `g_file_open_tmp` returns a FD owned by GLib’s CRT;
+  writing with MSVC `_write` crossed CRT boundaries. Asset load now uses
+  GLib-only I/O (`g_close` + `g_file_set_contents` + `g_unlink`).
+- **Windows: network / HTTPS playback silent failure**: Flutter only bundles
+  GStreamer `bin/*.dll`; plugins and GIO TLS modules were not discoverable.
+  Set `GST_PLUGIN_SYSTEM_PATH` and `GIO_MODULE_DIR` from
+  `GSTREAMER_1_0_ROOT_MSVC_X86_64` (fallback `C:\gstreamer\1.0\msvc_x86_64`)
+  before `gst_init` via new `native/src/windows_env.c`.
+- **Windows MSVC build**: replace `pthread` mutexes/`once` with GLib
+  `GMutex`/`GOnce`; compile with `/utf-8` and `_CRT_SECURE_NO_WARNINGS` so
+  Chinese code-page hosts and CRT secure warnings do not fail `/WX`.
+
 ## 1.4.9
 
 ### Bug fixes
