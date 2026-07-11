@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
-import 'package:xue_hua_video_player_example/video_url.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,12 +75,17 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _openNetwork() async {
-    await _controller.open(VideoSource.network(videoUrl), autoPlay: true);
+    await _controller.open(
+      VideoSource.network(
+        'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+      ),
+      autoPlay: true,
+    );
   }
 
   Future<void> _openAsset() async {
     await _controller.open(
-      const VideoSource.asset('assets/sample2.mp4'),
+      const VideoSource.asset('assets/sample.mp4'),
       autoPlay: true,
     );
   }

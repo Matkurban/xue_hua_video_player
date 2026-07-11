@@ -39,6 +39,10 @@ struct _XueHuaVideoTexture {
   std::vector<uint8_t>* rgba;
 };
 
+G_DEFINE_TYPE(XueHuaVideoTexture,
+              xue_hua_video_texture,
+              fl_pixel_buffer_texture_get_type())
+
 namespace {
 
 void XhvpTextureOnFrame(void* ctx) {
@@ -70,11 +74,24 @@ void BgraToRgbaTight(const uint8_t* src,
   }
 }
 
-gboolean xue_hua_video_texture_copy_pixels(FlPixelBufferTexture* texture,
-                                           const uint8_t** out_buffer,
-                                           uint32_t* width,
-                                           uint32_t* height,
-                                           GError** error) {
+}  // namespace
+
+static void xue_hua_video_texture_emit_placeholder(const uint8_t** out_buffer,
+                                                   uint32_t* width,
+                                                   uint32_t* height) {
+  // Flutter's Linux engine dereferences error->message when copy_pixels
+  // returns FALSE, so idle/no-frame must still return TRUE with pixels.
+  static const uint8_t kBlackRgba[4] = {0, 0, 0, 255};
+  *out_buffer = kBlackRgba;
+  *width = 1;
+  *height = 1;
+}
+
+static gboolean xue_hua_video_texture_copy_pixels(FlPixelBufferTexture* texture,
+                                                  const uint8_t** out_buffer,
+                                                  uint32_t* width,
+                                                  uint32_t* height,
+                                                  GError** /*error*/) {
   auto* self = XUE_HUA_VIDEO_TEXTURE(texture);
   std::lock_guard<std::mutex> guard(*self->lock);
 
@@ -85,10 +102,8 @@ gboolean xue_hua_video_texture_copy_pixels(FlPixelBufferTexture* texture,
   if (!xhvp_texture_frame_info(self->player_id, &frame_width, &frame_height,
                                &frame_stride, &frame_bytes) ||
       frame_width <= 0 || frame_height <= 0 || frame_bytes == 0) {
-    if (error) {
-      *error = nullptr;
-    }
-    return FALSE;
+    xue_hua_video_texture_emit_placeholder(out_buffer, width, height);
+    return TRUE;
   }
 
   if (self->staging_bgra->size() < frame_bytes) {
@@ -102,10 +117,8 @@ gboolean xue_hua_video_texture_copy_pixels(FlPixelBufferTexture* texture,
                                 frame_bytes, &copied_w, &copied_h,
                                 &copied_stride) ||
       copied_w <= 0 || copied_h <= 0) {
-    if (error) {
-      *error = nullptr;
-    }
-    return FALSE;
+    xue_hua_video_texture_emit_placeholder(out_buffer, width, height);
+    return TRUE;
   }
 
   const size_t rgba_bytes =
@@ -120,13 +133,10 @@ gboolean xue_hua_video_texture_copy_pixels(FlPixelBufferTexture* texture,
   *out_buffer = self->rgba->data();
   *width = static_cast<uint32_t>(copied_w);
   *height = static_cast<uint32_t>(copied_h);
-  if (error) {
-    *error = nullptr;
-  }
   return TRUE;
 }
 
-void xue_hua_video_texture_dispose(GObject* object) {
+static void xue_hua_video_texture_dispose(GObject* object) {
   auto* self = XUE_HUA_VIDEO_TEXTURE(object);
   xhvp_texture_unregister(self->player_id);
   delete self->lock;
@@ -138,25 +148,19 @@ void xue_hua_video_texture_dispose(GObject* object) {
   G_OBJECT_CLASS(xue_hua_video_texture_parent_class)->dispose(object);
 }
 
-void xue_hua_video_texture_class_init(XueHuaVideoTextureClass* klass) {
+static void xue_hua_video_texture_class_init(XueHuaVideoTextureClass* klass) {
   G_OBJECT_CLASS(klass)->dispose = xue_hua_video_texture_dispose;
   FL_PIXEL_BUFFER_TEXTURE_CLASS(klass)->copy_pixels =
       xue_hua_video_texture_copy_pixels;
 }
 
-void xue_hua_video_texture_init(XueHuaVideoTexture* self) {
+static void xue_hua_video_texture_init(XueHuaVideoTexture* self) {
   self->player_id = 0;
   self->registrar = nullptr;
   self->lock = new std::mutex();
   self->staging_bgra = new std::vector<uint8_t>();
   self->rgba = new std::vector<uint8_t>();
 }
-
-}  // namespace
-
-G_DEFINE_TYPE(XueHuaVideoTexture,
-              xue_hua_video_texture,
-              fl_pixel_buffer_texture_get_type())
 
 XueHuaVideoTexture* xue_hua_video_texture_new(int64_t player_id,
                                               FlTextureRegistrar* registrar) {
