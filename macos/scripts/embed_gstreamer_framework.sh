@@ -44,18 +44,25 @@ bash "${SCRIPT_DIR}/thin_gstreamer_framework.sh" "${DEST}"
 # Sign nested Mach-Os inside-out. Do not --preserve-metadata: the vendor
 # binaries are adhoc/linker-signed; keeping their identifier/flags breaks MAS
 # designated-requirement checks (ITMS-90238 on lib/GStreamer).
+# Avoid empty-array "${extra[@]}" under `set -u` (bash 3.2 unbound variable).
 sign_file() {
   local file="$1"
   local identity="${EXPANDED_CODE_SIGN_IDENTITY:-}"
-  local -a extra=()
-  # Framework main binary has no .dylib suffix; use Info.plist CFBundleIdentifier.
-  if [[ "$(basename "${file}")" == "GStreamer" ]]; then
-    extra+=(--identifier org.freedesktop.gstreamer)
-  fi
+  local is_gst=0
+  [[ "$(basename "${file}")" == "GStreamer" ]] && is_gst=1
+
   if [[ -n "${identity}" ]] && [[ "${identity}" != "-" ]]; then
-    /usr/bin/codesign --force --sign "${identity}" "${extra[@]}" "${file}"
+    if [[ "${is_gst}" -eq 1 ]]; then
+      /usr/bin/codesign --force --sign "${identity}" --identifier org.freedesktop.gstreamer "${file}"
+    else
+      /usr/bin/codesign --force --sign "${identity}" "${file}"
+    fi
   else
-    /usr/bin/codesign --force --sign - "${extra[@]}" "${file}" 2>/dev/null || true
+    if [[ "${is_gst}" -eq 1 ]]; then
+      /usr/bin/codesign --force --sign - --identifier org.freedesktop.gstreamer "${file}" 2>/dev/null || true
+    else
+      /usr/bin/codesign --force --sign - "${file}" 2>/dev/null || true
+    fi
   fi
 }
 

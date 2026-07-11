@@ -1,3 +1,11 @@
+## 1.4.8
+
+### Bug fixes
+
+- **macOS embed Run Script: `extra[@]: unbound variable`**: under `set -u`,
+  bash 3.2 rejects empty-array expansion when signing non-`GStreamer` dylibs.
+  Sign via explicit branches instead of `"${extra[@]}"`.
+
 ## 1.4.7
 
 ### Bug fixes
