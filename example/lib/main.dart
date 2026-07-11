@@ -1,3 +1,4 @@
+import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
@@ -46,15 +47,22 @@ class _PlayerPageState extends State<PlayerPage> {
 
   String? _initError;
 
+  final List<String> mediaList = [
+    'https://media.w3.org/2010/05/bunny/trailer.mp4',
+    'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    'https://media.w3.org/2010/05/video/movie_300.mp4',
+    'https://www.w3schools.com/html/mov_bbb.mp4',
+    'https://archive.org/download/big-bunny-sample-video/SampleVideo.mp4',
+    'https://media.w3.org/2010/05/bunny/movie.mp4',
+  ];
+
   @override
   void initState() {
     super.initState();
     _controller
         .initialize()
         .then((_) {
-          debugPrint(
-            'xue_hua_video_player: playerId=${_controller.playerId.value}',
-          );
+          debugPrint('xue_hua_video_player: playerId=${_controller.playerId.value}');
           if (mounted) setState(() => _ready = true);
         })
         .catchError((Object e, StackTrace st) {
@@ -74,20 +82,8 @@ class _PlayerPageState extends State<PlayerPage> {
     super.dispose();
   }
 
-  Future<void> _openNetwork() async {
-    await _controller.open(
-      VideoSource.network(
-        'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-      ),
-      autoPlay: true,
-    );
-  }
-
   Future<void> _openAsset() async {
-    await _controller.open(
-      const VideoSource.asset('assets/sample.mp4'),
-      autoPlay: true,
-    );
+    await _controller.open(const VideoSource.asset('assets/sample.mp4'), autoPlay: true);
   }
 
   @override
@@ -102,13 +98,34 @@ class _PlayerPageState extends State<PlayerPage> {
                   title: const Text('雪花视频播放器'),
                   toolbarHeight: 48,
                   actions: [
-                    TextButton(
-                      onPressed: _openNetwork,
-                      style: TextButton.styleFrom(
-                        tapTargetSize: .shrinkWrap,
-                        visualDensity: .compact,
-                      ),
-                      child: const Text('网络'),
+                    ChatContextMenuWrapper(
+                      backgroundColor: Colors.white,
+                      widgetBuilder: (context, shoeMenu, hideMenu) {
+                        return TextButton(
+                          onPressed: shoeMenu,
+                          style: TextButton.styleFrom(
+                            tapTargetSize: .shrinkWrap,
+                            visualDensity: .compact,
+                          ),
+                          child: const Text('网络'),
+                        );
+                      },
+                      menuBuilder: ((context, hideMenu) {
+                        return Column(
+                          mainAxisSize: .min,
+                          crossAxisAlignment: .start,
+                          children: List.generate(mediaList.length, (index) {
+                            final media = mediaList[index];
+                            return TextButton(
+                              onPressed: () {
+                                _controller.open(VideoSource.network(media), autoPlay: true);
+                                hideMenu();
+                              },
+                              child: Text(media),
+                            );
+                          }),
+                        );
+                      }),
                     ),
                     TextButton(
                       onPressed: _openAsset,
@@ -137,7 +154,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   child: XueHuaVideoView(
                     controller: _controller,
                     showControls: true,
-                    controlsStyle: .material,
+                    controlsStyle: .cupertino,
                   ),
                 ),
         );
