@@ -2,9 +2,15 @@
 
 ### Bug fixes
 
-- **macOS embed Run Script: `extra[@]: unbound variable`**: under `set -u`,
-  bash 3.2 rejects empty-array expansion when signing non-`GStreamer` dylibs.
-  Sign via explicit branches instead of `"${extra[@]}"`.
+- **Linux: example fails to build**: unused Android-only
+  `xhvp_deferred_play_cb` tripped `-Wunused-function` under `-Werror`; wrap it
+  in `#if defined(__ANDROID__)`. Fix GObject/C++ wiring for the Linux plugin
+  and `FlPixelBufferTexture` subclass (`G_DECLARE_FINAL_TYPE` only in the
+  header; keep `class_init` / `init` / `dispose` at file scope).
+- **Linux: crash right after `createTexture`**: idle `copy_pixels` returned
+  `FALSE` with a null `GError`, and the Flutter Linux engine then
+  dereferenced `error->message`. Return a 1×1 black RGBA placeholder with
+  `TRUE` until a real frame is available (same approach as media_kit).
 
 ## 1.4.7
 

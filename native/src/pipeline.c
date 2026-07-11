@@ -630,6 +630,7 @@ static void xhvp_attach_audio_sink(GstElement *pipeline) {
   g_object_set(pipeline, "audio-sink", bin, NULL);
 }
 
+#if defined(__ANDROID__)
 typedef struct {
   XhvpPlayerId id;
 } XhvpDeferredPlay;
@@ -644,6 +645,7 @@ static gboolean xhvp_deferred_play_cb(gpointer data) {
   g_free(op);
   return G_SOURCE_REMOVE;
 }
+#endif
 
 int32_t xhvp_pipeline_load_uri(XhvpPlayer *p, const char *uri, bool auto_play) {
   if (!uri || !*uri) {

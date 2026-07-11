@@ -1,19 +1,10 @@
 #include "include/xue_hua_video_player/xue_hua_video_player_plugin.h"
 
-#include <flutter_linux/flutter_linux.h>
-
 #include <cstdint>
 #include <map>
-#include <memory>
 #include <mutex>
 
 #include "xue_hua_video_texture.h"
-
-#include <flutter_linux/flutter_linux.h>
-
-#define XUE_HUA_VIDEO_PLAYER_TYPE_PLUGIN (xue_hua_video_player_plugin_get_type())
-G_DECLARE_FINAL_TYPE(XueHuaVideoPlayerPlugin, xue_hua_video_player_plugin,
-                     XUE_HUA, VIDEO_PLAYER_PLUGIN, GObject)
 
 struct _XueHuaVideoPlayerPlugin {
   GObject parent_instance;
