@@ -41,25 +41,35 @@ bash "${SCRIPT_DIR}/prune_gstreamer_plugins.sh" "${DEST}"
 bash "${SCRIPT_DIR}/prune_gstreamer_orphan_dylibs.sh" "${DEST}"
 bash "${SCRIPT_DIR}/thin_gstreamer_framework.sh" "${DEST}"
 
-sign_if_needed() {
+# Sign nested Mach-Os inside-out. Do not --preserve-metadata: the vendor
+# binaries are adhoc/linker-signed; keeping their identifier/flags breaks MAS
+# designated-requirement checks (ITMS-90238 on lib/GStreamer).
+sign_file() {
   local file="$1"
   local identity="${EXPANDED_CODE_SIGN_IDENTITY:-}"
+  local -a extra=()
+  # Framework main binary has no .dylib suffix; use Info.plist CFBundleIdentifier.
+  if [[ "$(basename "${file}")" == "GStreamer" ]]; then
+    extra+=(--identifier org.freedesktop.gstreamer)
+  fi
   if [[ -n "${identity}" ]] && [[ "${identity}" != "-" ]]; then
-    /usr/bin/codesign --force --sign "${identity}" --preserve-metadata=identifier,entitlements,flags "${file}"
+    /usr/bin/codesign --force --sign "${identity}" "${extra[@]}" "${file}"
   else
-    /usr/bin/codesign --force --sign - "${file}" 2>/dev/null || true
+    /usr/bin/codesign --force --sign - "${extra[@]}" "${file}" 2>/dev/null || true
   fi
 }
 
 identity="${EXPANDED_CODE_SIGN_IDENTITY:-}"
 if [[ -n "${identity}" ]] && [[ "${identity}" != "-" ]]; then
-  # Only regular files — skip symlinks (dangling ones break codesign).
+  # *.dylib / *.so / bare "GStreamer" (Versions/1.0/GStreamer + lib/GStreamer).
   while IFS= read -r -d '' lib; do
     [[ -f "${lib}" ]] || continue
-    sign_if_needed "${lib}"
-  done < <(find "${DEST}" \( -name '*.dylib' -o -name '*.so' \) -type f -print0)
+    sign_file "${lib}"
+  done < <(find "${DEST}" \( -name '*.dylib' -o -name '*.so' -o -name 'GStreamer' \) -type f -print0)
+  # TN2206: sign the versioned framework, then the .framework wrapper.
+  sign_file "${DEST}/Versions/1.0"
 fi
 
-sign_if_needed "${DEST}"
+sign_file "${DEST}"
 
 echo "Embedded GStreamer.framework ($(du -sh "${DEST}" | awk '{print $1}'))"

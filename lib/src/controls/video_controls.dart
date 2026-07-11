@@ -319,10 +319,7 @@ class _VideoControlsState extends State<VideoControls> {
               key: const ValueKey('video-controls-opacity'),
               opacity: _visible.value ? 1 : 0,
               duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_visible.value,
-                child: chrome,
-              ),
+              child: IgnorePointer(ignoring: !_visible.value, child: chrome),
             );
           },
         ),

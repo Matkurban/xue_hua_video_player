@@ -1,3 +1,13 @@
+## 1.4.7
+
+### Bug fixes
+
+- **macOS MAS ITMS-90238 (Invalid signature / designated Requirement)**:
+  embed only re-signed `*.dylib`/`*.so`, leaving the extensionless main binary
+  at `lib/GStreamer` with the vendor adhoc signature. Embed now signs all
+  Mach-Os including `GStreamer`, uses identifier `org.freedesktop.gstreamer`,
+  and signs `Versions/1.0` then the framework (inside-out).
+
 ## 1.4.6
 
 ### Bug fixes

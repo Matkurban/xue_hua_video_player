@@ -69,32 +69,36 @@ void main() {
       );
     }
 
-    testWidgets('hides top bar with bottom chrome after autoHide while playing', (
-      tester,
-    ) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      try {
-        await pumpControls(tester, autoHide: const Duration(milliseconds: 50));
+    testWidgets(
+      'hides top bar with bottom chrome after autoHide while playing',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        try {
+          await pumpControls(
+            tester,
+            autoHide: const Duration(milliseconds: 50),
+          );
 
-        expect(find.text('Episode 1'), findsOneWidget);
-        expect(opacityChrome(tester).opacity, 1.0);
+          expect(find.text('Episode 1'), findsOneWidget);
+          expect(opacityChrome(tester).opacity, 1.0);
 
-        await tester.pump(const Duration(milliseconds: 50));
-        await tester.pump(); // signal rebuild
-        await tester.pump(const Duration(milliseconds: 200)); // fade
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.pump(); // signal rebuild
+          await tester.pump(const Duration(milliseconds: 200)); // fade
 
-        expect(opacityChrome(tester).opacity, 0.0);
-        final ignore = tester.widget<IgnorePointer>(
-          find.descendant(
-            of: find.byKey(const ValueKey('video-controls-opacity')),
-            matching: find.byType(IgnorePointer),
-          ),
-        );
-        expect(ignore.ignoring, isTrue);
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
+          expect(opacityChrome(tester).opacity, 0.0);
+          final ignore = tester.widget<IgnorePointer>(
+            find.descendant(
+              of: find.byKey(const ValueKey('video-controls-opacity')),
+              matching: find.byType(IgnorePointer),
+            ),
+          );
+          expect(ignore.ignoring, isTrue);
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      },
+    );
 
     testWidgets('desktop mouse hover shows chrome again after auto-hide', (
       tester,
