@@ -1,3 +1,13 @@
+## 1.4.9
+
+### Bug fixes
+
+- **macOS MAS ITMS-90332 (Invalid Symbolic Link)**: strip removed `share`/`bin`
+  but left dangling links (`etc/fonts/conf.d/*` → `share/fontconfig`,
+  `Commands` → `bin`, top-level `Headers`). Strip now drops `etc/fonts` and
+  those links, then deletes any remaining dangling symlinks across the
+  framework. Keeps `etc/ssl` CA certs.
+
 ## 1.4.8
 
 ### Bug fixes
