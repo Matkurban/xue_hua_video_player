@@ -31,12 +31,30 @@ class MediaSourceResolver {
       case VideoSourceType.file:
         final trimmed = source.uri.trim();
         final parsed = Uri.tryParse(trimmed);
-        if (parsed != null && parsed.hasScheme) {
+        // Windows paths like `C:\...` / `C:/...` parse as scheme "C". Only keep
+        // the string when it is a real URI scheme GStreamer understands.
+        if (parsed != null &&
+            parsed.hasScheme &&
+            _isRealUriScheme(parsed.scheme)) {
           return trimmed;
         }
         return Uri.file(trimmed).toString();
       case VideoSourceType.asset:
         return source.uri.trim();
+    }
+  }
+
+  static bool _isRealUriScheme(String scheme) {
+    switch (scheme.toLowerCase()) {
+      case 'file':
+      case 'http':
+      case 'https':
+      case 'rtsp':
+      case 'rtspt':
+      case 'rtmp':
+        return true;
+      default:
+        return false;
     }
   }
 }

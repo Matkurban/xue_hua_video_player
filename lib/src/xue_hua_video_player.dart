@@ -82,8 +82,9 @@ class XueHuaVideoPlayer {
         final dto = const MediaSourceResolver().resolve(source);
         final uri = switch (dto) {
           MediaSourceDto_Uri(:final field0) => field0,
-          MediaSourceDto_FlutterAsset() =>
-            throw StateError('unexpected asset dto'),
+          MediaSourceDto_FlutterAsset() => throw StateError(
+            'unexpected asset dto',
+          ),
         };
         return (uri: uri, tempFile: null);
       case VideoSourceType.asset:

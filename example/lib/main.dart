@@ -4,6 +4,8 @@ import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
 import 'dart:typed_data';
 
+import 'thumbnail_page.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await XueHuaVideoPlayer.initialize();
@@ -48,14 +50,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   String? _initError;
 
-  final List<String> mediaList = [
-    'https://media.w3.org/2010/05/bunny/trailer.mp4',
-    'https://media.w3.org/2010/05/sintel/trailer.mp4',
-    'https://media.w3.org/2010/05/video/movie_300.mp4',
-    'https://www.w3schools.com/html/mov_bbb.mp4',
-    'https://archive.org/download/big-bunny-sample-video/SampleVideo.mp4',
-    'https://media.w3.org/2010/05/bunny/movie.mp4',
-  ];
+  final List<String> mediaList = ThumbnailPage.networkSamples;
 
   @override
   void initState() {
@@ -63,7 +58,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _controller
         .initialize()
         .then((_) {
-          debugPrint('xue_hua_video_player: playerId=${_controller.playerId.value}');
+          debugPrint(
+            'xue_hua_video_player: playerId=${_controller.playerId.value}',
+          );
           if (mounted) setState(() => _ready = true);
         })
         .catchError((Object e, StackTrace st) {
@@ -84,7 +81,10 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _openAsset() async {
-    await _controller.open(const VideoSource.asset('assets/sample.mp4'), autoPlay: true);
+    await _controller.open(
+      const VideoSource.asset('assets/sample.mp4'),
+      autoPlay: true,
+    );
   }
 
   Future<void> _showPng(Uint8List png, String title) async {
@@ -106,30 +106,22 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  Future<void> _captureThumbnail() async {
-    try {
-      final png = await XueHuaVideoPlayer.captureThumbnail(
-        VideoSource.network(mediaList.first),
-      );
-      await _showPng(png, '封面');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('抽封面失败: $e')),
-      );
-    }
-  }
-
   Future<void> _captureCurrentFrame() async {
     try {
       final png = await _controller.captureCurrentFrame();
       await _showPng(png, '当前帧');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('截帧失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('截帧失败: $e')));
     }
+  }
+
+  void _openThumbnailPage() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ThumbnailPage()));
   }
 
   @override
@@ -164,7 +156,10 @@ class _PlayerPageState extends State<PlayerPage> {
                             final media = mediaList[index];
                             return TextButton(
                               onPressed: () {
-                                _controller.open(VideoSource.network(media), autoPlay: true);
+                                _controller.open(
+                                  VideoSource.network(media),
+                                  autoPlay: true,
+                                );
                                 hideMenu();
                               },
                               child: Text(media),
@@ -182,12 +177,12 @@ class _PlayerPageState extends State<PlayerPage> {
                       child: const Text('本地'),
                     ),
                     TextButton(
-                      onPressed: _captureThumbnail,
+                      onPressed: _openThumbnailPage,
                       style: TextButton.styleFrom(
                         tapTargetSize: .shrinkWrap,
                         visualDensity: .compact,
                       ),
-                      child: const Text('封面'),
+                      child: const Text('抽封面'),
                     ),
                     TextButton(
                       onPressed: _captureCurrentFrame,

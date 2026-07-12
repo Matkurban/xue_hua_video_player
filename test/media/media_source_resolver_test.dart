@@ -29,9 +29,43 @@ void main() {
       expect((dto as MediaSourceDto_Uri).field0, startsWith('file://'));
     });
 
+    test('Windows drive path with backslashes becomes file URI', () {
+      final dto = resolver.resolve(
+        VideoSource.file(r'C:\Users\34963\Downloads\a.mov'),
+      );
+      expect(dto, isA<MediaSourceDto_Uri>());
+      final uri = (dto as MediaSourceDto_Uri).field0;
+      expect(uri, startsWith('file://'));
+      expect(uri.toLowerCase(), contains('/c:/users/34963/downloads/a.mov'));
+    });
+
+    test('Windows drive path with forward slashes becomes file URI', () {
+      final dto = resolver.resolve(
+        VideoSource.file('C:/Users/34963/Downloads/a.mp4'),
+      );
+      expect(dto, isA<MediaSourceDto_Uri>());
+      final uri = (dto as MediaSourceDto_Uri).field0;
+      expect(uri, startsWith('file://'));
+      expect(uri.toLowerCase(), contains('/c:/users/34963/downloads/a.mp4'));
+    });
+
     test('file URI with scheme is preserved', () {
       const uri = 'file:///tmp/video.mp4';
       final dto = resolver.resolve(VideoSource.file(uri));
+      expect(dto, isA<MediaSourceDto_Uri>());
+      expect((dto as MediaSourceDto_Uri).field0, uri);
+    });
+
+    test('Windows file URI with scheme is preserved', () {
+      const uri = 'file:///C:/Users/34963/Downloads/a.mov';
+      final dto = resolver.resolve(VideoSource.file(uri));
+      expect(dto, isA<MediaSourceDto_Uri>());
+      expect((dto as MediaSourceDto_Uri).field0, uri);
+    });
+
+    test('https network URI is preserved', () {
+      const uri = 'https://example.com/v.mp4';
+      final dto = resolver.resolve(VideoSource.network(uri));
       expect(dto, isA<MediaSourceDto_Uri>());
       expect((dto as MediaSourceDto_Uri).field0, uri);
     });

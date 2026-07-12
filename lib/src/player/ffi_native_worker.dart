@@ -355,9 +355,7 @@ Map<String, Object?> _readCapturedFrame({
     final len = outLen.value;
     final ptr = outPtr.value;
     if (ptr == nullptr || len == 0) {
-      throw StateError(
-        notReadyMessage ?? '$op returned empty frame',
-      );
+      throw StateError(notReadyMessage ?? '$op returned empty frame');
     }
     final bytes = Uint8List.fromList(ptr.asTypedList(len));
     XhvpLibrary.instance.bindings.xhvp_thumbnail_free(ptr);

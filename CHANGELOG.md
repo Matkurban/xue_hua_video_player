@@ -1,3 +1,19 @@
+## 1.5.2
+
+### Bug fixes
+
+- **Windows local file URI**: paths like `C:\...\video.mov` were treated as a
+  URI with scheme `C` and passed to GStreamer without `file:///`, causing
+  `captureThumbnail` / `open(VideoSource.file(...))` to fail with code `-1`.
+  `MediaSourceResolver` now only preserves real schemes (`file` / `http` /
+  `https` / `rtsp` / …) and converts drive-letter paths via `Uri.file`.
+
+### Example
+
+- Add a dedicated **抽封面** page: pick network / asset / local video via
+  `file_picker`, then call `XueHuaVideoPlayer.captureThumbnail` and preview
+  the PNG.
+
 ## 1.5.1
 
 ### Features
