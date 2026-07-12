@@ -400,6 +400,18 @@ nm -gU Runner.app/Runner | grep xhvp_init
 
 You should see `_xhvp_init`. An empty result means symbols were still stripped.
 
+#### SPM NativeCore (C sources)
+
+SPM builds the C core from `ios|macos/xue_hua_video_player/NativeCore/`, which
+must be a **real copy** of `native/` (not a directory symlink). Publishing with
+symlinks produced path-text stubs on pub.dev and linker errors
+(`undefined symbol: _xhvp_*`). After changing C code:
+
+```bash
+./tool/sync_native_core.sh
+./tool/verify_native_core.sh
+```
+
 ### Windows
 
 - Install the GStreamer **MSVC** package (development files + runtime) from
@@ -722,6 +734,11 @@ source (`XHVP_GSTREAMER_SRC`). See [third_party/gstreamer.md](third_party/gstrea
   [Apple Release / FFI symbols](#apple-release--ffi-symbols-ios--macos)
   (Strip Style = Non-Global Symbols; CocoaPods usually injects this after
   `pod install`).
+- **Link error: `undefined symbol: _xhvp_*` (SPM macOS/iOS):**
+  `NativeCore` C tree missing or corrupted (pub symlink stubs). Upgrade to
+  ≥1.5.3, or for a path dependency run `./tool/sync_native_core.sh` then
+  `flutter clean` and rebuild. See
+  [SPM NativeCore](#spm-nativecore-c-sources).
 - **iOS launch `g_dir_open_with_errno` / `g_filename_to_utf8` / ORC mmap errors:**
   GLib/GStreamer need writable `HOME`/`XDG_*`/`GST_REGISTRY`, ORC JIT is blocked
   by the Hardened Runtime, and static iOS builds must not scan a NULL plugin

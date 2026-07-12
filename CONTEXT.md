@@ -106,14 +106,15 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 
 ## Apple packaging (CocoaPods + SwiftPM)
 
-- iOS/macOS plugin sources live under `ios|macos/xue_hua_video_player/` (`Package.swift` + `Sources/` + `NativeCore/` → `native/`).
-- Plugin podspecs remain for host apps that still use CocoaPods (`build_pod.sh` + `-force_load`).
+- iOS/macOS plugin sources live under `ios|macos/xue_hua_video_player/` (`Package.swift` + `Sources/` + `NativeCore/`).
+- **`native/` is the canonical C tree.** `ios|macos/.../NativeCore/{include,src}` are **synced real copies** (not symlinks): `dart pub publish` turns directory symlinks into path-text stubs, which leaves SPM’s `xhvp_player_c` empty and causes undefined `_xhvp_*` at link. After editing `native/`, run [`tool/sync_native_core.sh`](tool/sync_native_core.sh); before publish run [`tool/verify_native_core.sh`](tool/verify_native_core.sh).
+- Plugin podspecs remain for host apps that still use CocoaPods (`build_pod.sh` + `-force_load`); CocoaPods still compiles from `native/` directly.
 - CocoaPods injects `STRIP_STYLE=non-global` and Runner `-force_load` via `user_target_xcconfig` so Dart `DynamicLibrary.process()` / `dlsym` can resolve `xhvp_*` in Release/Archive.
 - SPM hosts (including this repo’s **example**) must set Runner Strip Style to **Non-Global Symbols** themselves; see README “Apple Release / FFI symbols”.
 - Under SPM, CocoaPods `vendored_frameworks` does **not** embed GStreamer. Hosts with a `macos/Podfile` must call `install_gstreamer_embed_script!` from [`macos/gstreamer_podfile_helper.rb`](macos/gstreamer_podfile_helper.rb) in `post_install` (see README). Pure-SPM example uses a Runner Run Script (`embed_gstreamer_framework.sh`).
 - `xhvp_ffi_retain_symbols()` (called from plugin `register`) keeps Dart-looked-up ABI symbols from dead-strip.
 - The **example** app is SPM-only (no `Podfile`); macOS Runner embeds GStreamer via an Xcode Run Script phase (`macos/scripts/embed_gstreamer_framework.sh`).
-- After editing `native/`, clean the example (`flutter clean`) so SPM/Pods recompile C; do not run from a stale copy under another path (e.g. `VideoPlayer/` vs `XueHuaPackages/`).
+- After editing `native/` (and syncing NativeCore), clean the example (`flutter clean`) so SPM/Pods recompile C; do not run from a stale copy under another path (e.g. `VideoPlayer/` vs `XueHuaPackages/`).
 
 ## Presentation layout (Dart)
 

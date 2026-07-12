@@ -338,6 +338,17 @@ nm -gU Runner.app/Runner | grep xhvp_init
 
 应能看到 `_xhvp_init`。若无输出，说明符号仍被剥离。
 
+#### SPM NativeCore（C 源码）
+
+SPM 从 `ios|macos/xue_hua_video_player/NativeCore/` 编译 C 核心，这里必须是
+`native/` 的**真实拷贝**（不能是目录符号链接）。带符号链接发布到 pub.dev 会变成
+路径文本桩，链接时报 `undefined symbol: _xhvp_*`。改完 C 源码后请执行：
+
+```bash
+./tool/sync_native_core.sh
+./tool/verify_native_core.sh
+```
+
 ### Windows
 
 - 从 <https://gstreamer.freedesktop.org/download/> 安装 GStreamer 的 **MSVC** 包
@@ -617,6 +628,10 @@ dart run ffigen --config ffigen.yaml
   全局 FFI 符号被剥离。见
   [Apple Release / FFI 符号](#apple-release--ffi-符号ios-与-macos)
   （Strip Style = Non-Global Symbols；CocoaPods 在 `pod install` 后通常会自动注入）。
+- **链接报 `undefined symbol: _xhvp_*`（SPM macOS/iOS）：**
+  `NativeCore` C 目录缺失或损坏（pub 符号链接桩）。请升级到 ≥1.5.3；若用 path
+  依赖，先跑 `./tool/sync_native_core.sh`，再 `flutter clean` 后重建。见
+  [SPM NativeCore](#spm-nativecorec-源码)。
 - **iOS 启动出现 `g_dir_open_with_errno` / `g_filename_to_utf8` / ORC mmap 错误：**
   GLib/GStreamer 需要可写的 `HOME`/`XDG_*`/`GST_REGISTRY`，且 Hardened Runtime
   会阻止 ORC JIT。C 核心在 `gst_init` 前设置这些变量（`native/src/apple_env.c`，

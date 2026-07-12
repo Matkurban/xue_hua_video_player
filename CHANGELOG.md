@@ -1,3 +1,14 @@
+## 1.5.3
+
+### Bug fixes
+
+- **macOS/iOS SPM: undefined `_xhvp_*` at link**: `dart pub publish` turned
+  `NativeCore/{include,src}` directory symlinks into path-text stubs, so the
+  SPM `xhvp_player_c` target compiled no C and Runner failed with undefined
+  `_xhvp_ffi_retain_symbols` / `_xhvp_texture_*`. NativeCore is now a real
+  copy of `native/`; run `tool/sync_native_core.sh` after editing C sources
+  and `tool/verify_native_core.sh` before publish.
+
 ## 1.5.2
 
 ### Bug fixes
