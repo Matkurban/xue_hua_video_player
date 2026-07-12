@@ -325,3 +325,112 @@ List<MediaTrack> tracksFromMaps(List<Map<String, Object?>> maps) {
     );
   }).toList();
 }
+
+Map<String, Object?> _readCapturedFrame({
+  required int Function(
+    Pointer<Pointer<Uint8>>,
+    Pointer<Uint32>,
+    Pointer<Int32>,
+    Pointer<Int32>,
+    Pointer<Int32>,
+  )
+  capture,
+  required String op,
+  String? notReadyMessage,
+}) {
+  final outPtr = malloc<Pointer<Uint8>>();
+  final outLen = malloc<Uint32>();
+  final outW = malloc<Int32>();
+  final outH = malloc<Int32>();
+  final outStride = malloc<Int32>();
+  try {
+    final code = capture(outPtr, outLen, outW, outH, outStride);
+    if (code != 0) {
+      // XHVP_ERR_NOT_READY == -3
+      if (code == -3 && notReadyMessage != null) {
+        throw StateError(notReadyMessage);
+      }
+      throw StateError('$op failed with code $code');
+    }
+    final len = outLen.value;
+    final ptr = outPtr.value;
+    if (ptr == nullptr || len == 0) {
+      throw StateError(
+        notReadyMessage ?? '$op returned empty frame',
+      );
+    }
+    final bytes = Uint8List.fromList(ptr.asTypedList(len));
+    XhvpLibrary.instance.bindings.xhvp_thumbnail_free(ptr);
+    return <String, Object?>{
+      'bytes': bytes,
+      'width': outW.value,
+      'height': outH.value,
+      'stride': outStride.value,
+    };
+  } finally {
+    malloc.free(outPtr);
+    malloc.free(outLen);
+    malloc.free(outW);
+    malloc.free(outH);
+    malloc.free(outStride);
+  }
+}
+
+final class FfiThumbnailCaptureRequest extends FfiRequest {
+  const FfiThumbnailCaptureRequest({
+    required this.uri,
+    required this.positionMs,
+    required this.maxWidth,
+  });
+
+  final String uri;
+  final int positionMs;
+  final int maxWidth;
+
+  @override
+  Object? execute() {
+    final uriPtr = uri.toNativeUtf8();
+    try {
+      return _readCapturedFrame(
+        op: 'xhvp_thumbnail_capture($uri)',
+        capture: (outPtr, outLen, outW, outH, outStride) {
+          return XhvpLibrary.instance.bindings.xhvp_thumbnail_capture(
+            uriPtr.cast(),
+            positionMs,
+            maxWidth,
+            outPtr,
+            outLen,
+            outW,
+            outH,
+            outStride,
+          );
+        },
+      );
+    } finally {
+      malloc.free(uriPtr);
+    }
+  }
+}
+
+final class FfiPlayerCaptureFrameRequest extends FfiRequest {
+  const FfiPlayerCaptureFrameRequest(this.playerId);
+  final int playerId;
+
+  @override
+  Object? execute() {
+    return _readCapturedFrame(
+      op: 'xhvp_player_capture_frame($playerId)',
+      notReadyMessage: '尚未解码出画面，请稍后再截帧',
+      capture: (outPtr, outLen, outW, outH, outStride) {
+        return XhvpLibrary.instance.bindings.xhvp_player_capture_frame(
+          playerId,
+          outPtr,
+          outLen,
+          outW,
+          outH,
+          outStride,
+        );
+      },
+    );
+  }
+}

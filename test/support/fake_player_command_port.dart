@@ -131,6 +131,11 @@ class FakePlayerCommandPort implements PlayerCommandPort {
     lastAspectRatioMode = mode;
   }
 
+  @override
+  Future<Map<String, Object?>> captureCurrentFrame() async {
+    throw StateError('no frame available');
+  }
+
   void emit(PlayerEvent event) {
     _events.add(event);
   }

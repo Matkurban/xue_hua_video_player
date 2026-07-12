@@ -69,7 +69,7 @@ to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.5.0
+  xue_hua_video_player: ^1.5.1
 ```
 
 Then:
@@ -430,6 +430,12 @@ bundle a CA certificate database and configure GLib's default `GTlsDatabase`
 Static, one-time initialization of the native library / Rust bridge. Call once
 before using any controller.
 
+### `XueHuaVideoPlayer.captureThumbnail(VideoSource, {Duration? at, int maxWidth})`
+
+One-shot cover extraction via a headless GStreamer pipeline in C
+(`xhvp_thumbnail_capture`). Returns PNG `Uint8List`. Does not require an open
+controller. When `at` is null, native picks ~5% of duration (or 1s).
+
 ### `XueHuaPlayerController`
 
 | Method | Description |
@@ -443,6 +449,7 @@ before using any controller.
 | `setMuted(bool)` / `toggleMuted()` | Mute control. |
 | `setSpeed(double)` | Playback speed multiplier. |
 | `setLooping(bool)` | Loop at end-of-stream. |
+| `captureCurrentFrame()` | Latest decoded frame as PNG (`xhvp_player_capture_frame`). |
 | `queryPosition()` / `queryDuration()` | Query the pipeline directly. |
 | `dispose()` | Tear down the player and release all resources. |
 

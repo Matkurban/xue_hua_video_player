@@ -133,8 +133,7 @@ GstElement *xhvp_desktop_make_video_sink(XhvpPlayer *p) {
 #include <android/native_window.h>
 
 /* Update layout metadata from negotiated video caps and notify Dart.
- * Android has no appsink frames; probe post-glvideoflip so 90/270 report
- * swapped width/height and Dart SurfaceProducer matches the buffer. */
+ * Display is glimagesink; a tee→gldownload→appsink branch fills frame.c. */
 static void xhvp_apply_video_size_from_caps(XhvpPlayer *p, GstCaps *caps) {
   if (!p || !caps || gst_caps_is_empty(caps) || gst_caps_is_any(caps)) {
     return;
@@ -233,21 +232,37 @@ static void xhvp_try_update_video_size_from_sink(XhvpPlayer *p) {
 }
 
 GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
-  /* MediaCodec (amcvideodec) emits GLMemory / external-OES. The sink bin must
-   * bridge with glupload → glcolorconvert before glvideoflip/glimagesink.
-   * glvideoflip stays on GLMemory, swaps caps for 90/270, and aspect-scales
-   * so Dart SurfaceProducer can match post-orient size. Do not insert
-   * gldownload / CPU videoconvert / videoflip on this path. */
+  /* MediaCodec (amcvideodec) emits GLMemory / external-OES. Display stays on
+   * the GL path; a tee branch downloads BGRA into appsink for frame.c capture.
+   *
+   *   glupload → glcolorconvert → glvideoflip → tee
+   *     ├─ queue → glimagesink
+   *     └─ queue → gldownload → videoconvert → capsfilter → appsink
+   */
   GstElement *glupload =
       gst_element_factory_make("glupload", "xhvp-glupload");
   GstElement *glcc =
       gst_element_factory_make("glcolorconvert", "xhvp-glcolorconvert");
   GstElement *glflip =
       gst_element_factory_make("glvideoflip", "xhvp-glvideoflip");
+  GstElement *tee = gst_element_factory_make("tee", "xhvp-tee");
+  GstElement *q_display =
+      gst_element_factory_make("queue", "xhvp-q-display");
   GstElement *sink =
       gst_element_factory_make("glimagesink", "xhvp-glimagesink");
+  GstElement *q_capture =
+      gst_element_factory_make("queue", "xhvp-q-capture");
+  GstElement *gldownload =
+      gst_element_factory_make("gldownload", "xhvp-gldownload");
+  GstElement *convert =
+      gst_element_factory_make("videoconvert", "xhvp-capture-convert");
+  GstElement *capsfilter =
+      gst_element_factory_make("capsfilter", "xhvp-capture-caps");
+  GstElement *appsink =
+      gst_element_factory_make("appsink", "xhvp-appsink");
 
-  if (!glupload || !glcc || !glflip || !sink) {
+  if (!glupload || !glcc || !glflip || !tee || !q_display || !sink ||
+      !q_capture || !gldownload || !convert || !capsfilter || !appsink) {
     if (glupload) {
       gst_object_unref(glupload);
     }
@@ -257,11 +272,33 @@ GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
     if (glflip) {
       gst_object_unref(glflip);
     }
+    if (tee) {
+      gst_object_unref(tee);
+    }
+    if (q_display) {
+      gst_object_unref(q_display);
+    }
     if (sink) {
       gst_object_unref(sink);
     }
+    if (q_capture) {
+      gst_object_unref(q_capture);
+    }
+    if (gldownload) {
+      gst_object_unref(gldownload);
+    }
+    if (convert) {
+      gst_object_unref(convert);
+    }
+    if (capsfilter) {
+      gst_object_unref(capsfilter);
+    }
+    if (appsink) {
+      gst_object_unref(appsink);
+    }
     p->orient_element = NULL;
     p->overlay_element = NULL;
+    p->appsink = NULL;
     return NULL;
   }
 
@@ -269,14 +306,69 @@ GstElement *xhvp_android_make_video_sink(XhvpPlayer *p) {
    * portrait frames are letterboxed into a landscape SurfaceProducer. */
   g_object_set(sink, "force-aspect-ratio", FALSE, NULL);
 
+  GstCaps *bgra = gst_caps_from_string("video/x-raw,format=BGRA");
+  g_object_set(capsfilter, "caps", bgra, NULL);
+  g_object_set(appsink, "emit-signals", FALSE, "sync", FALSE, "max-buffers", 1,
+               "drop", TRUE, "caps", bgra, NULL);
+  gst_caps_unref(bgra);
+
+  GstAppSinkCallbacks cbs = {
+      .eos = NULL,
+      .new_preroll = NULL,
+      .new_sample = xhvp_frame_on_new_sample,
+  };
+  gst_app_sink_set_callbacks(GST_APP_SINK(appsink), &cbs, p, NULL);
+  p->appsink = appsink;
+
+  /* Keep capture branch from blocking display if download is slow. */
+  g_object_set(q_capture, "max-size-buffers", 1, "leaky", 2, NULL);
+
   GstElement *bin = gst_bin_new("xhvp-video-sink");
-  gst_bin_add_many(GST_BIN(bin), glupload, glcc, glflip, sink, NULL);
-  if (!gst_element_link_many(glupload, glcc, glflip, sink, NULL)) {
+  gst_bin_add_many(GST_BIN(bin), glupload, glcc, glflip, tee, q_display, sink,
+                   q_capture, gldownload, convert, capsfilter, appsink, NULL);
+
+  if (!gst_element_link_many(glupload, glcc, glflip, tee, NULL) ||
+      !gst_element_link_many(q_display, sink, NULL) ||
+      !gst_element_link_many(q_capture, gldownload, convert, capsfilter,
+                             appsink, NULL)) {
     gst_object_unref(bin);
     p->orient_element = NULL;
     p->overlay_element = NULL;
+    p->appsink = NULL;
     return NULL;
   }
+
+  GstPad *tee_display = gst_element_request_pad_simple(tee, "src_%u");
+  GstPad *q_display_sink = gst_element_get_static_pad(q_display, "sink");
+  GstPad *tee_capture = gst_element_request_pad_simple(tee, "src_%u");
+  GstPad *q_capture_sink = gst_element_get_static_pad(q_capture, "sink");
+  if (!tee_display || !q_display_sink || !tee_capture || !q_capture_sink ||
+      gst_pad_link(tee_display, q_display_sink) != GST_PAD_LINK_OK ||
+      gst_pad_link(tee_capture, q_capture_sink) != GST_PAD_LINK_OK) {
+    if (tee_display) {
+      gst_element_release_request_pad(tee, tee_display);
+      gst_object_unref(tee_display);
+    }
+    if (tee_capture) {
+      gst_element_release_request_pad(tee, tee_capture);
+      gst_object_unref(tee_capture);
+    }
+    if (q_display_sink) {
+      gst_object_unref(q_display_sink);
+    }
+    if (q_capture_sink) {
+      gst_object_unref(q_capture_sink);
+    }
+    gst_object_unref(bin);
+    p->orient_element = NULL;
+    p->overlay_element = NULL;
+    p->appsink = NULL;
+    return NULL;
+  }
+  gst_object_unref(tee_display);
+  gst_object_unref(q_display_sink);
+  gst_object_unref(tee_capture);
+  gst_object_unref(q_capture_sink);
 
   GstPad *pad = gst_element_get_static_pad(glupload, "sink");
   GstPad *ghost = gst_ghost_pad_new("sink", pad);
@@ -456,11 +548,9 @@ static int32_t xhvp_pipeline_set_state_sync(XhvpPlayer *p, GstState state);
 
 void xhvp_pipeline_destroy(XhvpPlayer *p) {
   xhvp_bus_detach(p);
-#if !defined(__ANDROID__)
   if (p->appsink) {
     gst_app_sink_set_callbacks(GST_APP_SINK(p->appsink), NULL, NULL, NULL);
   }
-#endif
 #if defined(__ANDROID__)
   /* Keep ANativeWindow across reload; only unbind from the old pipeline. */
   xhvp_android_unbind_overlay(p);
@@ -675,6 +765,11 @@ int32_t xhvp_pipeline_load_uri(XhvpPlayer *p, const char *uri, bool auto_play) {
 
   xhvp_bus_attach(p);
 
+  /* Optimistic buffering before blocking PAUSED preroll (network open UI). */
+  p->buffering_percent = 0;
+  xhvp_player_set_state(p, XHVP_STATE_BUFFERING);
+  xhvp_player_emit(p, XHVP_EVENT_BUFFERING, "");
+
 #if defined(__ANDROID__)
   if (p->android_window != 0) {
     xhvp_android_apply_overlay(p);
@@ -700,6 +795,12 @@ int32_t xhvp_pipeline_load_uri(XhvpPlayer *p, const char *uri, bool auto_play) {
     return rc;
   }
 
+  /* Clear optimistic 0% so UI spinner hides when GStreamer never emits
+   * BUFFERING (local/asset / autoPlay:false). Real rebuffer can still drop
+   * below 100 via GST_MESSAGE_BUFFERING. */
+  p->buffering_percent = 100;
+  xhvp_player_emit(p, XHVP_EVENT_BUFFERING, "");
+
   xhvp_player_set_state(p, XHVP_STATE_READY);
   /* Caps may already be negotiated after preroll; emit size so Dart layout
    * does not stay on the 16:9 fallback until the next CAPS event. */
@@ -724,6 +825,9 @@ int32_t xhvp_pipeline_load_uri(XhvpPlayer *p, const char *uri, bool auto_play) {
   if (rc != XHVP_ERR_OK) {
     return rc;
   }
+
+  p->buffering_percent = 100;
+  xhvp_player_emit(p, XHVP_EVENT_BUFFERING, "");
 
   xhvp_player_set_state(p, XHVP_STATE_READY);
 

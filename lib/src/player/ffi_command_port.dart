@@ -220,4 +220,9 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
       'set_aspect_ratio_mode',
     );
   }
+
+  @override
+  Future<Map<String, Object?>> captureCurrentFrame() {
+    return _native<Map<String, Object?>>(FfiPlayerCaptureFrameRequest(_id));
+  }
 }

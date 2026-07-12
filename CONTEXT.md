@@ -20,21 +20,21 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 
 | Platform | Sink | Flutter integration |
 |----------|------|---------------------|
-| Android | `glupload` → `glcolorconvert` → `glvideoflip` → `glimagesink` | `TextureRegistry.SurfaceProducer` → `Surface` → `ANativeWindow` (VideoOverlay) |
+| Android | `glupload` → `glcolorconvert` → `glvideoflip` → `tee` → `glimagesink` (+ capture: `gldownload` → `appsink`) | `TextureRegistry.SurfaceProducer` → `Surface` → `ANativeWindow` (VideoOverlay); frames via tee appsink |
 | iOS / macOS | `appsink` (BGRA) | `FlutterTexture` + IOSurface-backed `CVPixelBuffer` |
 | Windows / Linux | `appsink` (BGRA) | `PixelBufferTexture` / `FlPixelBufferTexture` (RGBA upload) |
 
 ## Rendering model
 
 - **Apple + desktop:** GStreamer terminates in `appsink`; C `frame.c` double-buffers BGRA and exposes `xhvp_texture_*` for native texture plugins.
-- **Android:** GStreamer video-sink bin
-  (`glupload` → `glcolorconvert` → `glvideoflip` → `glimagesink`) renders
-  into the `SurfaceProducer` surface; JNI `AndroidSurfaceBridge` forwards
-  surfaces to `xhvp_player_notify_android_surface`. The `glupload`/
-  `glcolorconvert` bridge is required for MediaCodec (`amcvideodec`) GLMemory /
-  external-OES negotiation — without it the decoder thrash-probes and playbin
-  stalls (no position, no A/V). `glvideoflip` rotates on GPU and swaps caps
-  for 90°/270° so layout size matches the buffer.
+- **Android display:** `glupload → glcolorconvert → glvideoflip → tee → glimagesink`
+  (VideoOverlay / SurfaceProducer). The `glupload`/`glcolorconvert` bridge is
+  required for MediaCodec (`amcvideodec`) GLMemory / external-OES negotiation.
+- **Android capture branch:** same tee also feeds
+  `gldownload → videoconvert → appsink` so `frame.c` /
+  `xhvp_player_capture_frame` work without changing the display path.
+- **Thumbnails:** `xhvp_thumbnail_capture` builds a short-lived headless playbin
+  (no player slot / no Texture).
 - Dart embeds video with the Flutter `Texture` widget; MethodChannel `xue_hua_video_player/texture`.
 
 ## GStreamer runtime
@@ -124,7 +124,8 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
   The FittedBox child is a unit `SizedBox(width: ratio, height: 1)`; Android
   `SurfaceProducer.setSize` uses the fitted video rect (video aspect via
   `applyBoxFit` / cover scale), not that unit box and not the raw viewport.
-- Android has no appsink frames: emit `VIDEO_SIZE` / `METADATA_CHANGED` from
+- Android display stays on `glimagesink`; a tee→`gldownload`→appsink branch
+  fills `frame.c` for `xhvp_player_capture_frame`. Size metadata still comes from
   negotiated **post-orient** caps (`glimagesink` sink after `glvideoflip`, plus
   post-PAUSED query). `glvideoflip` swaps width/height for 90°/270° on GLMemory.
 - Video rotation is applied only in the native video-sink bin (`videoflip` on

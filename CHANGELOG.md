@@ -1,3 +1,30 @@
+## 1.5.1
+
+### Features
+
+- **Network open loading UI**: `open()` enters `buffering` (0%) immediately so
+  the spinner shows during preroll instead of an idle “ready to play” state.
+  Native `load_uri` also emits `BUFFERING 0` before PAUSED preroll, then
+  `BUFFERING 100` after successful preroll (covers local/asset / `autoPlay:
+  false` when GStreamer never sends buffering messages).
+- **`XueHuaVideoPlayer.captureThumbnail`**: full-platform one-shot cover frame
+  via C `xhvp_thumbnail_capture` (GStreamer snapshot pattern); returns PNG.
+  Runs on a dedicated native thread so it does not stall active playback.
+- **`XueHuaPlayerController.captureCurrentFrame`**: capture the latest decoded
+  frame as PNG. Android playback sink tees `gldownload → appsink` into
+  `frame.c` alongside `glimagesink`.
+
+### Bug fixes
+
+- **Loading overlay stuck after failed open**: error paths reset
+  `bufferingPercent` to 100 so the spinner does not cover the error state.
+- **Capture before first frame**: `xhvp_player_capture_frame` returns
+  `XHVP_ERR_NOT_READY` with a clear Dart message when no frame is available.
+- **Asset thumbnail temp files**: staging files written for Flutter assets are
+  deleted after capture completes (success or failure).
+- **Android pipeline destroy**: clear appsink callbacks on destroy (same as
+  desktop/Apple) to reduce teardown races with the capture tee branch.
+
 ## 1.5.0
 
 ### Bug fixes

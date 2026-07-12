@@ -2,6 +2,7 @@ import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
+import 'dart:typed_data';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,6 +87,51 @@ class _PlayerPageState extends State<PlayerPage> {
     await _controller.open(const VideoSource.asset('assets/sample.mp4'), autoPlay: true);
   }
 
+  Future<void> _showPng(Uint8List png, String title) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Image.memory(png),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _captureThumbnail() async {
+    try {
+      final png = await XueHuaVideoPlayer.captureThumbnail(
+        VideoSource.network(mediaList.first),
+      );
+      await _showPng(png, '封面');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('抽封面失败: $e')),
+      );
+    }
+  }
+
+  Future<void> _captureCurrentFrame() async {
+    try {
+      final png = await _controller.captureCurrentFrame();
+      await _showPng(png, '当前帧');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('截帧失败: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SignalBuilder(
@@ -134,6 +180,22 @@ class _PlayerPageState extends State<PlayerPage> {
                         visualDensity: .compact,
                       ),
                       child: const Text('本地'),
+                    ),
+                    TextButton(
+                      onPressed: _captureThumbnail,
+                      style: TextButton.styleFrom(
+                        tapTargetSize: .shrinkWrap,
+                        visualDensity: .compact,
+                      ),
+                      child: const Text('封面'),
+                    ),
+                    TextButton(
+                      onPressed: _captureCurrentFrame,
+                      style: TextButton.styleFrom(
+                        tapTargetSize: .shrinkWrap,
+                        visualDensity: .compact,
+                      ),
+                      child: const Text('截帧'),
                     ),
                   ],
                 ),

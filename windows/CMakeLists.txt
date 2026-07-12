@@ -29,6 +29,7 @@ add_library(${PLUGIN_NAME} SHARED
   "${NATIVE_ROOT}/src/bus.c"
   "${NATIVE_ROOT}/src/frame.c"
   "${NATIVE_ROOT}/src/pipeline.c"
+  "${NATIVE_ROOT}/src/thumbnail.c"
   "${NATIVE_ROOT}/src/xhvp_player.c"
   "${NATIVE_ROOT}/src/windows_env.c"
 )

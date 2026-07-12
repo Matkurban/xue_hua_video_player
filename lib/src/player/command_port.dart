@@ -58,6 +58,9 @@ abstract class PlayerCommandPort {
 
   /// 设置宽高比模式。
   Future<void> setAspectRatioMode(AspectRatioMode mode);
+
+  /// 拷贝当前最新视频帧（BGRA map：bytes/width/height/stride）。
+  Future<Map<String, Object?>> captureCurrentFrame();
 }
 
 /// 生产环境适配器（Dart FFI → C 播放器核心）。

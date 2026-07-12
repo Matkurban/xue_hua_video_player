@@ -134,6 +134,23 @@ XHVP_EXPORT bool xhvp_texture_copy_latest(int64_t player_id, uint8_t *dst,
                                           int32_t *out_stride);
 
 /**
+ * One-shot cover frame from a URI (no player slot).
+ * position_ms < 0 → auto (5% of duration, or 1s). max_width <= 0 → 320.
+ * On success *out_bgra is g_malloc'd BGRA; free with xhvp_thumbnail_free.
+ */
+XHVP_EXPORT int32_t xhvp_thumbnail_capture(
+    const char *uri, int64_t position_ms, int32_t max_width, uint8_t **out_bgra,
+    uint32_t *out_len, int32_t *out_width, int32_t *out_height,
+    int32_t *out_stride);
+
+/** Copy the latest BGRA frame from an active player into a new buffer. */
+XHVP_EXPORT int32_t xhvp_player_capture_frame(
+    XhvpPlayerId id, uint8_t **out_bgra, uint32_t *out_len, int32_t *out_width,
+    int32_t *out_height, int32_t *out_stride);
+
+XHVP_EXPORT void xhvp_thumbnail_free(uint8_t *data);
+
+/**
  * Touch every Dart-looked-up ABI symbol so Apple Release dead-strip / LTO
  * cannot drop them. Call once from the Flutter plugin register path.
  */

@@ -525,6 +525,111 @@ class XhvpBindings {
           ffi.Pointer<ffi.Int32>,
         )
       >();
+
+  int xhvp_thumbnail_capture(
+    ffi.Pointer<ffi.Char> uri,
+    int position_ms,
+    int max_width,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_bgra,
+    ffi.Pointer<ffi.Uint32> out_len,
+    ffi.Pointer<ffi.Int32> out_width,
+    ffi.Pointer<ffi.Int32> out_height,
+    ffi.Pointer<ffi.Int32> out_stride,
+  ) {
+    return _xhvp_thumbnail_capture(
+      uri,
+      position_ms,
+      max_width,
+      out_bgra,
+      out_len,
+      out_width,
+      out_height,
+      out_stride,
+    );
+  }
+
+  late final _xhvp_thumbnail_capturePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Int64,
+            ffi.Int32,
+            ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+            ffi.Pointer<ffi.Uint32>,
+            ffi.Pointer<ffi.Int32>,
+            ffi.Pointer<ffi.Int32>,
+            ffi.Pointer<ffi.Int32>,
+          )
+        >
+      >('xhvp_thumbnail_capture');
+  late final _xhvp_thumbnail_capture = _xhvp_thumbnail_capturePtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+          ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+          ffi.Pointer<ffi.Uint32>,
+          ffi.Pointer<ffi.Int32>,
+          ffi.Pointer<ffi.Int32>,
+          ffi.Pointer<ffi.Int32>,
+        )
+      >();
+
+  int xhvp_player_capture_frame(
+    int id,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_bgra,
+    ffi.Pointer<ffi.Uint32> out_len,
+    ffi.Pointer<ffi.Int32> out_width,
+    ffi.Pointer<ffi.Int32> out_height,
+    ffi.Pointer<ffi.Int32> out_stride,
+  ) {
+    return _xhvp_player_capture_frame(
+      id,
+      out_bgra,
+      out_len,
+      out_width,
+      out_height,
+      out_stride,
+    );
+  }
+
+  late final _xhvp_player_capture_framePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            XhvpPlayerId,
+            ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+            ffi.Pointer<ffi.Uint32>,
+            ffi.Pointer<ffi.Int32>,
+            ffi.Pointer<ffi.Int32>,
+            ffi.Pointer<ffi.Int32>,
+          )
+        >
+      >('xhvp_player_capture_frame');
+  late final _xhvp_player_capture_frame = _xhvp_player_capture_framePtr
+      .asFunction<
+        int Function(
+          int,
+          ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+          ffi.Pointer<ffi.Uint32>,
+          ffi.Pointer<ffi.Int32>,
+          ffi.Pointer<ffi.Int32>,
+          ffi.Pointer<ffi.Int32>,
+        )
+      >();
+
+  void xhvp_thumbnail_free(ffi.Pointer<ffi.Uint8> data) {
+    return _xhvp_thumbnail_free(data);
+  }
+
+  late final _xhvp_thumbnail_freePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Uint8>)>>(
+        'xhvp_thumbnail_free',
+      );
+  late final _xhvp_thumbnail_free = _xhvp_thumbnail_freePtr
+      .asFunction<void Function(ffi.Pointer<ffi.Uint8>)>();
 }
 
 typedef XhvpPlayerId = ffi.Int64;

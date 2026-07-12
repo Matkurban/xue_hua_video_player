@@ -11,6 +11,7 @@ set(XHVP_SOURCES
   src/bus.c
   src/frame.c
   src/pipeline.c
+  src/thumbnail.c
   src/xhvp_player.c
   src/xhvp_ffi_keep.c
 )

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
@@ -6,6 +7,7 @@ import 'package:signals/signals_flutter.dart';
 import '../enum/video_rotation.dart';
 import '../controls/playback_controls_model.dart';
 import '../presentation/playback_presentation_model.dart';
+import '../media/frame_image.dart';
 import '../media/media_source_resolver.dart';
 import '../model/video_source.dart';
 import '../domain/player_events.dart';
@@ -256,6 +258,12 @@ class PlaybackSession
   Future<void> setAspectRatioMode(AspectRatioMode mode) =>
       _guard(() => _port.setAspectRatioMode(mode));
 
+  /// 截取当前最新画面为 PNG / Captures the latest decoded frame as PNG.
+  Future<Uint8List> captureCurrentFrame() async {
+    final map = await _port.captureCurrentFrame();
+    return CapturedBgraFrame.fromMap(map).toPng();
+  }
+
   /// 取消订阅、销毁 player 并释放全部 signals / Cancels subscription, disposes player and all signals.
   ///
   /// Releases the native Flutter texture while [playerId] is still valid, then
@@ -306,12 +314,13 @@ class PlaybackSession
   void _resetForOpen() {
     batch(() {
       _error.value = null;
-      _bufferingPercent.value = 100;
+      // Optimistic loading UI until native BUFFERING / READY / PLAYING events.
+      _bufferingPercent.value = 0;
       _videoSize.value = Size.zero;
       _videoMetadata.value = null;
       _tracks.value = const [];
       _speed.value = 1.0;
-      _state.value = PlayerState.idle;
+      _state.value = PlayerState.buffering;
       _position.value = Duration.zero;
       _duration.value = Duration.zero;
       _isSeekable.value = true;
@@ -371,6 +380,7 @@ class PlaybackSession
         batch(() {
           _error.value = event.message;
           _state.value = PlayerState.error;
+          _bufferingPercent.value = 100;
         });
       case PlayerEventKind.tracksChanged:
         break;
@@ -381,6 +391,7 @@ class PlaybackSession
     batch(() {
       _error.value = message;
       _state.value = PlayerState.error;
+      _bufferingPercent.value = 100;
     });
   }
 

@@ -126,6 +126,7 @@ void main() {
 
       expect(session.error.value, contains('load failed'));
       expect(session.state.value, PlayerState.error);
+      expect(session.bufferingPercent.value, 100);
     });
 
     test('seek applies optimistic position before port call', () async {
@@ -342,7 +343,8 @@ void main() {
 
       await session.open(VideoSource.network('https://example.com/b.mp4'));
 
-      expect(session.state.value, PlayerState.idle);
+      expect(session.state.value, PlayerState.buffering);
+      expect(session.bufferingPercent.value, 0);
       expect(session.position.value, Duration.zero);
       expect(session.duration.value, Duration.zero);
     });

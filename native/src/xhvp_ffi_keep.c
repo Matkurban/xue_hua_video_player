@@ -36,6 +36,9 @@ void xhvp_ffi_retain_symbols(void) {
       (void *)xhvp_texture_unregister,
       (void *)xhvp_texture_frame_info,
       (void *)xhvp_texture_copy_latest,
+      (void *)xhvp_thumbnail_capture,
+      (void *)xhvp_player_capture_frame,
+      (void *)xhvp_thumbnail_free,
   };
   /* Volatile read so the compiler cannot elide the table. */
   (void)*(volatile void *const *)&keep[0];

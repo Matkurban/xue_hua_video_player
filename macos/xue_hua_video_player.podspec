@@ -109,6 +109,7 @@ A Flutter video player plugin that decodes local/network video with GStreamer
       :input_files => [
         '${PODS_TARGET_SRCROOT}/../native/include/xhvp_player.h',
         '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
+        '${PODS_TARGET_SRCROOT}/../native/src/thumbnail.c',
         '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
         '${PODS_TARGET_SRCROOT}/../native/src/xhvp_player.c',
         '${PODS_TARGET_SRCROOT}/../native/src/xhvp_ffi_keep.c',

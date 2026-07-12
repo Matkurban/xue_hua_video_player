@@ -29,7 +29,7 @@ void xhvp_player_set_state(XhvpPlayer *p, int32_t state) {
   xhvp_player_emit(p, XHVP_EVENT_STATE_CHANGED, "");
 }
 
-const char *xhvp_version(void) { return "1.5.0"; }
+const char *xhvp_version(void) { return "1.5.1"; }
 
 int32_t xhvp_init(void) { return xhvp_runtime_start(); }
 
@@ -554,4 +554,72 @@ bool xhvp_texture_copy_latest(int64_t player_id, uint8_t *dst, uint32_t dst_len,
     return false;
   }
   return xhvp_frame_copy(p, dst, dst_len, out_width, out_height, out_stride);
+}
+
+typedef struct {
+  XhvpPlayerId id;
+  uint8_t **out_bgra;
+  uint32_t *out_len;
+  int32_t *out_width;
+  int32_t *out_height;
+  int32_t *out_stride;
+  int32_t result;
+} XhvpCaptureFrameOp;
+
+static gboolean xhvp_op_capture_frame(gpointer data) {
+  XhvpCaptureFrameOp *op = data;
+  XhvpPlayer *p = xhvp_player_lookup(op->id);
+  if (!p) {
+    op->result = XHVP_ERR_BAD_ID;
+    return G_SOURCE_REMOVE;
+  }
+  int32_t w = 0;
+  int32_t h = 0;
+  int32_t stride = 0;
+  uint32_t bytes = 0;
+  if (!xhvp_frame_info(p, &w, &h, &stride, &bytes) || bytes == 0) {
+    op->result = XHVP_ERR_NOT_READY;
+    return G_SOURCE_REMOVE;
+  }
+  uint8_t *buf = g_malloc(bytes);
+  if (!xhvp_frame_copy(p, buf, bytes, &w, &h, &stride)) {
+    g_free(buf);
+    op->result = XHVP_ERR_FAIL;
+    return G_SOURCE_REMOVE;
+  }
+  *op->out_bgra = buf;
+  *op->out_len = bytes;
+  if (op->out_width) {
+    *op->out_width = w;
+  }
+  if (op->out_height) {
+    *op->out_height = h;
+  }
+  if (op->out_stride) {
+    *op->out_stride = stride;
+  }
+  op->result = XHVP_ERR_OK;
+  return G_SOURCE_REMOVE;
+}
+
+int32_t xhvp_player_capture_frame(XhvpPlayerId id, uint8_t **out_bgra,
+                                  uint32_t *out_len, int32_t *out_width,
+                                  int32_t *out_height, int32_t *out_stride) {
+  if (!out_bgra || !out_len) {
+    return XHVP_ERR_FAIL;
+  }
+  *out_bgra = NULL;
+  *out_len = 0;
+  if (!xhvp_player_lookup(id)) {
+    return XHVP_ERR_BAD_ID;
+  }
+  XhvpCaptureFrameOp op = {.id = id,
+                           .out_bgra = out_bgra,
+                           .out_len = out_len,
+                           .out_width = out_width,
+                           .out_height = out_height,
+                           .out_stride = out_stride,
+                           .result = XHVP_ERR_FAIL};
+  xhvp_runtime_invoke_sync(xhvp_op_capture_frame, &op);
+  return op.result;
 }

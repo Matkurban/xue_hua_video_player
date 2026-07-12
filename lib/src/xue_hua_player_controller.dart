@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
+import 'dart:typed_data';
 
 import 'enum/video_rotation.dart';
 import 'controls/immersive_controls_state.dart';
@@ -237,6 +238,9 @@ class XueHuaPlayerController
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) =>
       _session.setAspectRatioMode(mode);
+
+  /// 截取当前最新画面为 PNG / Captures the latest decoded frame as PNG bytes.
+  Future<Uint8List> captureCurrentFrame() => _session.captureCurrentFrame();
 
   /// 释放 player 与事件订阅 / Disposes the player and event subscription.
   Future<void> dispose() async {
