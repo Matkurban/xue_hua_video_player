@@ -1,20 +1,28 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:signals/signals_flutter.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
-import 'dart:typed_data';
 
 import 'thumbnail_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Start gst_init on a background thread; do not block the first frame.
-  final pluginSw = Stopwatch()..start();
+  // Kickoff only (<50ms); gst_init continues in background. create/open await ready.
+  final kickoffSw = Stopwatch()..start();
   await XueHuaVideoPlayer.initialize();
-  runApp(const MyApp());
   debugPrint(
-    '[xhvp-init-timing] example_plugin_init=${pluginSw.elapsedMilliseconds}ms',
+    '[xhvp-init-timing] example_plugin_kickoff=${kickoffSw.elapsedMilliseconds}ms',
   );
+  kickoffSw.stop();
+  unawaited(
+    XueHuaVideoPlayer.ensureReady().then((_) {
+      debugPrint('[xhvp-init-timing] example_plugin_ready=done');
+    }),
+  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

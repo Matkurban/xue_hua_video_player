@@ -4,5 +4,5 @@ import 'package:xue_hua_video_player/xue_hua_video_player.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() async => await XueHuaVideoPlayer.initialize());
+  setUpAll(() async => await XueHuaVideoPlayer.ensureReady());
 }

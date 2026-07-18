@@ -16,38 +16,70 @@ import 'player/ffi_native_worker.dart';
 
 /// 插件入口：加载原生库并初始化 GStreamer 运行时。
 ///
-/// 推荐在 [runApp] 之前**启动**初始化，但不阻塞首帧；在 [open] / 使用控制器前
-/// `await` 完成：
+/// [initialize] 只做 kickoff（打开 dylib、启动后台 `gst_init` / worker），目标
+/// <50ms，不阻塞首帧。真正就绪由 [ensureReady] 等待；`create` / `open` /
+/// [captureThumbnail] 会自动调用。
 ///
 /// ```dart
 /// Future<void> main() async {
 ///   WidgetsFlutterBinding.ensureInitialized();
-///   final ready = XueHuaVideoPlayer.initialize();
+///   unawaited(XueHuaVideoPlayer.initialize()); // 或 await（仅等 kickoff）
 ///   runApp(const MyApp());
-///   await ready;
 /// }
 /// ```
 class XueHuaVideoPlayer {
   const XueHuaVideoPlayer._();
 
   static bool _initialized = false;
-  static Future<void>? _initializing;
+  static Future<void>? _kickoff;
+  static Future<void>? _ready;
 
-  /// Whether [initialize] has completed successfully in this isolate.
+  /// Whether the native runtime is ready (`gst_init` + worker) in this isolate.
+  ///
+  /// May still be `false` right after [initialize] returns; use [ensureReady]
+  /// when you need a hard wait. Controller / thumbnail paths await this for you.
   static bool get isInitialized => _initialized;
 
-  /// 后台初始化 C 运行时（`gst_init`）并预热 FFI worker isolate。
+  /// Kick off C runtime init and FFI worker spawn without waiting for them.
   ///
-  /// 不在 UI isolate 上同步阻塞 `gst_init`。幂等；并发调用共享同一 [Future]；
-  /// 失败后可重试。
+  /// Idempotent; concurrent calls share the same kickoff [Future]. Does not
+  /// block the UI isolate on `gst_init`. Failures during dylib open clear the
+  /// kickoff so a later call can retry.
   static Future<void> initialize() {
     if (_initialized) {
       return Future<void>.value();
     }
-    return _initializing ??= _initializeOnce();
+    return _kickoff ??= _kickoffOnce();
   }
 
-  static Future<void> _initializeOnce() async {
+  /// Await full runtime readiness (`gst_init` success + worker started).
+  ///
+  /// Starts [initialize] if needed. Idempotent; failures clear state so a later
+  /// call can retry.
+  static Future<void> ensureReady() {
+    if (_initialized) {
+      return Future<void>.value();
+    }
+    // Ensure kickoff has scheduled `_ready` (or schedule ready directly).
+    _kickoff ??= _kickoffOnce();
+    return _ready ??= _readyOnce();
+  }
+
+  static Future<void> _kickoffOnce() async {
+    final total = Stopwatch()..start();
+    try {
+      XhvpLibrary.instance;
+      // Schedule ready work; do not await gst_init / worker spawn here.
+      _ready ??= _readyOnce();
+      xhvpInitTiming('plugin_kickoff', total);
+    } catch (_) {
+      _kickoff = null;
+      _ready = null;
+      rethrow;
+    }
+  }
+
+  static Future<void> _readyOnce() async {
     final total = Stopwatch()..start();
     NativeCallable<XhvpInitDoneFnFunction>? callable;
     try {
@@ -83,7 +115,8 @@ class XueHuaVideoPlayer {
       _initialized = true;
       xhvpInitTiming('plugin_init', total);
     } catch (_) {
-      _initializing = null;
+      _ready = null;
+      _kickoff = null;
       rethrow;
     } finally {
       callable?.close();
@@ -95,13 +128,13 @@ class XueHuaVideoPlayer {
   /// [at] 为 null 时由 native 自动选点（约 5% 时长或 1 秒）。
   /// [maxWidth] 限制输出宽度（默认 320）。
   ///
-  /// 须先调用 [initialize]。不占用播放中的 controller。
+  /// 须先 [initialize]（或由本方法内部 [ensureReady]）。不占用播放中的 controller。
   static Future<Uint8List> captureThumbnail(
     VideoSource source, {
     Duration? at,
     int maxWidth = 320,
   }) async {
-    await initialize();
+    await ensureReady();
     final resolved = await _resolveThumbnailUri(source);
     try {
       final worker = await FfiNativeWorker.ensureStarted();

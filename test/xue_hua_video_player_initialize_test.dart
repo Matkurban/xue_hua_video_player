@@ -8,14 +8,19 @@ import 'package:xue_hua_video_player/xue_hua_video_player.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('initialize warms FfiNativeWorker (host dylib)', () async {
+  test('initialize is kickoff-only; ensureReady warms runtime', () async {
     final dylib = _hostDylibPath();
     if (dylib == null) {
       // Skip when native host lib was not built in this environment.
       return;
     }
     XhvpLibrary.openPath(dylib);
+
     await XueHuaVideoPlayer.initialize();
+    // Kickoff must not require full gst_init; isInitialized may still be false.
+    expect(XhvpLibrary.isInitialized, isTrue);
+
+    await XueHuaVideoPlayer.ensureReady();
     expect(XueHuaVideoPlayer.isInitialized, isTrue);
     expect(FfiNativeWorker.isStarted, isTrue);
   });

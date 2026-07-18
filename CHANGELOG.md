@@ -1,3 +1,14 @@
+## 1.5.5
+
+### Performance
+
+- **`XueHuaVideoPlayer.initialize()` is kickoff-only (under 50ms target)**:
+  opens the dylib and starts background `gst_init` / worker spawn without
+  awaiting them. New **`ensureReady()`** awaits full runtime readiness.
+  Controller `create` and `captureThumbnail` call `ensureReady` automatically.
+  Prefer `unawaited(XueHuaVideoPlayer.initialize()); runApp(...);` so the first
+  frame is not stalled. All platforms.
+
 ## 1.5.4
 
 ### Performance

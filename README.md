@@ -69,7 +69,7 @@ to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.5.4
+  xue_hua_video_player: ^1.5.5
 ```
 
 Then:
@@ -88,15 +88,17 @@ produced via ndk-build (see [Android](#android-all-abis) below).
 ## Quick start
 
 ```dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Start GStreamer init in the background so the first frame is not blocked.
-  final ready = XueHuaVideoPlayer.initialize();
+  // Kickoff only (under 50ms); gst_init continues in the background.
+  // create / open / captureThumbnail await ensureReady() for you.
+  unawaited(XueHuaVideoPlayer.initialize());
   runApp(const MyApp());
-  await ready; // or await before controller.open(...)
 }
 
 class PlayerPage extends StatefulWidget {
@@ -147,9 +149,11 @@ Bundled assets are loaded via Dart FFI bytes into a native temp file (not AppSrc
 
 1. **Start `XueHuaVideoPlayer.initialize()` once** early (typically in `main()`
    after `WidgetsFlutterBinding.ensureInitialized()`). Prefer
-   `final ready = XueHuaVideoPlayer.initialize(); runApp(...); await ready;`
-   so the first frame is not blocked on `gst_init`. It
-   is idempotent and safe to call again after a hot restart.
+   `unawaited(XueHuaVideoPlayer.initialize()); runApp(...);` — kickoff is
+   under 50ms and does not wait for `gst_init`. Use
+   `XueHuaVideoPlayer.ensureReady()` only if you need a hard wait; controller
+   `create` / `captureThumbnail` already await it. Idempotent and safe after a
+   hot restart.
 2. **Create and `initialize()` a `XueHuaPlayerController` per video surface.** The
    controller owns a native player; it is created during `initialize()`.
 3. **Always `dispose()` the controller** when the surface goes away — this stops
@@ -271,9 +275,9 @@ build with a clean tree and symbolicate with
 
 1. **Plugin version** — use **1.4.0+** for Texture rendering; run
    `flutter clean` / full reinstall after upgrading.
-2. **Initialization order** — start `XueHuaVideoPlayer.initialize()` (prefer
-   overlapping with first frame) → `controller.initialize()` → wait until media
-   is on disk → `open(...)`.
+2. **Initialization order** — kick off `XueHuaVideoPlayer.initialize()` (prefer
+   overlapping with first frame; under 50ms) → `controller.initialize()` (awaits
+   `ensureReady`) → wait until media is on disk → `open(...)`.
 3. **Video surface** — embed `XueHuaVideoView` (set `showControls: false` if you
    provide your own chrome). The widget registers a native texture automatically.
 4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR.
@@ -443,10 +447,16 @@ bundle a CA certificate database and configure GLib's default `GTlsDatabase`
 
 ### `XueHuaVideoPlayer.initialize()`
 
-Static, one-time initialization of the native library / GStreamer runtime.
-Starts `gst_init` on a background thread so the UI isolate is not blocked.
-Kick it off early (e.g. before `runApp`), and `await` before `open` / playback.
-Safe to call concurrently; subsequent calls share the same `Future`.
+Kickoff-only: opens the native library and starts background `gst_init` /
+FFI worker spawn. Target under 50ms; does **not** wait for runtime readiness.
+Call early (e.g. before `runApp`). Idempotent; concurrent calls share one
+`Future`. After return, `isInitialized` may still be `false`.
+
+### `XueHuaVideoPlayer.ensureReady()`
+
+Awaits full runtime readiness (`gst_init` success + worker started). Starts
+`initialize()` if needed. Controller `create` and `captureThumbnail` call this
+automatically.
 
 ### `XueHuaVideoPlayer.captureThumbnail(VideoSource, {Duration? at, int maxWidth})`
 

@@ -42,10 +42,9 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
   @override
   Future<void> create() async {
     // Runtime + worker must be ready before player slot / NativeCallable setup.
-    // Prefer XueHuaVideoPlayer.initialize() in main(); this is a safe fallback.
-    if (!XueHuaVideoPlayer.isInitialized) {
-      await XueHuaVideoPlayer.initialize();
-    }
+    // Prefer XueHuaVideoPlayer.initialize() kickoff in main(); await ready here
+    // so xhvp_player_create never blocks the UI isolate on gst_init.
+    await XueHuaVideoPlayer.ensureReady();
 
     final id = xhvpTimed(
       'player_create',
