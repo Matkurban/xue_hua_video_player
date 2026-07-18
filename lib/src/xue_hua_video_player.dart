@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import 'ffi/init_timing.dart';
+import 'ffi/xhvp_bindings.dart';
 import 'ffi/xhvp_library.dart';
 import 'media/frame_image.dart';
 import 'media/media_source_resolver.dart';
@@ -12,28 +16,78 @@ import 'player/ffi_native_worker.dart';
 
 /// 插件入口：加载原生库并初始化 GStreamer 运行时。
 ///
-/// 在创建 [XueHuaPlayerController] 之前调用 [initialize] 一次：
+/// 推荐在 [runApp] 之前**启动**初始化，但不阻塞首帧；在 [open] / 使用控制器前
+/// `await` 完成：
 ///
 /// ```dart
 /// Future<void> main() async {
 ///   WidgetsFlutterBinding.ensureInitialized();
-///   await XueHuaVideoPlayer.initialize();
+///   final ready = XueHuaVideoPlayer.initialize();
 ///   runApp(const MyApp());
+///   await ready;
 /// }
 /// ```
 class XueHuaVideoPlayer {
   const XueHuaVideoPlayer._();
 
   static bool _initialized = false;
+  static Future<void>? _initializing;
 
-  /// 加载原生库并初始化 C 播放器运行时。幂等；热重启后可重复调用。
-  static Future<void> initialize() async {
-    if (_initialized) return;
-    final code = XhvpLibrary.instance.init();
-    if (code != 0) {
-      throw StateError('xhvp_init failed with code $code');
+  /// Whether [initialize] has completed successfully in this isolate.
+  static bool get isInitialized => _initialized;
+
+  /// 后台初始化 C 运行时（`gst_init`）并预热 FFI worker isolate。
+  ///
+  /// 不在 UI isolate 上同步阻塞 `gst_init`。幂等；并发调用共享同一 [Future]；
+  /// 失败后可重试。
+  static Future<void> initialize() {
+    if (_initialized) {
+      return Future<void>.value();
     }
-    _initialized = true;
+    return _initializing ??= _initializeOnce();
+  }
+
+  static Future<void> _initializeOnce() async {
+    final total = Stopwatch()..start();
+    NativeCallable<XhvpInitDoneFnFunction>? callable;
+    try {
+      // Open dylib on this isolate, then start worker in parallel with gst_init.
+      XhvpLibrary.instance;
+      final workerFuture = xhvpTimedAsync(
+        'plugin_worker_spawn',
+        FfiNativeWorker.ensureStarted,
+      );
+
+      final code = await xhvpTimedAsync('plugin_xhvp_init', () async {
+        final done = Completer<int>();
+        callable = NativeCallable<XhvpInitDoneFnFunction>.listener((
+          Pointer<Void> ctx,
+          int result,
+        ) {
+          if (!done.isCompleted) {
+            done.complete(result);
+          }
+        });
+        XhvpLibrary.instance.bindings.xhvp_init_async(
+          callable!.nativeFunction,
+          nullptr,
+        );
+        return done.future;
+      });
+
+      await workerFuture;
+
+      if (code != 0) {
+        throw StateError('xhvp_init failed with code $code');
+      }
+      _initialized = true;
+      xhvpInitTiming('plugin_init', total);
+    } catch (_) {
+      _initializing = null;
+      rethrow;
+    } finally {
+      callable?.close();
+    }
   }
 
   /// 从 [source] 抽取一帧封面，返回 PNG 字节。

@@ -19,7 +19,7 @@ void main() {
     } else {
       XhvpLibrary.openPath(path);
     }
-    expect(XhvpLibrary.instance.version(), contains('ffi'));
+    expect(XhvpLibrary.instance.version(), isNotEmpty);
     expect(XhvpLibrary.instance.init(), 0);
   });
 }

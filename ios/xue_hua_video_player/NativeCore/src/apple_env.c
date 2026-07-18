@@ -22,6 +22,35 @@ static void xhvp_setenv_copy(const char *key, const char *value) {
   setenv(key, value, 1);
 }
 
+static int xhvp_file_exists(const char *path) {
+  struct stat st;
+  return path && stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static void xhvp_copy_file_best_effort(const char *src, const char *dst) {
+  if (!src || !dst || !xhvp_file_exists(src) || xhvp_file_exists(dst)) {
+    return;
+  }
+  FILE *in = fopen(src, "rb");
+  if (!in) {
+    return;
+  }
+  FILE *out = fopen(dst, "wb");
+  if (!out) {
+    fclose(in);
+    return;
+  }
+  char buf[8192];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+    if (fwrite(buf, 1, n, out) != n) {
+      break;
+    }
+  }
+  fclose(out);
+  fclose(in);
+}
+
 static void xhvp_setup_sandbox_writable_env(void) {
   const char *tmp = getenv("TMPDIR");
   if (!tmp || tmp[0] == '\0') {
@@ -52,7 +81,9 @@ static void xhvp_setup_sandbox_writable_env(void) {
   char registry[PATH_MAX];
   snprintf(cache_buf, sizeof(cache_buf), "%s/Library/Caches", home);
   snprintf(docs_buf, sizeof(docs_buf), "%s/Documents", home);
-  snprintf(registry, sizeof(registry), "%s/gstreamer-registry.bin", tmp);
+  /* Persist registry under Caches — TMPDIR is often wiped, forcing slow
+   * gst_init plugin rescans on every cold start. */
+  snprintf(registry, sizeof(registry), "%s/gstreamer-registry.bin", cache_buf);
 
   /* Best-effort create dirs; ignore failures (sandbox may already have them). */
   {
@@ -75,6 +106,8 @@ static void xhvp_setup_sandbox_writable_env(void) {
   xhvp_setenv_copy("XDG_DATA_DIRS", docs_buf);
   xhvp_setenv_copy("XDG_CONFIG_DIRS", docs_buf);
   xhvp_setenv_copy("FONTCONFIG_PATH", tmp);
+  /* libexec/gst-plugin-scanner is stripped for MAS; force in-process scan. */
+  xhvp_setenv_copy("GST_REGISTRY_FORK", "no");
   xhvp_setenv_copy("GST_REGISTRY", registry);
 }
 
@@ -140,13 +173,20 @@ void xhvp_setup_macos_env(void) {
   if (xhvp_find_bundled_gstreamer_lib(lib_dir, sizeof(lib_dir))) {
     char plugins[PATH_MAX];
     char gio[PATH_MAX];
+    char seed[PATH_MAX];
     snprintf(plugins, sizeof(plugins), "%s/gstreamer-1.0", lib_dir);
     snprintf(gio, sizeof(gio), "%s/gio/modules", lib_dir);
+    snprintf(seed, sizeof(seed), "%s/gstreamer-registry.bin.seed", lib_dir);
     if (xhvp_dir_exists(plugins)) {
       xhvp_setenv_copy("GST_PLUGIN_SYSTEM_PATH", plugins);
     }
     if (xhvp_dir_exists(gio)) {
       xhvp_setenv_copy("GIO_MODULE_DIR", gio);
+    }
+    /* Cold start: install build-time registry so gst_init skips full scan. */
+    const char *registry = getenv("GST_REGISTRY");
+    if (registry && registry[0] != '\0') {
+      xhvp_copy_file_best_effort(seed, registry);
     }
   }
 

@@ -65,7 +65,7 @@
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.5.2
+  xue_hua_video_player: ^1.5.4
 ```
 
 然后执行：
@@ -87,9 +87,10 @@ import 'package:xue_hua_video_player/xue_hua_video_player.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 应用启动时初始化一次原生库。
-  await XueHuaVideoPlayer.initialize();
+  // 后台启动 GStreamer 初始化，避免挡住首帧。
+  final ready = XueHuaVideoPlayer.initialize();
   runApp(const MyApp());
+  await ready; // 或在 controller.open(...) 之前 await
 }
 
 class PlayerPage extends StatefulWidget {
@@ -138,9 +139,10 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
 
 ## 在应用中集成（请先阅读）
 
-1. **在创建任何控制器之前，先调用一次 `XueHuaVideoPlayer.initialize()`**（通常放在
-   `main()` 里、`WidgetsFlutterBinding.ensureInitialized()` 之后）。该方法幂等，热重启后
-   再次调用也安全。
+1. **尽早启动一次 `XueHuaVideoPlayer.initialize()`**（通常放在 `main()` 里、
+   `WidgetsFlutterBinding.ensureInitialized()` 之后）。推荐
+   `final ready = XueHuaVideoPlayer.initialize(); runApp(...); await ready;`，
+   避免 `gst_init` 挡住首帧。该方法幂等，热重启后再次调用也安全。
 2. **每个视频画面创建并 `initialize()` 一个 `XueHuaPlayerController`。** 控制器持有原生
    播放器，在 `initialize()` 时创建。
 3. **画面销毁时务必调用 `dispose()`** —— 它会停止管线、取消事件流并释放原生资源。忘记
@@ -374,7 +376,9 @@ issue）。
 
 ### `XueHuaVideoPlayer.initialize()`
 
-对原生库 / Rust 桥接进行一次性初始化。使用任何控制器前调用一次。
+对原生库 / GStreamer 运行时进行一次性初始化。在后台线程执行 `gst_init`，不阻塞
+UI isolate。尽早启动（例如 `runApp` 之前），在 `open` / 播放前 `await`。可并发调用，
+共享同一 `Future`。
 
 ### `XueHuaPlayerController`
 

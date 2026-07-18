@@ -4,13 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:signals/signals_flutter.dart';
 
-import '../enum/video_rotation.dart';
 import '../controls/playback_controls_model.dart';
-import '../presentation/playback_presentation_model.dart';
+import '../domain/player_events.dart';
+import '../enum/video_rotation.dart';
+import '../ffi/init_timing.dart';
 import '../media/frame_image.dart';
 import '../media/media_source_resolver.dart';
 import '../model/video_source.dart';
-import '../domain/player_events.dart';
+import '../presentation/playback_presentation_model.dart';
 import '../surface/texture_surface.dart';
 import 'command_port.dart';
 
@@ -143,6 +144,7 @@ class PlaybackSession
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
     if (_initialized.value) return;
+    final total = Stopwatch()..start();
     await _port.create();
     final id = _port.playerId;
     if (id == null) {
@@ -154,6 +156,7 @@ class PlaybackSession
       _onEvent,
       onError: (Object e) => _applyError(e.toString()),
     );
+    xhvpInitTiming('controller_total', total);
   }
 
   void _onEvent(PlayerEvent event) {

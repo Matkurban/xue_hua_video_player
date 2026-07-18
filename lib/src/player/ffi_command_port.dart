@@ -1,9 +1,11 @@
 import 'package:flutter/services.dart';
 
 import '../domain/player_events.dart';
-import '../player/command_port.dart';
 import '../ffi/event_pump.dart';
+import '../ffi/init_timing.dart';
 import '../ffi/xhvp_library.dart';
+import '../player/command_port.dart';
+import '../xue_hua_video_player.dart';
 import 'ffi_native_worker.dart';
 
 /// Production [PlayerCommandPort] backed by the native C player via dart:ffi.
@@ -39,15 +41,23 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
 
   @override
   Future<void> create() async {
-    // init + event pump must stay on the root isolate (ReceivePort / NativeCallable).
-    XhvpLibrary.instance.init();
-    await FfiNativeWorker.ensureStarted();
-    final id = XhvpLibrary.instance.bindings.xhvp_player_create();
+    // Runtime + worker must be ready before player slot / NativeCallable setup.
+    // Prefer XueHuaVideoPlayer.initialize() in main(); this is a safe fallback.
+    if (!XueHuaVideoPlayer.isInitialized) {
+      await XueHuaVideoPlayer.initialize();
+    }
+
+    final id = xhvpTimed(
+      'player_create',
+      () => XhvpLibrary.instance.bindings.xhvp_player_create(),
+    );
     if (id == 0) {
       throw StateError('xhvp_player_create failed');
     }
     _playerId = id;
-    _pump = XhvpEventPump(id)..start();
+    xhvpTimed('event_pump', () {
+      _pump = XhvpEventPump(id)..start();
+    });
   }
 
   @override

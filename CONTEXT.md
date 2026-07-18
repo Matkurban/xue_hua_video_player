@@ -42,7 +42,10 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 - Dedicated **`xhvp-gst`** thread owns a non-default `GMainContext` and runs `g_main_loop_run`.
 - Pipeline ops are marshalled onto that thread via `xhvp_runtime_invoke_sync` / `_async`.
 - Android: `GStreamerInitProvider` (`xue_hua.video_player`) loads
-  `gstreamer_android` then `xue_hua_video_player` before Dart FFI.
+  `gstreamer_android` then `xue_hua_video_player`, runs `GStreamer.init(Context)`
+  on the main thread, then `NativeRuntimeWarmup` → `xhvp_init` on a **background**
+  thread (not from `JNI_OnLoad`). Dart `XueHuaVideoPlayer.initialize()` uses
+  `xhvp_init_async` so the UI isolate is not blocked on `gst_init`.
 - Do **not** block the Flutter UI isolate with `g_main_loop_run`.
 - Do **not** call blocking `get_state` from bus watch callbacks.
 

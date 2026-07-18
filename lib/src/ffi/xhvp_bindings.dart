@@ -43,6 +43,19 @@ class XhvpBindings {
   );
   late final _xhvp_init = _xhvp_initPtr.asFunction<int Function()>();
 
+  void xhvp_init_async(XhvpInitDoneFn cb, ffi.Pointer<ffi.Void> ctx) {
+    return _xhvp_init_async(cb, ctx);
+  }
+
+  late final _xhvp_init_asyncPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(XhvpInitDoneFn, ffi.Pointer<ffi.Void>)
+        >
+      >('xhvp_init_async');
+  late final _xhvp_init_async = _xhvp_init_asyncPtr
+      .asFunction<void Function(XhvpInitDoneFn, ffi.Pointer<ffi.Void>)>();
+
   void xhvp_shutdown() {
     return _xhvp_shutdown();
   }
@@ -775,3 +788,9 @@ typedef XhvpFrameReadyFnFunction = ffi.Void Function(ffi.Pointer<ffi.Void> ctx);
 typedef DartXhvpFrameReadyFnFunction = void Function(ffi.Pointer<ffi.Void> ctx);
 typedef XhvpFrameReadyFn =
     ffi.Pointer<ffi.NativeFunction<XhvpFrameReadyFnFunction>>;
+typedef XhvpInitDoneFnFunction =
+    ffi.Void Function(ffi.Pointer<ffi.Void> ctx, ffi.Int32 code);
+typedef DartXhvpInitDoneFnFunction =
+    void Function(ffi.Pointer<ffi.Void> ctx, int code);
+typedef XhvpInitDoneFn =
+    ffi.Pointer<ffi.NativeFunction<XhvpInitDoneFnFunction>>;

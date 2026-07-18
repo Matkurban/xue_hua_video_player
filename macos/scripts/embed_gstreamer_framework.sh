@@ -36,10 +36,13 @@ echo "Embedding GStreamer.framework (runtime) from ${SRC} into ${DEST}"
 mkdir -p "${DEST_DIR}"
 rm -rf "${DEST}"
 ditto "${SRC}" "${DEST}"
-bash "${SCRIPT_DIR}/strip_gstreamer_runtime.sh" "${DEST}"
+# Prune before strip so gst-inspect (bin/) can seed the registry, then strip
+# removes CLI helpers (including libexec scanner) for MAS.
 bash "${SCRIPT_DIR}/prune_gstreamer_plugins.sh" "${DEST}"
 bash "${SCRIPT_DIR}/prune_gstreamer_orphan_dylibs.sh" "${DEST}"
 bash "${SCRIPT_DIR}/thin_gstreamer_framework.sh" "${DEST}"
+bash "${SCRIPT_DIR}/seed_gstreamer_registry.sh" "${DEST}"
+bash "${SCRIPT_DIR}/strip_gstreamer_runtime.sh" "${DEST}"
 
 # Sign nested Mach-Os inside-out. Do not --preserve-metadata: the vendor
 # binaries are adhoc/linker-signed; keeping their identifier/flags breaks MAS

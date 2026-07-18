@@ -69,7 +69,7 @@ to your app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  xue_hua_video_player: ^1.5.2
+  xue_hua_video_player: ^1.5.4
 ```
 
 Then:
@@ -93,9 +93,10 @@ import 'package:xue_hua_video_player/xue_hua_video_player.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Load the native library once at app start.
-  await XueHuaVideoPlayer.initialize();
+  // Start GStreamer init in the background so the first frame is not blocked.
+  final ready = XueHuaVideoPlayer.initialize();
   runApp(const MyApp());
+  await ready; // or await before controller.open(...)
 }
 
 class PlayerPage extends StatefulWidget {
@@ -144,8 +145,10 @@ Bundled assets are loaded via Dart FFI bytes into a native temp file (not AppSrc
 
 ## Integrating into your app (read this first)
 
-1. **Call `XueHuaVideoPlayer.initialize()` once** before creating any controller
-   (typically in `main()` after `WidgetsFlutterBinding.ensureInitialized()`). It
+1. **Start `XueHuaVideoPlayer.initialize()` once** early (typically in `main()`
+   after `WidgetsFlutterBinding.ensureInitialized()`). Prefer
+   `final ready = XueHuaVideoPlayer.initialize(); runApp(...); await ready;`
+   so the first frame is not blocked on `gst_init`. It
    is idempotent and safe to call again after a hot restart.
 2. **Create and `initialize()` a `XueHuaPlayerController` per video surface.** The
    controller owns a native player; it is created during `initialize()`.
@@ -268,8 +271,9 @@ build with a clean tree and symbolicate with
 
 1. **Plugin version** — use **1.4.0+** for Texture rendering; run
    `flutter clean` / full reinstall after upgrading.
-2. **Initialization order** — `XueHuaVideoPlayer.initialize()` →
-   `controller.initialize()` → wait until media is on disk → `open(...)`.
+2. **Initialization order** — start `XueHuaVideoPlayer.initialize()` (prefer
+   overlapping with first frame) → `controller.initialize()` → wait until media
+   is on disk → `open(...)`.
 3. **Video surface** — embed `XueHuaVideoView` (set `showControls: false` if you
    provide your own chrome). The widget registers a native texture automatically.
 4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR.
@@ -439,8 +443,10 @@ bundle a CA certificate database and configure GLib's default `GTlsDatabase`
 
 ### `XueHuaVideoPlayer.initialize()`
 
-Static, one-time initialization of the native library / Rust bridge. Call once
-before using any controller.
+Static, one-time initialization of the native library / GStreamer runtime.
+Starts `gst_init` on a background thread so the UI isolate is not blocked.
+Kick it off early (e.g. before `runApp`), and `await` before `open` / playback.
+Safe to call concurrently; subsequent calls share the same `Future`.
 
 ### `XueHuaVideoPlayer.captureThumbnail(VideoSource, {Duration? at, int maxWidth})`
 

@@ -38,9 +38,11 @@ static void xhvp_android_bind_surface(JNIEnv *env, jlong player_id,
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   (void)reserved;
+  /* Capture JavaVM only. Defer xhvp_init until after GStreamer.init(Context)
+   * so MediaCodec discovery has an application ClassLoader (see
+   * GStreamerInitProvider). */
   g_vm = vm;
-  xhvp_init();
-  LOGI("JNI_OnLoad: xhvp_init done");
+  LOGI("JNI_OnLoad: JavaVM captured");
   return JNI_VERSION_1_6;
 }
 
@@ -50,7 +52,7 @@ Java_xue_1hua_video_1player_NativeRuntimeWarmup_nativeWarmupNativeRuntime(
   (void)env;
   (void)clazz;
   xhvp_init();
-  LOGI("NativeRuntimeWarmup");
+  LOGI("NativeRuntimeWarmup: xhvp_init done");
 }
 
 JNIEXPORT void JNICALL

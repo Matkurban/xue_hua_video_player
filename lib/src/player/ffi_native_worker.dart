@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import '../domain/player_events.dart';
+import '../ffi/init_timing.dart';
 import '../ffi/xhvp_library.dart';
 
 /// Long-lived isolate that serializes blocking `xhvp_player_*` FFI calls.
@@ -24,6 +25,9 @@ class FfiNativeWorker {
   static FfiNativeWorker? _instance;
   static Future<FfiNativeWorker>? _starting;
 
+  /// Whether the worker isolate is already running in this isolate group.
+  static bool get isStarted => _instance != null;
+
   static Future<FfiNativeWorker> ensureStarted() {
     final existing = _instance;
     if (existing != null) {
@@ -33,19 +37,21 @@ class FfiNativeWorker {
   }
 
   static Future<FfiNativeWorker> _start() async {
-    final ready = ReceivePort();
-    await Isolate.spawn(
-      _workerMain,
-      ready.sendPort,
-      debugName: 'xhvp-ffi-worker',
-    );
-    final commands = await ready.first as SendPort;
-    ready.close();
-    final worker = FfiNativeWorker._(commands);
-    worker._replies.listen(worker._onReply);
-    _instance = worker;
-    _starting = null;
-    return worker;
+    return xhvpTimedAsync('worker_spawn', () async {
+      final ready = ReceivePort();
+      await Isolate.spawn(
+        _workerMain,
+        ready.sendPort,
+        debugName: 'xhvp-ffi-worker',
+      );
+      final commands = await ready.first as SendPort;
+      ready.close();
+      final worker = FfiNativeWorker._(commands);
+      worker._replies.listen(worker._onReply);
+      _instance = worker;
+      _starting = null;
+      return worker;
+    });
   }
 
   void _onReply(dynamic message) {

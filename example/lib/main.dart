@@ -8,8 +8,13 @@ import 'thumbnail_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Start gst_init on a background thread; do not block the first frame.
+  final pluginSw = Stopwatch()..start();
   await XueHuaVideoPlayer.initialize();
   runApp(const MyApp());
+  debugPrint(
+    '[xhvp-init-timing] example_plugin_init=${pluginSw.elapsedMilliseconds}ms',
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -55,11 +60,14 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
+    final sw = Stopwatch()..start();
     _controller
         .initialize()
         .then((_) {
           debugPrint(
-            'xue_hua_video_player: playerId=${_controller.playerId.value}',
+            '[xhvp-init-timing] example_controller_init='
+            '${sw.elapsedMilliseconds}ms '
+            'playerId=${_controller.playerId.value}',
           );
           if (mounted) setState(() => _ready = true);
         })

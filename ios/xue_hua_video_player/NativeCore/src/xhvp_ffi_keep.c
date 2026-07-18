@@ -10,6 +10,7 @@ void xhvp_ffi_retain_symbols(void) {
   static void *const keep[] = {
       (void *)xhvp_version,
       (void *)xhvp_init,
+      (void *)xhvp_init_async,
       (void *)xhvp_shutdown,
       (void *)xhvp_player_create,
       (void *)xhvp_player_dispose,

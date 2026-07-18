@@ -1,3 +1,32 @@
+## 1.5.4
+
+### Performance
+
+- **`XueHuaVideoPlayer.initialize()` no longer blocks the UI isolate on
+  `gst_init`**: native `xhvp_init_async` runs runtime start on a background
+  thread; Dart waits via `NativeCallable` and warms `FfiNativeWorker` in
+  parallel. Prefer
+  `final ready = XueHuaVideoPlayer.initialize(); runApp(...); await ready;`
+  so the first frame is not stalled.
+- **`XueHuaPlayerController.initialize()`**: after plugin init, create only
+  allocates a player slot and event pump (worker spawn moved into plugin
+  init).
+- **macOS cold `gst_init`**: embed script seeds
+  `gstreamer-registry.bin.seed` after plugin prune; runtime copies it into
+  `Library/Caches` and sets `GST_REGISTRY_FORK=no` (scanner was stripped for
+  MAS). Measured `native_gst_init` drop from ~664ms to ~68ms on example.
+- **Windows**: persistent `GST_REGISTRY` under `%LOCALAPPDATA%` and optional
+  seed copy; `GST_REGISTRY_FORK=no`.
+- **Android**: `GStreamerInitProvider` still binds Context on the main
+  thread, but `NativeRuntimeWarmup` / `xhvp_init` runs on a background
+  thread so process startup is not blocked on full runtime start.
+- **Apple**: `GST_REGISTRY` lives under `Library/Caches` instead of
+  `TMPDIR` so the registry is not wiped every cold start.
+
+### Documentation / example
+
+- Example and README recommend overlapping `initialize()` with `runApp`.
+
 ## 1.5.3
 
 ### Bug fixes

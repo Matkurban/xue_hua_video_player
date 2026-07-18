@@ -72,8 +72,17 @@ typedef void (*XhvpEventCallback)(void *ctx, int32_t kind, int64_t position_ms,
 
 typedef void (*XhvpFrameReadyFn)(void *ctx);
 
+/** Called when [xhvp_init_async] finishes; [code] is [XHVP_ERR_*]. */
+typedef void (*XhvpInitDoneFn)(void *ctx, int32_t code);
+
 XHVP_EXPORT const char *xhvp_version(void);
 XHVP_EXPORT int32_t xhvp_init(void);
+/**
+ * Starts runtime init on a background thread (does not block the caller).
+ * Invokes [cb] once finished. Concurrent [xhvp_init] waits on the same gate.
+ * If already initialized, [cb] is invoked immediately on the calling thread.
+ */
+XHVP_EXPORT void xhvp_init_async(XhvpInitDoneFn cb, void *ctx);
 XHVP_EXPORT void xhvp_shutdown(void);
 
 XHVP_EXPORT XhvpPlayerId xhvp_player_create(void);
