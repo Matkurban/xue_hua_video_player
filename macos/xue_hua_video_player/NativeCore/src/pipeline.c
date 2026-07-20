@@ -456,6 +456,11 @@ static void xhvp_android_unbind_overlay(XhvpPlayer *p) {
 }
 
 void xhvp_android_clear_overlay(XhvpPlayer *p) {
+  /* Mid-play SurfaceProducer.setSize clears the window; glimagesink then
+   * blocks the whole playbin (A+V). Remember resume intent so rebind plays. */
+  if (p->desired_playing) {
+    p->pending_auto_play = true;
+  }
   xhvp_android_unbind_overlay(p);
   xhvp_android_release_window(p);
 }
@@ -504,6 +509,8 @@ void xhvp_android_apply_overlay(XhvpPlayer *p) {
     return;
   }
   p->pending_auto_play = false;
+  /* Always kick play after rebind — even if GST already reports PLAYING, a
+   * prior window=0 stall may have left sinks blocked until play+expose. */
   xhvp_pipeline_play(p);
 }
 #endif

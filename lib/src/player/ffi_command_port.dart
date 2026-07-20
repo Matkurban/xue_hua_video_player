@@ -1,3 +1,4 @@
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/player_events.dart';
@@ -45,6 +46,12 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
     // Prefer XueHuaVideoPlayer.initialize() kickoff in main(); await ready here
     // so xhvp_player_create never blocks the UI isolate on gst_init.
     await XueHuaVideoPlayer.ensureReady();
+
+    // Yield past the current frame so route transitions / initState callers can
+    // paint before sync xhvp_player_create + NativeCallable.listener (event pump)
+    // run on the UI isolate. Without this, a warm ensureReady resumes in a
+    // microtask and stalls the first frame.
+    await SchedulerBinding.instance.endOfFrame;
 
     final id = xhvpTimed(
       'player_create',

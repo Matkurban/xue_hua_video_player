@@ -206,14 +206,10 @@ class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
       return texture;
     }
 
-    // Prefer outer layout size; null / unusable → MediaQuery fallback.
-    // When androidLayoutSize is omitted, fall back to own LayoutBuilder.
+    // When androidLayoutSize is provided, sync only from create / didUpdateWidget
+    // (not every rebuild) so SignalBuilder ticks cannot thrash SurfaceProducer.setSize
+    // mid-playback and clear ANativeWindow while playbin is PLAYING.
     if (widget.androidLayoutSize != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _syncAndroidBufferSize();
-        }
-      });
       return texture;
     }
 

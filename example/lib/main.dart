@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:chat_context_menu/chat_context_menu.dart';
@@ -10,18 +9,8 @@ import 'thumbnail_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Kickoff only (<50ms); gst_init continues in background. create/open await ready.
-  final kickoffSw = Stopwatch()..start();
-  await XueHuaVideoPlayer.initialize();
-  debugPrint(
-    '[xhvp-init-timing] example_plugin_kickoff=${kickoffSw.elapsedMilliseconds}ms',
-  );
-  kickoffSw.stop();
-  unawaited(
-    XueHuaVideoPlayer.ensureReady().then((_) {
-      debugPrint('[xhvp-init-timing] example_plugin_ready=done');
-    }),
-  );
+  // No plugin kickoff here — open PlayerPage via HomePage to feel route jank
+  // when controller.initialize() runs in initState (create awaits ensureReady).
   runApp(const MyApp());
 }
 
@@ -44,7 +33,45 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         extensions: [VideoControlsTheme.cupertino()],
       ),
-      home: const PlayerPage(),
+      home: const HomePage(),
+    );
+  }
+}
+
+/// Landing page with no player init — push [PlayerPage] to test transition jank.
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('雪花视频播放器')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const PlayerPage()),
+                );
+              },
+              child: const Text('进入播放页（initState 初始化）'),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ThumbnailPage(),
+                  ),
+                );
+              },
+              child: const Text('抽封面'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

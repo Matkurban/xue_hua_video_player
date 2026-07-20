@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:xue_hua_video_player/xue_hua_video_player.dart';
+import 'package:xue_hua_video_player_example/video_url.dart';
 
 /// Demo page: pick a video source, then call [XueHuaVideoPlayer.captureThumbnail].
 class ThumbnailPage extends StatefulWidget {
@@ -15,6 +16,7 @@ class ThumbnailPage extends StatefulWidget {
     'https://www.w3schools.com/html/mov_bbb.mp4',
     'https://archive.org/download/big-bunny-sample-video/SampleVideo.mp4',
     'https://media.w3.org/2010/05/bunny/movie.mp4',
+    videoUrl
   ];
 
   @override

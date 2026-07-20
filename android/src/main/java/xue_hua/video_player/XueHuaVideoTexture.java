@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Surface;
 
 import androidx.annotation.Nullable;
@@ -23,10 +24,14 @@ import io.flutter.view.TextureRegistry;
  * <p>{@link TextureRegistry.SurfaceProducer#setSize} destroys the old buffer. Unbind
  * VideoOverlay <em>synchronously</em> before {@code setSize} so glimagesink cannot call
  * {@code eglCreateWindowSurface} on a destroyed Surface (FORTIFY destroyed-mutex abort).
- * While resizing, ignore {@link #onSurfaceCleanup}. On cleanup, always clear then
- * post a rebind so Flutter can recreate the ImageReader ({@code getSurface}).
+ * Keep {@link #resizing} true until the new surface is bound so a late
+ * {@link #onSurfaceCleanup} cannot clear the new window. On cleanup (when not resizing),
+ * always clear then post a rebind so Flutter can recreate the ImageReader
+ * ({@code getSurface}).
  */
 final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callback {
+    private static final String TAG = "xhvp-surface";
+
     /**
      * Test hook: when non-null, run posted rebind tasks through this instead of
      * {@link Handler} (JVM unit tests have no main looper).
@@ -39,8 +44,10 @@ final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callba
 
     private final long playerId;
     private final TextureRegistry.SurfaceProducer surfaceProducer;
-    /** True while {@link #syncSize} owns the resize; skip cleanup→destroy race. */
+    /** True while {@link #syncSize} owns the resize until a successful bind. */
     private boolean resizing;
+    /** setSize completed but bind failed; wait for {@link #onSurfaceAvailable}. */
+    private boolean needsBindAfterResize;
     private boolean disposed;
     /** Last Surface passed to native; skip redundant ANativeWindow_fromSurface. */
     private Surface boundSurface;
@@ -90,18 +97,31 @@ final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callba
             return;
         }
         resizing = true;
+        needsBindAfterResize = false;
         try {
             // Unbind GST from the current window BEFORE setSize destroys the Surface.
+            Log.i(TAG, "syncSize clear playerId=" + playerId + " -> " + width + "x" + height);
             clearBoundSurface();
             surfaceProducer.setSize(width, height);
-            bindSurfaceIfAvailable();
+            if (!bindSurfaceIfAvailable()) {
+                needsBindAfterResize = true;
+                Log.i(TAG, "syncSize waiting for onSurfaceAvailable playerId=" + playerId);
+                return;
+            }
+            Log.i(TAG, "syncSize bound playerId=" + playerId + " " + width + "x" + height);
         } finally {
-            resizing = false;
+            // Keep resizing until bind succeeds so late cleanup cannot clear the
+            // newly bound window (or the pending post-setSize surface).
+            if (!needsBindAfterResize) {
+                resizing = false;
+            }
         }
     }
 
     void dispose() {
         disposed = true;
+        resizing = false;
+        needsBindAfterResize = false;
         surfaceProducer.setCallback(null);
         clearBoundSurface();
         surfaceProducer.release();
@@ -109,17 +129,25 @@ final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callba
 
     @Override
     public void onSurfaceAvailable() {
-        bindSurfaceIfAvailable();
+        if (bindSurfaceIfAvailable()) {
+            if (needsBindAfterResize) {
+                Log.i(TAG, "onSurfaceAvailable bound after resize playerId=" + playerId);
+            }
+            needsBindAfterResize = false;
+            resizing = false;
+        }
     }
 
     @Override
     public void onSurfaceCleanup() {
         if (disposed || resizing) {
-            // setSize invalidated the old buffer; syncSize will bind the new one.
+            // setSize invalidated the old buffer; syncSize / onSurfaceAvailable
+            // will bind the new one. Do not clear the pending/new window.
             return;
         }
         // Always clear: Flutter may be about to close this ImageReader (trim /
         // release). Leaving GST bound causes abandoned BufferQueue / EGL_BAD_SURFACE.
+        Log.i(TAG, "onSurfaceCleanup clear playerId=" + playerId);
         clearBoundSurface();
         scheduleRebind();
     }
@@ -182,13 +210,16 @@ final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callba
         AndroidSurfaceBridge.onSurfaceDestroyed(playerId);
     }
 
-    private void bindSurfaceIfAvailable() {
+    /**
+     * @return true if a valid surface is bound to native (or already bound).
+     */
+    private boolean bindSurfaceIfAvailable() {
         if (disposed) {
-            return;
+            return false;
         }
         Surface surface = surfaceProducer.getSurface();
         if (surface == null || !surface.isValid()) {
-            return;
+            return false;
         }
         // Pass the SurfaceProducer buffer size (physical pixels), not decoded frame size.
         int width = surfaceProducer.getWidth();
@@ -196,11 +227,13 @@ final class XueHuaVideoTexture implements TextureRegistry.SurfaceProducer.Callba
         if (surface == boundSurface && width == boundWidth && height == boundHeight) {
             // Same Surface instance: skip ANativeWindow_fromSurface (new pointer each
             // call would force native clear+re-apply and extra EGL churn).
-            return;
+            return true;
         }
         boundSurface = surface;
         boundWidth = width;
         boundHeight = height;
+        Log.i(TAG, "bind playerId=" + playerId + " " + width + "x" + height);
         AndroidSurfaceBridge.onSurfaceChanged(playerId, surface, width, height);
+        return true;
     }
 }
